@@ -1,0 +1,7 @@
+{
+  "provider": "github",
+  "owner": "ly136148277-netizen",
+  "repo": "mogu-ai-releases",
+  "url": "",
+  "notes": "GitHub Releases 自动更新。发版：scripts/publish_mogu_releases.ps1"
+}

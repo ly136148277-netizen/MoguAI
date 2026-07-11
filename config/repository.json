@@ -1,0 +1,8 @@
+{
+  "syncUrl": "https://raw.githubusercontent.com/ly136148277-netizen/mogu-map/main/catalog/models.json",
+  "fallbackSyncUrls": [
+    "https://cdn.jsdelivr.net/gh/ly136148277-netizen/mogu-map@main/catalog/models.json"
+  ],
+  "sources": ["catalog", "local", "huggingface", "modelscope", "github"],
+  "notes": "syncUrl 指向 CDN 上的 catalog/models.json；离线时使用安装包内 catalog/ 目录。将 catalog/models.json 推送到 mogu-map 仓库即可在线更新。"
+}

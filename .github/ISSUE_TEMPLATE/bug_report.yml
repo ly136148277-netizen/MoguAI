@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a bug in Mogu AI / 报告蘑菇AI问题
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or 中文 — both welcome. / 中英文均可。
+
+  - type: input
+    id: version
+    attributes:
+      label: Mogu AI version / 版本
+      placeholder: e.g. 1.4.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 期望行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional) / 日志（可选）
+      description: From `%APPDATA%\ai-model-manager\logs` if relevant

@@ -1,0 +1,222 @@
+{
+  "catalogVersion": 1,
+  "updatedAt": "2026-07-11T01:45:00.000Z",
+  "models": [
+    {
+      "id": "llama3-8b-q4",
+      "name": "Llama 3 8B Q4_K_M",
+      "description": "Meta Llama 3 8B 量化版，适合本地聊天推理",
+      "category": "chat",
+      "size": "4.6 GB",
+      "sizeBytes": 4920734272,
+      "paramCount": 8000000000,
+      "downloadCount": 12840,
+      "rating": 4.8,
+      "updatedAt": "2025-12-01T00:00:00.000Z",
+      "url": "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
+      "filename": "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
+      "sha256": "8ba9baf3a7345f705a11878397500fb25174034f0fd784e83aa4a96aaa47735f",
+      "source": "huggingface",
+      "tags": ["GGUF", "chat", "8b", "Q4"],
+      "sources": {
+        "official": "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
+        "hf_mirror": "https://hf-mirror.com/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
+      },
+      "ollama": {
+        "name": "llama3-8b-q4",
+        "system": "你是一个乐于助人的 AI 助手。",
+        "autoImport": true,
+        "parameters": { "temperature": 0.7, "top_p": 0.9 }
+      }
+    },
+    {
+      "id": "qwen2.5-7b-q4",
+      "name": "Qwen 2.5 7B Q3_K_M",
+      "description": "阿里通义千问 2.5 7B Q3 量化版（单文件），中文表现优秀",
+      "category": "chat",
+      "size": "3.5 GB",
+      "sizeBytes": 3808391072,
+      "paramCount": 7000000000,
+      "downloadCount": 9860,
+      "rating": 4.9,
+      "updatedAt": "2025-11-15T00:00:00.000Z",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q3_k_m.gguf",
+      "filename": "qwen2.5-7b-instruct-q3_k_m.gguf",
+      "sha256": "a96b16179dc6cc9afdf0cf7a96a80c199cbd00b9be207c3465be21cb721cca5e",
+      "source": "huggingface",
+      "tags": ["GGUF", "chat", "7b", "Q3", "chinese"],
+      "sources": {
+        "official": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q3_k_m.gguf",
+        "hf_mirror": "https://hf-mirror.com/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q3_k_m.gguf"
+      },
+      "ollama": {
+        "name": "qwen2.5-7b-q4",
+        "system": "你是通义千问，一个乐于助人的中文 AI 助手。",
+        "autoImport": true,
+        "parameters": { "temperature": 0.7, "top_p": 0.9 }
+      }
+    },
+    {
+      "id": "phi3-mini-q4",
+      "name": "Phi-3 Mini Q4_K_M",
+      "description": "Microsoft Phi-3 Mini 轻量模型，低内存占用",
+      "category": "code",
+      "size": "2.2 GB",
+      "sizeBytes": 2393231072,
+      "paramCount": 3800000000,
+      "downloadCount": 6520,
+      "rating": 4.6,
+      "updatedAt": "2025-10-20T00:00:00.000Z",
+      "url": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
+      "filename": "Phi-3-mini-4k-instruct-q4.gguf",
+      "sha256": "8a83c7fb9049a9b2e92266fa7ad04933bb53aa1e85136b7b30f1b8000ff2edef",
+      "source": "huggingface",
+      "tags": ["GGUF", "code", "3b", "Q4", "lightweight"],
+      "sources": {
+        "official": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
+        "hf_mirror": "https://hf-mirror.com/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+      },
+      "ollama": {
+        "name": "phi3-mini-q4",
+        "system": "You are a helpful AI assistant.",
+        "autoImport": true,
+        "parameters": { "temperature": 0.7 }
+      }
+    },
+    {
+      "id": "qwen2.5-3b-q4",
+      "name": "Qwen 2.5 3B Q4_K_M",
+      "description": "通义千问 2.5 3B 轻量版，8G 显卡友好，中文对话流畅",
+      "category": "chat",
+      "size": "2.0 GB",
+      "sizeBytes": 2147483648,
+      "paramCount": 3000000000,
+      "downloadCount": 8420,
+      "rating": 4.7,
+      "updatedAt": "2026-07-01T00:00:00.000Z",
+      "url": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+      "filename": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+      "sha256": "",
+      "source": "huggingface",
+      "tags": ["GGUF", "chat", "3b", "Q4", "chinese", "lightweight"],
+      "sources": {
+        "official": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+        "hf_mirror": "https://hf-mirror.com/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf"
+      },
+      "ollama": {
+        "name": "qwen2.5-3b-q4",
+        "system": "你是通义千问，一个乐于助人的中文 AI 助手。",
+        "autoImport": true,
+        "parameters": { "temperature": 0.7, "top_p": 0.9 }
+      }
+    },
+    {
+      "id": "gemma2-2b-q4",
+      "name": "Gemma 2 2B IT Q4_K_M",
+      "description": "Google Gemma 2 2B 指令微调版，体积小、响应快",
+      "category": "chat",
+      "size": "1.7 GB",
+      "sizeBytes": 1825361100,
+      "paramCount": 2000000000,
+      "downloadCount": 5210,
+      "rating": 4.5,
+      "updatedAt": "2026-06-15T00:00:00.000Z",
+      "url": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+      "filename": "gemma-2-2b-it-Q4_K_M.gguf",
+      "sha256": "",
+      "source": "huggingface",
+      "tags": ["GGUF", "chat", "2b", "Q4", "lightweight"],
+      "sources": {
+        "official": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+        "hf_mirror": "https://hf-mirror.com/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf"
+      },
+      "ollama": {
+        "name": "gemma2-2b-q4",
+        "system": "You are a helpful AI assistant.",
+        "autoImport": true,
+        "parameters": { "temperature": 0.7 }
+      }
+    },
+    {
+      "id": "deepseek-r1-qwen-7b-q4",
+      "name": "DeepSeek R1 Distill Qwen 7B Q4",
+      "description": "DeepSeek R1 蒸馏版，链式推理能力强，适合复杂问答",
+      "category": "reasoning",
+      "size": "4.7 GB",
+      "sizeBytes": 5043653222,
+      "paramCount": 7000000000,
+      "downloadCount": 11200,
+      "rating": 4.9,
+      "updatedAt": "2026-07-05T00:00:00.000Z",
+      "url": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+      "filename": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+      "sha256": "",
+      "source": "huggingface",
+      "tags": ["GGUF", "reasoning", "7b", "Q4", "chinese"],
+      "sources": {
+        "official": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+        "hf_mirror": "https://hf-mirror.com/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+      },
+      "ollama": {
+        "name": "deepseek-r1-qwen-7b",
+        "system": "你是一个善于逐步推理的 AI 助手。",
+        "autoImport": true,
+        "parameters": { "temperature": 0.6, "top_p": 0.9 }
+      }
+    },
+    {
+      "id": "mistral-7b-v03-q4",
+      "name": "Mistral 7B Instruct v0.3 Q4",
+      "description": "Mistral 7B 指令模型 v0.3，英文与代码表现稳定",
+      "category": "chat",
+      "size": "4.4 GB",
+      "sizeBytes": 4724464025,
+      "paramCount": 7000000000,
+      "downloadCount": 7650,
+      "rating": 4.7,
+      "updatedAt": "2026-05-20T00:00:00.000Z",
+      "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+      "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+      "sha256": "",
+      "source": "huggingface",
+      "tags": ["GGUF", "chat", "7b", "Q4"],
+      "sources": {
+        "official": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+        "hf_mirror": "https://hf-mirror.com/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
+      },
+      "ollama": {
+        "name": "mistral-7b-v03-q4",
+        "system": "You are a helpful AI assistant.",
+        "autoImport": true,
+        "parameters": { "temperature": 0.7 }
+      }
+    },
+    {
+      "id": "nomic-embed-v15-q4",
+      "name": "Nomic Embed v1.5 Q4",
+      "description": "Nomic 文本嵌入模型，用于 RAG / 语义搜索（非聊天）",
+      "category": "embedding",
+      "size": "84 MB",
+      "sizeBytes": 88080384,
+      "paramCount": 137000000,
+      "downloadCount": 4320,
+      "rating": 4.6,
+      "updatedAt": "2026-04-10T00:00:00.000Z",
+      "url": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5-Q4_K_M.gguf",
+      "filename": "nomic-embed-text-v1.5-Q4_K_M.gguf",
+      "sha256": "",
+      "source": "huggingface",
+      "tags": ["GGUF", "embedding", "Q4"],
+      "sources": {
+        "official": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5-Q4_K_M.gguf",
+        "hf_mirror": "https://hf-mirror.com/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5-Q4_K_M.gguf"
+      },
+      "ollama": {
+        "name": "nomic-embed-v15",
+        "system": "",
+        "autoImport": true,
+        "parameters": {}
+      }
+    }
+  ]
+}

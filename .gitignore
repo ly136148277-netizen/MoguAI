@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+
+# Electron build output
+dist/
+out/
+release/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Daily news agent secrets
+config/mogu_daily_news.json
+config/mogu_deals_news.json
+config/mogu_incidents.json
+config/github.token
+
+# Map publish temp dirs
+.publish-mogu-map/
+.publish-mogu-catalog/
+.clone-github-io/
+
+# Local logs
+logs/
+
+# Agent handoff / unrelated local projects (not part of open-source app)
+MOGU_AI_项目存档.md
+MOGU_AI_桌面端存档.md
+blog/
+wordpress-theme/
+mogu_*.py
+scripts/mogu_push*
+scripts/mogu_deals*
+scripts/mogu_daily*
+scripts/mogu_incidents*
+
+# Unrelated local tooling / maps / wechat (not part of desktop app)
+__pycache__/
+*.pyc
+wechat-miniprogram/
+wordpress-theme/
+blog/
+docs/deals_today.json
+docs/events_*
+docs/map.html
+docs/map_config.js
+docs/verify/
+docker-compose*.yml
+mogu-ai-creator.html
+requirements-daily-news.txt
+config/xuzhou_*.json

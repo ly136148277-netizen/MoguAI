@@ -1,0 +1,5 @@
+# GitHub Personal Access Token (local only — do NOT commit the real token)
+# 在此目录创建 github.token 文件，写入一行 PAT，用于发布脚本（可选）
+#
+# Example scopes: repo (for releases / catalog push)
+# 示例权限：repo（用于发布 Release / 推送模型目录）

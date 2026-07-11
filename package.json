@@ -1,0 +1,76 @@
+{
+  "name": "ai-model-manager",
+  "version": "1.4.0",
+  "description": "Mogu AI (蘑菇AI) — GGUF downloads, Ollama chat & optional AI butler desktop app",
+  "homepage": "https://github.com/ly136148277-netizen/MoguAI#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ly136148277-netizen/MoguAI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ly136148277-netizen/MoguAI/issues"
+  },
+  "main": "src/main/main.js",
+  "author": "蘑菇AI",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "electron",
+    "llm",
+    "gguf",
+    "model-manager",
+    "ollama",
+    "local-ai",
+    "mogu-ai",
+    "蘑菇ai",
+    "desktop-app"
+  ],
+  "dependencies": {
+    "axios": "^1.8.4",
+    "electron-updater": "^6.8.9",
+    "fs-extra": "^11.3.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.aimodel.manager",
+    "productName": "蘑菇AI",
+    "icon": "assets/icon.png",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "config/**/*",
+      "catalog/**/*",
+      "assets/icon.png",
+      "models.json",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://example.com/mogu-ai/releases/"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false,
+      "signDlls": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
