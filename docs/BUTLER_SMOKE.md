@@ -11,6 +11,26 @@
 | ComfyUI | `http://127.0.0.1:8189`（F 盘实例，PAI yaml 已指向） |
 | 桌面应用 | 蘑菇AI ≥ v1.3（含管家 / ComfyUI 面板） |
 
+## 工作流 JSON 放哪里？
+
+PAI 会扫描 **两个目录**（见 `gateway/video_factory/config.py` → `workflow_search_dirs`）：
+
+| 目录 | 用途 |
+|------|------|
+| **`{PAI根}/workflows/`** | **推荐**：从网上下载的 `.json` 直接放这里（本机示例 `E:\projects\PAI\workflows\`，当前 **14** 个文件） |
+| **`{ComfyUI}/ComfyUI/user/default/workflows/`** | ComfyUI 界面「Save」保存的工作流（本机 `F:\ComfyUI\...\workflows\`） |
+| `video_factory.extra_dirs`（可选） | `pai.yaml` 里可再加自定义目录 |
+
+放入后：
+
+1. 蘑菇AI → **ComfyUI 出片** → **刷新列表**（或管家输入 `同步工作流` / `列出工作流`）
+2. PAI 解析 JSON → 对照 ComfyUI `object_info` 校验节点 → 写入 `data/workflows/` catalog + API prompt
+3. 面板显示 **可 API** / **待校验** / **仅手动** 徽章
+
+**ComfyUI 程序本身**路径：管家页 **一键识别本机** → 写入 `pai.yaml` 的 `comfyui.path`（与上表工作流目录不同）。
+
+---
+
 ## 自动化（本机脚本）
 
 ```powershell

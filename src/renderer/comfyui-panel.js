@@ -19,6 +19,7 @@ const ComfyUiPanel = (() => {
     els.progressWrap = document.getElementById("comfyui-progress-wrap");
     els.progressFill = document.getElementById("comfyui-progress-fill");
     els.progressText = document.getElementById("comfyui-progress-text");
+    els.workflowHint = document.getElementById("comfyui-workflow-hint");
 
     presets = window.PaiCatalog?.FALLBACK_PRESETS || [];
 
@@ -87,11 +88,36 @@ const ComfyUiPanel = (() => {
   async function loadPanel(force) {
     setBusy(true);
     try {
+      await refreshWorkflowHint();
       await refreshComfyUiStatus();
       await loadPresetsFromPai();
       await loadWorkflowCatalog(force);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refreshWorkflowHint() {
+    if (!els.workflowHint) {
+      return;
+    }
+    try {
+      const settings = await window.modelManager.getSettings();
+      const paiRoot = (settings.paiRoot || "E:\\projects\\PAI").replace(/\//g, "\\");
+      let comfyPath = "";
+      try {
+        const status = await window.modelManager.getComfyUiStatus();
+        comfyPath = status.path || "";
+      } catch {
+        // ignore
+      }
+      const paiWorkflows = `${paiRoot}\\workflows`;
+      const comfyWorkflows = comfyPath
+        ? `${comfyPath.replace(/\//g, "\\")}\\ComfyUI\\user\\default\\workflows`
+        : "ComfyUI\\user\\default\\workflows";
+      els.workflowHint.innerHTML = `下载的工作流 <code>.json</code> 请放入 <strong>${escapeHtml(paiWorkflows)}</strong>（推荐，PAI 自动扫描），或 ComfyUI 保存目录 <strong>${escapeHtml(comfyWorkflows)}</strong>。点「刷新列表」后 PAI 会解析 JSON、对照 ComfyUI 节点并生成可 API 调用的 prompt。首次请先在「AI 执行管家」点 <strong>一键识别本机</strong> 写入 ComfyUI 路径。`;
+    } catch {
+      // keep static fallback from HTML
     }
   }
 

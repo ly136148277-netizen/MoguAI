@@ -388,6 +388,10 @@
             <div>
               <h2>ComfyUI 工作流</h2>
               <p>查看已同步工作流、ComfyUI 连接状态，一键触发已验收出片任务（L2 需确认）。</p>
+              <p id="comfyui-workflow-hint" class="comfyui-workflow-hint">
+                下载的工作流 JSON 请放入 <strong>PAI/workflows/</strong>（推荐）或 ComfyUI 的 <strong>user/default/workflows/</strong>，然后点「刷新列表」；PAI 会自动扫描并提取 API。
+                首次使用请在「AI 执行管家」点「一键识别本机」写入 ComfyUI 路径。
+              </p>
               <div class="comfyui-status">
                 <span id="comfyui-status-dot" class="comfyui-status__dot"></span>
                 <span id="comfyui-status-text">检测 ComfyUI…</span>
