@@ -1,4 +1,5 @@
-# Dependencies
+.acceptance-staging/
+
 node_modules/
 
 # Electron build output

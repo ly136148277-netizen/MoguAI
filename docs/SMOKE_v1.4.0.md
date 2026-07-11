@@ -3,7 +3,8 @@
 
 ## Automated (CI/local script)
 
-- [x] `npm test` → 49/49
+- [x] `npm test` → 50/50
+- [x] `npm run acceptance` → 24/24 (see `docs/ACCEPTANCE_v1.4.0.md`)
 - [x] `dist/蘑菇AI Setup 1.4.0.exe` exists (~83 MB)
 - [x] `dist/latest.yml` version = 1.4.0
 - [x] `win-unpacked/蘑菇AI.exe` starts (process alive 8s+)
