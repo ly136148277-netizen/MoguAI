@@ -29,6 +29,26 @@ Everything runs on your machine. After models are downloaded, chat works **fully
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/01-home.png" alt="Mogu AI home — welcome and quick start" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/images/02-models.png" alt="Model store — browse and download GGUF models" width="720" />
+  &nbsp;&nbsp;
+  <img src="docs/images/03-chat.png" alt="AI chat — offline Ollama conversations" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/images/04-comfyui.png" alt="ComfyUI panel — workflow paths and API sync" width="720" />
+</p>
+
+<sub>Regenerate: <code>npm run screenshots</code> · See <a href="docs/images/README.md">docs/images</a></sub>
+
+---
+
 ## Screenshots & download
 
 **Windows installers (recommended):**

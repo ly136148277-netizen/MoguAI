@@ -29,6 +29,26 @@
 
 ---
 
+## 界面预览
+
+<p align="center">
+  <img src="docs/images/01-home.png" alt="蘑菇AI 首页 — 欢迎与快速开始" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/images/02-models.png" alt="模型仓库 — 浏览下载 GGUF" width="720" />
+  &nbsp;&nbsp;
+  <img src="docs/images/03-chat.png" alt="AI 聊天 — Ollama 离线对话" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/images/04-comfyui.png" alt="ComfyUI 出片 — 工作流路径与 API 同步" width="720" />
+</p>
+
+<sub>重新生成截图：<code>npm run screenshots</code> · 说明见 <a href="docs/images/README.md">docs/images</a></sub>
+
+---
+
 ## 下载
 
 👉 **[最新安装包](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest)**
