@@ -101,7 +101,7 @@ By contributing, you agree your work is licensed under the [MIT License](./LICEN
 
 ## 简体中文
 
-感谢你愿意改进 **蘑菇AI**！本文说明如何参与、改哪里、哪些区域需要先沟通。
+感谢你愿意改进 **MOGU AI**！本文说明如何参与、改哪里、哪些区域需要先沟通。
 
 ### 分工一览
 

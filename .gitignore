@@ -17,6 +17,10 @@ coverage/
 Thumbs.db
 .DS_Store
 
+# Generated icon previews/backups
+assets/icon-256.png
+assets/icon-square.png
+
 # Daily news agent secrets
 config/mogu_daily_news.json
 config/mogu_deals_news.json
@@ -34,6 +38,8 @@ logs/
 # Agent handoff / unrelated local projects (not part of open-source app)
 MOGU_AI_项目存档.md
 MOGU_AI_桌面端存档.md
+MOGU_ComfyUI_本地视频存档.md
+系统缓存迁移与软件体检存档.md
 blog/
 wordpress-theme/
 mogu_*.py

@@ -1,212 +1,282 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
-  <title>蘑菇AI</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' mogu-media: data: blob:; media-src 'self' mogu-media: blob:;" />
+  <title>MOGU AI</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div class="titlebar-drag">
+    <div class="titlebar-inner">
+      <span class="titlebar-brand">MOGU AI</span>
+      <div id="ollama-toolbar" class="ollama-toolbar titlebar-toolbar">
+        <div id="ollama-status" class="ollama-status ollama-status--unknown">
+          <span class="ollama-status__dot"></span>
+          <span id="ollama-status-text">检测本地 AI 引擎...</span>
+        </div>
+        <button id="ollama-start-btn" class="btn btn--primary btn--tiny hidden" type="button">启动 Ollama</button>
+        <button id="ollama-install-btn" class="btn btn--primary btn--tiny hidden" type="button">下载安装</button>
+      </div>
+    </div>
+  </div>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="sidebar__brand">
-        <strong>蘑菇AI</strong>
-        <span>模型管理 · 电脑管家 · 视频出片</span>
+        <span>Agent模型 · Agent · ComfyUI创作 · 合成</span>
       </div>
       <nav class="sidebar__nav">
-        <button type="button" class="nav-item is-active" data-nav="home" data-i18n="navHome">🏠 首页</button>
-        <button type="button" class="nav-item" data-nav="models" data-i18n="navModels">📦 模型仓库</button>
-        <button type="button" class="nav-item" data-nav="downloads" data-i18n="navDownloads">⬇ 下载中心</button>
-        <button type="button" class="nav-item" data-nav="my-models" data-i18n="navMyModels">📦 我的模型</button>
-
-        <div class="nav-section nav-section--spaced">
-          <div class="nav-section__title" data-i18n="navSectionChat">AI 聊天问答</div>
-          <div class="nav-section__items">
-            <button type="button" class="nav-item" data-nav="chat" data-i18n="navChat">💬 AI 聊天</button>
-          </div>
-        </div>
-
-        <div class="nav-section nav-section--spaced">
-          <div class="nav-section__title" data-i18n="navSectionButler">AI 执行管家</div>
-          <div class="nav-section__items">
-            <button type="button" class="nav-item" data-nav="butler" data-i18n="navButlerMain">🤖 指令控制台</button>
-            <button type="button" class="nav-item nav-item--sub" data-nav="comfyui">🎬 ComfyUI 出片</button>
-            <button type="button" class="nav-item nav-item--sub" data-nav="butler" data-butler-prefill="打开 ComfyUI">▶ 打开 ComfyUI</button>
-            <button type="button" class="nav-item nav-item--sub" data-nav="butler" data-butler-prefill="开始工作">☀ 晨间开始</button>
-            <button type="button" class="nav-item nav-item--sub" data-nav="butler" data-butler-prefill="搜索 ">🔍 搜索文件</button>
-            <button type="button" class="nav-item nav-item--sub" data-nav="butler" data-butler-prefill="备份 PAI">💾 备份项目</button>
-          </div>
-        </div>
+        <button type="button" class="nav-item is-active" data-nav="home" data-nav-group="home">首页</button>
+        <button type="button" class="nav-item" data-nav="models" data-nav-group="models">Agent模型</button>
+        <button type="button" class="nav-item" data-nav="chat" data-nav-group="agent">Agent</button>
+        <button type="button" class="nav-item" data-nav="studio" data-nav-group="create">ComfyUI创作</button>
+        <button type="button" class="nav-item" data-nav="compose" data-nav-group="compose">视频合成</button>
+        <button type="button" class="nav-item" data-nav="setup" data-nav-group="setup">环境</button>
 
         <div class="nav-section nav-section--spaced nav-section--tail">
-          <button type="button" class="nav-item" data-nav="settings" data-i18n="navSettings">⚙ 软件设置</button>
-          <button type="button" class="nav-item" data-nav="help" data-i18n="navHelp">❓ 使用帮助</button>
+          <button type="button" class="nav-item" data-nav="settings" data-nav-group="settings">设置</button>
+          <button type="button" class="nav-item" data-nav="help" data-nav-group="help">帮助</button>
         </div>
       </nav>
       <div class="sidebar__footer">
-        <p id="sidebar-version">v1.3.0</p>
+        <p id="sidebar-version">v1.5.3</p>
       </div>
     </aside>
 
     <div class="app-main">
-      <header class="header">
-        <div class="header__status">
-            <div id="ollama-toolbar" class="ollama-toolbar">
-            <div id="ollama-status" class="ollama-status ollama-status--unknown">
-              <span class="ollama-status__dot"></span>
-              <span id="ollama-status-text">检测本地 AI 引擎...</span>
-            </div>
-            <button id="ollama-start-btn" class="btn btn--primary btn--tiny hidden" type="button">启动 Ollama</button>
-            <button id="ollama-install-btn" class="btn btn--primary btn--tiny hidden" type="button">下载安装</button>
-          </div>
-        </div>
-        <div class="header__storage">
-          <div class="storage-head">
-            <label for="storage-path">模型保存位置</label>
-            <button id="change-storage-btn" class="btn btn--primary btn--tiny" type="button">更改位置</button>
-          </div>
-          <div class="storage-row">
-            <input id="storage-path" type="text" readonly title="双击可更改保存位置" />
-            <button id="refresh-btn" class="btn btn--primary btn--tiny" type="button">刷新</button>
-          </div>
-        </div>
-      </header>
+      <!-- 保存位置在点「下载」时选择；路径仍同步到隐藏 input 供逻辑读取 -->
+      <div id="header-storage" class="header__storage hidden" aria-hidden="true">
+        <input id="storage-path" type="hidden" />
+      </div>
 
       <!-- 首页 -->
       <section id="view-home" class="view is-active">
-        <div id="welcome-section" class="welcome panel">
-          <h2 data-i18n="welcomeTitle">欢迎使用 AI 模型管理助手</h2>
-          <p class="welcome__intro" data-i18n="welcomeIntro">AI 模型管理助手是一款帮助用户下载、管理并使用本地 AI 大语言模型的桌面软件。</p>
-          <ul class="welcome__features">
-            <li data-i18n="feature1">一键下载 GGUF 模型</li>
-            <li data-i18n="feature2">自动导入本地 AI 引擎</li>
-            <li data-i18n="feature3">离线聊天，数据留在本机</li>
-            <li data-i18n="feature4">多线程高速下载</li>
-            <li data-i18n="feature5">统一管理所有模型</li>
-          </ul>
-          <h3 class="welcome__section-title" data-i18n="quickStart">快速开始</h3>
-          <div class="welcome__steps">
-            <div class="step-card"><span>①</span><strong data-i18n="step1">选择模型</strong></div>
-            <div class="step-arrow">↓</div>
-            <div class="step-card step-card--static"><span>②</span><strong data-i18n="step2">下载模型</strong></div>
-            <div class="step-arrow">↓</div>
-            <div class="step-card step-card--static"><span>③</span><strong data-i18n="step3">一键导入 Ollama</strong></div>
-            <div class="step-arrow">↓</div>
-            <div class="step-card step-card--static"><span>④</span><strong data-i18n="step4">开始聊天</strong></div>
+        <div class="home-strip panel">
+          <p class="home-strip__tip">Agent 办事 / 创作出台 · 建议先配好环境</p>
+          <div id="home-env-lights" class="home-env-lights">
+            <span id="home-light-ollama" class="home-env-chip">Ollama …</span>
+            <span id="home-light-pai" class="home-env-chip">PAI …</span>
+            <span id="home-light-comfy" class="home-env-chip">ComfyUI …</span>
+            <span id="home-light-ffmpeg" class="home-env-chip">FFmpeg …</span>
+            <button id="home-goto-setup-btn" class="home-env-chip home-env-chip--link" type="button">环境 …</button>
           </div>
-          <div class="welcome__actions">
-            <button id="start-experience-btn" class="btn btn--primary btn--large" type="button" data-i18n="startExperience">开始体验</button>
-            <button id="home-import-ollama-btn" class="btn btn--primary btn--large" type="button">一键导入 Ollama</button>
-            <button id="home-goto-chat-btn" class="btn btn--primary btn--large" type="button" data-i18n="gotoChat">进入聊天</button>
-            <button id="home-goto-butler-btn" class="btn btn--primary btn--large" type="button">进入 AI 执行管家</button>
-          </div>
+        </div>
+        <div class="home-dual">
+          <button type="button" class="home-entry panel" id="home-goto-chat-btn">
+            <strong>对话 Agent</strong>
+            <span>打字办事 · 问用法 · 可选模型闲聊</span>
+          </button>
+          <button type="button" class="home-entry panel" id="home-goto-studio-btn">
+            <strong>视频创作</strong>
+            <span>挂工作流 · 写提示词 · 出片</span>
+          </button>
+        </div>
+        <div class="home-secondary">
+          <button id="home-goto-models-btn" class="btn btn--ghost btn--tiny" type="button">模型库</button>
+          <button id="home-import-ollama-btn" class="btn btn--ghost btn--tiny" type="button">导入 Ollama</button>
+          <button id="start-experience-btn" class="btn btn--ghost btn--tiny hidden" type="button">开始体验</button>
+          <button id="home-goto-butler-btn" class="btn btn--ghost btn--tiny" type="button">Agent 介绍</button>
+          <button id="home-help-btn" class="btn btn--ghost btn--tiny" type="button">帮助</button>
         </div>
         <section id="home-import-panel" class="home-import panel">
           <div class="panel__head">
-            <h3>导入 Ollama</h3>
-            <span id="home-import-badge" class="badge">0 个待导入</span>
+            <h3>待导入模型</h3>
+            <span id="home-import-badge" class="badge">0</span>
           </div>
           <p id="home-import-hint" class="home-import__hint">加载中...</p>
           <ul id="home-import-list" class="home-import-list"></ul>
           <div class="home-import__actions">
             <button id="home-import-all-btn" class="btn btn--primary" type="button" disabled>一键导入全部</button>
-            <button id="home-goto-models-btn" class="btn btn--primary" type="button">前往模型仓库</button>
           </div>
         </section>
         <section class="home-recent panel">
-          <h3 class="home-recent__title" data-i18n="recentUsage">最近使用</h3>
+          <h3 class="home-recent__title">最近</h3>
           <div class="home-grid">
             <div class="home-card">
-              <h4 data-i18n="recentDownloads">最近下载</h4>
+              <h4>下载</h4>
               <ul id="recent-downloads" class="dashboard-list"></ul>
             </div>
             <div class="home-card">
-              <h4 data-i18n="recentChats">最近聊天</h4>
+              <h4>对话</h4>
               <ul id="recent-sessions" class="dashboard-list"></ul>
             </div>
             <div class="home-card">
-              <h4 data-i18n="recentImported">最近导入</h4>
+              <h4>导入</h4>
               <ul id="recent-imported" class="dashboard-list"></ul>
             </div>
           </div>
         </section>
-        <div class="home-footer panel">
-          <span id="home-version" class="home-footer__version">v1.3.0</span>
-          <button id="home-help-btn" class="btn btn--primary" type="button" data-i18n="viewHelp">查看帮助</button>
-        </div>
       </section>
 
-      <!-- 模型仓库 -->
+      <!-- 模型：先选本地 / 联网 -->
       <section id="view-models" class="view">
-        <div class="view-head">
-          <div class="view-head__toolbar">
-            <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
-            <div class="view-head__main">
-              <h2 data-i18n="pageModelsTitle">模型仓库</h2>
-              <p data-i18n="pageModelsDesc">浏览并下载可用的 AI 大语言模型</p>
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
+          <span class="view-category-label">Agent模型</span>
+          <button id="models-back-gate-btn" class="btn btn--ghost btn--tiny hidden" type="button">← 返回选择</button>
+          <button id="refresh-btn" class="btn btn--ghost btn--tiny" type="button">刷新列表</button>
+          <button id="sync-btn" class="btn btn--primary btn--tiny hidden" type="button" data-i18n="syncCatalog">更新模型库</button>
+        </div>
+
+        <div id="models-gate" class="models-gate">
+          <p class="models-gate__note">这是 Agent 的脑子模型，不是 ComfyUI 模型。</p>
+          <button type="button" class="models-gate__card panel" id="models-goto-local-btn">
+            <strong>本地模型</strong>
+            <span>下载 GGUF · 导入 Ollama · 本机离线聊天与 Agent 引导</span>
+          </button>
+          <button type="button" class="models-gate__card panel" id="models-goto-online-btn">
+            <strong>联网模型</strong>
+            <span>选服务商与模型名 · 填 API 密钥 · 用于 Agent 聪明引导</span>
+          </button>
+        </div>
+
+        <div id="models-local" class="models-local hidden">
+          <div class="hub-tabs" data-hub="models">
+            <button type="button" class="hub-tab is-active" data-hub-nav="models" data-models-mode="local">聊天模型</button>
+            <button type="button" class="hub-tab" data-hub-nav="my-models" data-models-mode="local">我的模型</button>
+            <button type="button" class="hub-tab" data-hub-nav="downloads" data-models-mode="local">下载中</button>
+            <button type="button" class="hub-tab hub-tab--soon" disabled title="二期：ComfyUI 权重下载">创作模型</button>
+          </div>
+          <section class="panel models-hub-panel">
+            <div class="panel__head">
+              <h2>全部模型</h2>
+              <span id="model-count" class="badge">0 个模型</span>
             </div>
-            <button id="sync-btn" class="btn btn--primary" type="button" data-i18n="syncCatalog">更新模型库</button>
-          </div>
+            <div class="toolbar">
+              <div class="toolbar__row">
+                <input id="search-input" class="toolbar__search" type="search" placeholder="搜索模型名称，例如 llama、通义千问..." />
+                <select id="filter-select" class="toolbar__select">
+                  <option value="all">全部模型</option>
+                  <option value="installed">已下载</option>
+                  <option value="favorites">我的收藏</option>
+                  <option value="recent">最近下载</option>
+                </select>
+                <select id="category-select" class="toolbar__select">
+                  <option value="all">模型类型</option>
+                </select>
+                <select id="tag-select" class="toolbar__select">
+                  <option value="all">模型标签</option>
+                </select>
+                <select id="sort-select" class="toolbar__select">
+                  <option value="updatedAt">更新时间</option>
+                </select>
+              </div>
+            </div>
+            <div id="model-list" class="model-list"></div>
+          </section>
         </div>
-        <div class="toolbar panel">
-          <div class="toolbar__row">
-            <input id="search-input" class="toolbar__search" type="search" placeholder="搜索模型名称，例如 llama、通义千问..." />
-            <select id="filter-select" class="toolbar__select">
-              <option value="all">全部模型</option>
-              <option value="installed">已下载</option>
-              <option value="favorites">我的收藏</option>
-              <option value="recent">最近下载</option>
+
+        <div id="models-online" class="models-online panel hidden">
+          <h2>联网模型</h2>
+          <p class="models-online__hint">填写后点「执行」：保存并设为 Agent 引导模型。办事仍走本机 PAI。</p>
+          <label>服务商
+            <select id="online-api-preset">
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai">OpenAI</option>
+              <option value="qwen">通义千问</option>
+              <option value="moonshot">月之暗面 Kimi</option>
+              <option value="custom">自定义</option>
             </select>
-            <select id="category-select" class="toolbar__select">
-              <option value="all">模型类型</option>
+          </label>
+          <label>模型名称
+            <select id="online-model-select">
+              <option value="deepseek-chat">deepseek-chat</option>
+              <option value="deepseek-reasoner">deepseek-reasoner</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="qwen-plus">qwen-plus</option>
+              <option value="qwen-turbo">qwen-turbo</option>
+              <option value="moonshot-v1-8k">moonshot-v1-8k</option>
+              <option value="__custom__">自定义输入…</option>
             </select>
-            <select id="tag-select" class="toolbar__select">
-              <option value="all">模型标签</option>
-            </select>
-            <select id="sort-select" class="toolbar__select">
-              <option value="updatedAt">更新时间</option>
-            </select>
+          </label>
+          <label id="online-model-custom-wrap" class="hidden">自定义模型名
+            <input id="online-model-custom" type="text" spellcheck="false" placeholder="例如 gpt-4.1-mini" />
+          </label>
+          <label>API 密钥
+            <input id="online-api-key" type="password" spellcheck="false" placeholder="sk-…" autocomplete="off" />
+          </label>
+          <details class="models-online__advanced">
+            <summary>高级 · API 地址</summary>
+            <label>Base URL
+              <input id="online-api-base" type="text" spellcheck="false" placeholder="https://api.deepseek.com/v1" />
+            </label>
+          </details>
+          <div class="models-online__actions">
+            <button id="online-test-btn" class="btn btn--ghost" type="button">测试连接</button>
+            <button id="online-apply-btn" class="btn btn--primary" type="button">执行</button>
           </div>
+          <p id="online-status" class="models-online__status"></p>
         </div>
-        <section class="panel">
-          <div class="panel__head">
-            <h2>全部模型</h2>
-            <span id="model-count" class="badge">0 个模型</span>
-          </div>
-          <div id="model-list" class="model-list"></div>
-        </section>
       </section>
 
       <!-- 下载中心 -->
       <section id="view-downloads" class="view">
-        <div class="view-head">
-          <div class="view-head__toolbar">
-            <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
-            <div class="view-head__main">
-              <h2 data-i18n="pageDownloadsTitle">下载中心</h2>
-              <p data-i18n="pageDownloadsDesc">查看下载进度，支持暂停、继续和断点续传</p>
-            </div>
-            <span id="queue-count" class="badge">空闲</span>
-          </div>
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
+          <span class="view-category-label">模型 · 下载中</span>
+          <span id="queue-count" class="badge">空闲</span>
+        </div>
+        <div class="hub-tabs" data-hub="models">
+          <button type="button" class="hub-tab" data-hub-nav="models" data-models-mode="local">聊天模型</button>
+          <button type="button" class="hub-tab" data-hub-nav="my-models" data-models-mode="local">我的模型</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="downloads" data-models-mode="local">下载中</button>
+          <button type="button" class="hub-tab hub-tab--soon" disabled title="二期：ComfyUI 权重下载">创作模型</button>
         </div>
         <section class="panel">
           <div id="queue-list" class="queue-list queue-list--full"></div>
         </section>
       </section>
 
-      <!-- AI 聊天问答 -->
+      <!-- Agent：统一对话窗（打字办事 / 问用法 / 引导） -->
       <section id="view-chat" class="view">
         <div class="view-head view-head--compact">
-          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
-          <span class="view-category-label" data-i18n="navSectionChat">AI 聊天问答</span>
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
+          <span class="view-category-label">Agent</span>
         </div>
-        <div id="chat-picker" class="chat-picker panel">
-          <h2 data-i18n="pageChatPickerTitle">选择要聊天的模型</h2>
-          <p data-i18n="pageChatPickerDesc">请先下载并导入模型。下方列出已就绪、可直接对话的模型。</p>
-          <h3 class="chat-picker__section-title" data-i18n="chatReadyModels">已有模型</h3>
+        <div id="agent-workspace" class="agent-workspace panel">
+          <div class="agent-workspace__head">
+            <div class="butler-status">
+              <span id="agent-status-dot" class="butler-status__dot"></span>
+              <span id="agent-status-text">打字即可办事或提问</span>
+            </div>
+            <div class="agent-toolbar">
+              <div class="agent-toolbar__cmds">
+                <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="打开 ComfyUI">打开 ComfyUI</button>
+                <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="列出工作流">列出工作流</button>
+                <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="搜索 ">搜索文件</button>
+                <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="备份 PAI">备份 PAI</button>
+                <button type="button" class="btn btn--ghost btn--tiny" data-agent-cmd="怎么用MOGU AI">怎么用</button>
+              </div>
+              <div class="agent-toolbar__aside">
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-goto-studio-btn">去创作台</button>
+                <button type="button" class="btn btn--primary btn--tiny" id="agent-goto-models-btn">去添加模型</button>
+              </div>
+            </div>
+            <div class="agent-power">
+              <span class="agent-power__label">定时关机</span>
+              <label class="agent-power__custom">
+                <input id="agent-shutdown-minutes" type="number" min="1" max="1440" step="1" value="60" />
+                分钟后
+              </label>
+              <button type="button" class="btn btn--primary btn--tiny" id="agent-shutdown-custom-btn">开始计时</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="agent-shutdown-cancel-btn">取消关机</button>
+              <span id="agent-shutdown-status" class="agent-power__status"></span>
+            </div>
+          </div>
+          <div id="agent-messages" class="butler-messages"></div>
+          <form id="agent-form" class="butler-form agent-form">
+            <input id="agent-input" type="text" placeholder="例如：打开 ComfyUI、列出工作流、搜索 桌面、备份 PAI、怎么用创作台…" autocomplete="off" />
+            <button class="btn btn--primary" type="submit">发送</button>
+          </form>
+        </div>
+
+        <!-- ChatUI 兼容节点（不在 Agent 主界面露出；我的模型「去聊天」仍可用） -->
+        <div id="chat-picker" class="chat-picker panel hidden">
+          <h2>选择模型</h2>
           <div id="chat-ready-models" class="chat-ready-models"></div>
-          <button id="chat-goto-models-btn" class="btn btn--primary" type="button" data-i18n="gotoModelStore">点击去模型仓库下载更多模型</button>
+          <button id="chat-goto-models-btn" class="btn btn--primary" type="button">去模型库</button>
         </div>
         <div id="chat-workspace" class="chat-workspace hidden">
           <div class="chat-layout panel">
@@ -245,11 +315,58 @@
         </div>
       </section>
 
-      <!-- AI 执行管家 -->
+      <!-- Agent 介绍（只读说明，不进入对话） -->
+      <section id="view-agent-intro" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
+          <span class="view-category-label">Agent 介绍</span>
+        </div>
+        <div class="agent-intro panel">
+          <h2>Agent 是什么？</h2>
+          <p>Agent 是 MOGU AI 的「办事助手」：侧栏点 <strong>Agent</strong>，打字即可让本机办事，或问怎么用。日常出片请走<strong>创作台</strong>。</p>
+          <p class="agent-intro__tip">建议先在「环境」配好 Ollama / PAI / ComfyUI，再（可选）到「模型」给 Agent 配引导脑子。<strong>那是答疑用的模型，不是 ComfyUI 出片模型。</strong></p>
+
+          <h3>常用能力（记住这几项就够）</h3>
+          <ul>
+            <li><strong>打开软件</strong> — 如 ComfyUI、Ollama、资源管理器</li>
+            <li><strong>列出 / 分析工作流</strong> — 看本机有哪些出片流</li>
+            <li><strong>确认出片</strong> — 一句话跑工作流（可视化出片仍用创作台）</li>
+            <li><strong>搜索文件</strong> — 全文搜本机索引（如「搜索 ROADMAP」）</li>
+            <li><strong>备份</strong> — 打包 PAI / 项目 zip</li>
+            <li><strong>恢复</strong> — 从备份还原</li>
+            <li><strong>抓取网页</strong> — 抓页面，可用本地模型总结</li>
+            <li><strong>删除文件</strong> — 需二次确认；删前自动备份快照</li>
+          </ul>
+
+          <details class="agent-intro__advanced">
+            <summary>高级能力（完整控制台，多数人用不上）</summary>
+            <ul>
+              <li><strong>启动时开始</strong> — 一键自检并拉起 Ollama/ComfyUI、建索引（日常看「环境」页灯即可）</li>
+              <li><strong>视频后期</strong> — ffmpeg 剪辑/拼接（一般更建议剪映）</li>
+              <li><strong>更新 / 管理 ComfyUI</strong> — 运维向，有误操作风险</li>
+              <li><strong>索引目录、下载链接、软件更新、定时任务、批量操作</strong> — 引擎支持，不在此页展开</li>
+            </ul>
+          </details>
+
+          <h3>怎么开始</h3>
+          <ol>
+            <li>首页确认环境灯为绿，或到「环境」补齐</li>
+            <li>（可选）「模型」→ 本地/联网，给 Agent 配引导脑子</li>
+            <li>侧栏进入 <strong>Agent</strong>，打字或点快捷按钮</li>
+          </ol>
+
+          <div class="agent-intro__actions">
+            <button type="button" class="btn btn--primary" id="agent-intro-goto-agent-btn">去 Agent 开始使用</button>
+            <button type="button" class="btn btn--ghost" id="agent-intro-goto-setup-btn">去配置环境</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI 执行管家（高级，不再从首页入口跳入） -->
       <section id="view-butler" class="view">
         <div class="view-head view-head--compact">
-          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
-          <span class="view-category-label" data-i18n="navSectionButler">AI 执行管家</span>
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
+          <span class="view-category-label">Agent · 高级控制台</span>
         </div>
         <div class="butler-workspace panel">
           <div class="butler-head">
@@ -270,52 +387,36 @@
           <div class="butler-quick">
             <button type="button" class="btn btn--primary btn--tiny" data-butler-cmd="打开 ComfyUI">打开 ComfyUI</button>
             <button type="button" class="btn btn--primary btn--tiny" data-butler-cmd="列出工作流">列出工作流</button>
-            <button type="button" class="btn btn--primary btn--tiny" data-butler-cmd="开始工作">晨间开始</button>
             <button type="button" class="btn btn--primary btn--tiny" data-butler-cmd="搜索 ROADMAP">搜索文件</button>
             <button type="button" class="btn btn--primary btn--tiny" data-butler-cmd="备份 PAI">备份 PAI</button>
             <button type="button" class="btn btn--primary btn--tiny" data-butler-cmd="抓取 https://example.com">抓取网页</button>
+            <button type="button" class="btn btn--ghost btn--tiny" data-butler-cmd="开始工作">启动时开始</button>
           </div>
           <details class="butler-capabilities">
-            <summary>全部能力说明（由 PAI 引擎驱动，共 17 项）</summary>
+            <summary>能力说明（常用 8 项 · 其余在高级）</summary>
             <div class="butler-capabilities__grid">
               <div class="butler-capabilities__group">
-                <h4>日常 · 启动</h4>
+                <h4>常用</h4>
                 <ul>
                   <li><strong>打开软件</strong> — 如 ComfyUI、Ollama、资源管理器</li>
-                  <li><strong>晨间开始</strong> — 自检 + 启动 Ollama/ComfyUI + 索引</li>
-                </ul>
-              </div>
-              <div class="butler-capabilities__group">
-                <h4>ComfyUI · 视频出片</h4>
-                <ul>
-                  <li><strong>列出/分析工作流</strong> — 查看存档、分析出片步骤</li>
+                  <li><strong>列出 / 分析工作流</strong> — 查看存档、分析出片步骤</li>
                   <li><strong>确认出片</strong> — 如「确认出片 demo_video」</li>
-                  <li><strong>视频后期</strong> — ffmpeg 剪辑、拼接、配乐</li>
-                  <li><strong>更新 ComfyUI</strong> — 备份后 git pull</li>
-                  <li><strong>管理 ComfyUI 文件</strong> — 白名单内列出/删除</li>
-                </ul>
-              </div>
-              <div class="butler-capabilities__group">
-                <h4>文件 · 搜索</h4>
-                <ul>
-                  <li><strong>搜索文件</strong> — 全文索引搜索（如「搜索 ROADMAP」）</li>
-                  <li><strong>索引目录</strong> — 把白名单目录编入 Memory</li>
+                  <li><strong>搜索文件</strong> — 全文索引（如「搜索 ROADMAP」）</li>
                   <li><strong>备份 / 恢复</strong> — 打包 zip 或从备份还原</li>
+                  <li><strong>抓取网页</strong> — 抓取并用本地模型总结</li>
+                  <li><strong>删除文件</strong> — L3，删前自动备份快照</li>
                 </ul>
               </div>
               <div class="butler-capabilities__group">
-                <h4>网络 · 系统</h4>
+                <h4>高级</h4>
                 <ul>
-                  <li><strong>下载链接</strong> — URL 下载到白名单目录</li>
-                  <li><strong>抓取网页</strong> — 抓取并用本地模型总结</li>
-                  <li><strong>软件更新</strong> — winget 检查/升级 Chrome 等</li>
-                  <li><strong>定时任务</strong> — 添加或列出定时执行的命令</li>
-                  <li><strong>批量操作</strong> — 批量移动/删除（L3，先预览）</li>
-                  <li><strong>删除文件</strong> — L3，删除前自动备份快照</li>
+                  <li><strong>启动时开始</strong> — 自检 + 拉起 Ollama/ComfyUI + 索引（日常看「环境」页即可）</li>
+                  <li><strong>视频后期 / 更新·管理 ComfyUI</strong> — 运维与后期，慎用</li>
+                  <li><strong>索引、下载、软件更新、定时、批量</strong> — 引擎支持，非日常卖点</li>
                 </ul>
               </div>
             </div>
-            <p class="butler-capabilities__hint">用法：点左侧快捷入口，或在下方输入框用自然语言描述任务。需先在「软件设置」配置 PAI 路径并「连接 PAI」。</p>
+            <p class="butler-capabilities__hint">用法：点快捷按钮，或下方输入自然语言。需先配置 PAI 路径并「连接 PAI」。</p>
           </details>
           <div id="butler-progress" class="butler-progress hidden">
             <div class="comfyui-progress__track">
@@ -377,10 +478,306 @@
         </div>
       </section>
 
+      <!-- 环境中心 -->
+      <section id="view-setup" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">环境中心</span>
+        </div>
+        <div class="setup-workspace panel">
+          <div class="setup-head">
+            <h2>一键环境</h2>
+            <p>1. 请把下面工具全部都安装好之后再使用。<br />2. 所有工具作者已辛苦帮你整合了，别怕学，懂得越多越是免费。</p>
+          </div>
+          <div id="setup-cards" class="setup-cards">
+            <article class="setup-card" data-setup="ollama">
+              <div class="setup-card__head">
+                <h3>Ollama</h3>
+                <span id="setup-ollama-badge" class="badge">检测中…</span>
+              </div>
+              <p id="setup-ollama-text" class="setup-card__text">本地大模型运行时，聊天与模型导入依赖它。</p>
+              <div class="setup-card__actions">
+                <button id="setup-ollama-install-btn" class="btn btn--primary btn--tiny" type="button">一键安装</button>
+                <button id="setup-ollama-start-btn" class="btn btn--ghost btn--tiny" type="button">启动</button>
+              </div>
+            </article>
+            <article class="setup-card" data-setup="pai">
+              <div class="setup-card__head">
+                <h3>PAI 引擎</h3>
+                <span id="setup-pai-badge" class="badge">检测中…</span>
+              </div>
+              <p id="setup-pai-text" class="setup-card__text">管家与创作台出片引擎。可自动安装到本机用户目录，或选择已有文件夹。</p>
+              <div class="setup-card__actions">
+                <button id="setup-pai-install-btn" class="btn btn--primary btn--tiny" type="button">一键安装</button>
+                <button id="setup-pai-pick-btn" class="btn btn--ghost btn--tiny" type="button">选择文件夹</button>
+                <button id="setup-pai-start-btn" class="btn btn--ghost btn--tiny" type="button">启动</button>
+              </div>
+            </article>
+            <article class="setup-card" data-setup="comfyui">
+              <div class="setup-card__head">
+                <h3>ComfyUI</h3>
+                <span id="setup-comfy-badge" class="badge">检测中…</span>
+              </div>
+              <p id="setup-comfy-text" class="setup-card__text">体积较大：先下载便携包解压，再点「扫描写入」。</p>
+              <div class="setup-card__actions">
+                <button id="setup-comfy-guide-btn" class="btn btn--primary btn--tiny" type="button">下载便携包</button>
+                <button id="setup-comfy-scan-btn" class="btn btn--ghost btn--tiny" type="button">我已装好 → 扫描</button>
+              </div>
+            </article>
+            <article class="setup-card" data-setup="ffmpeg">
+              <div class="setup-card__head">
+                <h3>FFmpeg</h3>
+                <span id="setup-ffmpeg-badge" class="badge">检测中…</span>
+              </div>
+              <p id="setup-ffmpeg-text" class="setup-card__text">视频拼接/转码。一键安装会下载便携版到软件目录，换电脑也能用；无需手动配 PATH。</p>
+              <div class="setup-card__actions">
+                <button id="setup-ffmpeg-install-btn" class="btn btn--primary btn--tiny" type="button">一键安装</button>
+              </div>
+            </article>
+          </div>
+          <pre id="setup-log" class="setup-log"></pre>
+          <div class="setup-foot">
+            <button id="setup-refresh-btn" class="btn btn--ghost btn--tiny" type="button">刷新状态（含代理）</button>
+            <button id="setup-goto-studio-btn" class="btn btn--primary btn--tiny" type="button">去创作台</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 创作台 -->
+      <section id="view-studio" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">ComfyUI创作</span>
+        </div>
+        <div class="studio-workspace panel">
+          <div id="studio-env-bar" class="studio-env-bar">
+            <span id="studio-env-ollama" class="studio-env-chip">Ollama …</span>
+            <span id="studio-env-pai" class="studio-env-chip">PAI …</span>
+            <span id="studio-env-comfy" class="studio-env-chip">ComfyUI …</span>
+            <span id="studio-env-ffmpeg" class="studio-env-chip">FFmpeg …</span>
+            <span id="studio-env-all" class="studio-env-chip">环境 …</span>
+          </div>
+          <div class="studio-prompts">
+            <div class="studio-prompt-card">
+              <div class="studio-prompt-card__head">
+                <h3>人物描述</h3>
+                <button id="studio-add-photo-btn" class="btn btn--ghost btn--tiny" type="button">+ 照片</button>
+              </div>
+              <textarea id="studio-character" rows="4" placeholder="例如：一位穿红裙的东亚女性，电影光影…"></textarea>
+              <p id="studio-photo-label" class="studio-photo-label">未添加参考照片</p>
+            </div>
+            <div class="studio-prompt-card">
+              <div class="studio-prompt-card__head">
+                <h3>动作 / 行为描述</h3>
+              </div>
+              <textarea id="studio-action" rows="4" placeholder="例如：缓缓转身看向镜头，发丝随风飘动…"></textarea>
+            </div>
+          </div>
+          <div class="studio-params">
+            <div class="studio-params__row">
+              <div class="studio-param-block">
+                <span class="studio-param-label">尺寸（分辨率）</span>
+                <select id="studio-size" class="studio-param-select" aria-label="尺寸分辨率">
+                  <option value="">工作流默认</option>
+                  <option value="640x960">竖屏 · 640×960（2:3）</option>
+                  <option value="720x1280">竖屏 · 720×1280（9:16）</option>
+                  <option value="1080x1920">竖屏 · 1080×1920（高清）</option>
+                  <option value="1280x720">横屏 · 1280×720（720p）</option>
+                  <option value="1920x1080">横屏 · 1920×1080（1080p）</option>
+                  <option value="1024x1024">方形 · 1024×1024</option>
+                  <option value="512x512">方形 · 512×512</option>
+                  <option value="512x768">低显存 · 512×768（竖）</option>
+                  <option value="768x512">低显存 · 768×512（横）</option>
+                </select>
+              </div>
+              <div class="studio-param-block">
+                <span class="studio-param-label">清晰度</span>
+                <select id="studio-clarity" class="studio-param-select" aria-label="清晰度">
+                  <option value="">工作流默认</option>
+                  <option value="fast">快速</option>
+                  <option value="standard">标准</option>
+                  <option value="high">精细</option>
+                </select>
+              </div>
+              <div class="studio-param-block">
+                <span class="studio-param-label">时长</span>
+                <select id="studio-duration" class="studio-param-select" aria-label="视频时长">
+                  <option value="">工作流默认</option>
+                  <option value="2">2 秒</option>
+                  <option value="3">3 秒</option>
+                  <option value="5">5 秒</option>
+                  <option value="8">8 秒</option>
+                  <option value="10">10 秒（8G 建议上限）</option>
+                  <option value="15">15 秒 · 12G+</option>
+                  <option value="20">20 秒 · 12G+</option>
+                  <option value="30">30 秒 · 16G+</option>
+                  <option value="45">45 秒 · 16G+</option>
+                  <option value="60">1 分钟 · 高显卡</option>
+                  <option value="120">2 分钟 · 高显卡</option>
+                  <option value="180">3 分钟 · 高显卡</option>
+                  <option value="300">5 分钟 · 高显卡</option>
+                  <option value="600">10 分钟（最长）</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="studio-pipeline">
+            <div class="studio-mode-row">
+              <strong>创作台</strong>
+              <span class="studio-mode-hint">请导入你的工作流，工作流要适配，否则视频人物与原图有偏差。</span>
+            </div>
+            <div class="studio-stage" data-stage="t2i">
+              <div class="studio-slot">
+                <div>
+                  <button id="studio-add-t2i-btn" class="btn btn--primary btn--tiny studio-add-btn" type="button">+</button>
+                  <span>文生图工作流</span>
+                  <small>可添加文生图工作流</small>
+                </div>
+                <strong id="studio-t2i-name">未选择</strong>
+              </div>
+              <div id="studio-t2i-progress" class="studio-stage-progress hidden">
+                <div class="studio-stage-progress__track">
+                  <div id="studio-t2i-progress-fill" class="studio-stage-progress__fill is-indeterminate"></div>
+                </div>
+                <p id="studio-t2i-progress-text" class="studio-stage-progress__text">待命</p>
+              </div>
+              <div id="studio-t2i-preview" class="studio-stage-preview hidden">
+                <p class="studio-stage-preview__label">文生图成品</p>
+                <img id="studio-t2i-preview-img" alt="文生图成品" />
+                <p id="studio-t2i-preview-path" class="studio-stage-preview__path"></p>
+              </div>
+            </div>
+            <div class="studio-stage" data-stage="i2v">
+              <div class="studio-slot">
+                <div>
+                  <button id="studio-add-i2v-btn" class="btn btn--primary btn--tiny studio-add-btn" type="button">+</button>
+                  <span>图生视频工作流</span>
+                  <small>可添加图生视频工作流</small>
+                </div>
+                <strong id="studio-i2v-name">未选择</strong>
+              </div>
+              <div id="studio-i2v-progress" class="studio-stage-progress hidden">
+                <div class="studio-stage-progress__track">
+                  <div id="studio-i2v-progress-fill" class="studio-stage-progress__fill is-indeterminate"></div>
+                </div>
+                <p id="studio-i2v-progress-text" class="studio-stage-progress__text">待命</p>
+                <p class="studio-stage-progress__wait-tip">
+                  视频正在生成中，请耐心等待；进度条仅为粗略估算，靠近完成时可能停较久。确需停止可点「取消」。也可打开 ComfyUI 后台查看实时进度。
+                </p>
+              </div>
+              <div id="studio-i2v-preview" class="studio-stage-preview hidden">
+                <p class="studio-stage-preview__label">图生视频成品</p>
+                <video id="studio-i2v-preview-video" controls playsinline></video>
+                <p id="studio-i2v-preview-path" class="studio-stage-preview__path"></p>
+              </div>
+            </div>
+            <div class="studio-actions">
+              <button id="studio-run-btn" class="btn btn--primary" type="button">执行</button>
+              <button id="studio-cancel-btn" class="btn btn--ghost" type="button" title="中断 ComfyUI 当前任务并清空队列">取消</button>
+            </div>
+          </div>
+
+          <div id="studio-tip" class="studio-tip">
+            <p>点 <strong>+</strong> 选工作流 → 写提示词 → 执行。短片出完后，去左侧「视频合成」拼长片。</p>
+            <button id="studio-tip-dismiss" class="btn btn--ghost btn--tiny" type="button">知道了</button>
+          </div>
+          <div id="studio-guide" class="studio-guide hidden" aria-hidden="true">
+            <p id="studio-guide-meta" class="studio-guide__meta">进入本页会自动扫描本机工作流。</p>
+          </div>
+
+          <div id="studio-run-panel" class="studio-run-panel hidden">
+            <div class="studio-run-panel__head">
+              <h3>执行进度</h3>
+              <button id="studio-clear-log-btn" class="btn btn--ghost btn--tiny" type="button">清空</button>
+            </div>
+            <div id="studio-progress-wrap" class="comfyui-progress hidden">
+              <div class="comfyui-progress__track">
+                <div id="studio-progress-fill" class="comfyui-progress__fill is-indeterminate"></div>
+              </div>
+              <p id="studio-progress-text" class="comfyui-progress__text">待命</p>
+            </div>
+            <pre id="studio-log" class="studio-log"></pre>
+          </div>
+
+          <div class="studio-workflow-tip">
+            <p>
+              小提示：按用途自选能衔接的工作流，上一段成品会尽量传给下一段。优先 ComfyUI「Save (API Format)」；参数会尽量写入，特殊节点/连线尺寸可能盖不进去。
+              进度仅为估算，慢可点「取消」或看 ComfyUI 后台。有问题找 Agent（请先在「模型」选好聪明大脑）。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 视频合成：长片剪辑 / 拼接 -->
+      <section id="view-compose" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
+          <span class="view-category-label">视频合成</span>
+        </div>
+        <div class="compose-workspace panel">
+          <div class="compose-hero">
+            <h2>视频合成</h2>
+            <p>短镜头在「创作」出片；这里按时间线顺序一键拼成长视频（首次会自动准备 FFmpeg）。</p>
+          </div>
+
+          <div class="compose-tool-row">
+            <button id="compose-concat-btn" class="btn btn--primary" type="button">一键拼接</button>
+            <span class="compose-tool-arrow" aria-hidden="true">→</span>
+            <div class="compose-tool-refine">
+              <label>
+                细修工具（可选）
+                <select id="compose-tool">
+                  <option value="shotcut" selected>Shotcut（免费剪辑）</option>
+                  <option value="jianying">剪映</option>
+                  <option value="__add__">添加其它工具…</option>
+                </select>
+              </label>
+              <button id="compose-remove-tool-btn" class="btn btn--ghost btn--tiny hidden" type="button">移除</button>
+              <button id="compose-open-tool-btn" class="btn btn--ghost" type="button">用工具细修</button>
+            </div>
+          </div>
+          <p class="compose-concat-note">一键拼接只做首尾相接。如需裁剪、转场、字幕，请到专业剪辑工具做更细致修改。</p>
+
+          <div class="compose-timeline" aria-label="合成时间线">
+            <div class="compose-timeline__ruler">
+              <span>00:00</span><span>00:05</span><span>00:10</span><span>00:15</span><span>00:20</span>
+            </div>
+            <div id="compose-timeline-track" class="compose-timeline__track"></div>
+            <p class="compose-timeline__hint">从左到右排列短片；点「+」选文件加入，排好后点「一键拼接」。</p>
+          </div>
+
+          <div id="compose-result" class="compose-result hidden">
+            <div class="compose-result__head">
+              <h3>拼接完成</h3>
+              <button id="compose-result-open-btn" class="btn btn--ghost btn--tiny" type="button">用工具精修</button>
+            </div>
+            <video id="compose-result-video" controls playsinline></video>
+            <p id="compose-result-path" class="compose-result__path"></p>
+          </div>
+        </div>
+      </section>
+
+      <div id="studio-workflow-modal" class="butler-confirm-modal hidden" role="dialog" aria-modal="true">
+        <div class="butler-confirm-modal__backdrop" data-studio-close="1"></div>
+        <div class="butler-confirm-modal__panel studio-workflow-modal__panel">
+          <h3 id="studio-workflow-modal-title">选择工作流</h3>
+          <p class="studio-workflow-modal__tip">
+            推荐上传 ComfyUI「Save (API Format)」的 JSON。软件会自动读取 API；提示词/尺寸/清晰度/时长会尽量同步到 ComfyUI，但特殊节点可能盖不进去。
+            遇问题可去 Agent 反馈，请先选好聪明的 Agent 大脑。
+          </p>
+          <div id="studio-workflow-modal-list" class="studio-workflow-modal__list"></div>
+          <div class="butler-confirm-modal__actions">
+            <button id="studio-workflow-refresh-btn" class="btn btn--ghost" type="button">刷新列表</button>
+            <button id="studio-workflow-import-btn" class="btn btn--ghost" type="button">从文件添加…</button>
+            <button id="studio-workflow-modal-cancel" class="btn btn--primary" type="button">关闭</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ComfyUI 出片面板 -->
       <section id="view-comfyui" class="view">
         <div class="view-head view-head--compact">
-          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
           <span class="view-category-label">ComfyUI 出片</span>
         </div>
         <div class="comfyui-workspace panel">
@@ -390,7 +787,8 @@
               <p>查看已同步工作流、ComfyUI 连接状态，一键触发已验收出片任务（L2 需确认）。</p>
               <p id="comfyui-workflow-hint" class="comfyui-workflow-hint">
                 下载的工作流 JSON 请放入 <strong>PAI/workflows/</strong>（推荐）或 ComfyUI 的 <strong>user/default/workflows/</strong>，然后点「刷新列表」；PAI 会自动扫描并提取 API。
-                首次使用请在「AI 执行管家」点「一键识别本机」写入 ComfyUI 路径。
+                请优先使用 ComfyUI「Save (API Format)」；创作台改提示词/尺寸/清晰度/时长会尽量同步，特殊节点可能无效。
+                首次使用请在「AI 执行管家」点「一键识别本机」写入 ComfyUI 路径。如有问题可反映给 Agent（请先选好聪明的 Agent 大脑）。
               </p>
               <div class="comfyui-status">
                 <span id="comfyui-status-dot" class="comfyui-status__dot"></span>
@@ -433,16 +831,17 @@
         </div>
       </section>
 
-      <!-- 我的模型 -->
+      <!-- 我的模型（模型 Tab） -->
       <section id="view-my-models" class="view">
-        <div class="view-head">
-          <div class="view-head__toolbar">
-            <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
-            <div class="view-head__main">
-              <h2 data-i18n="pageMyModelsTitle">我的模型</h2>
-              <p data-i18n="pageMyModelsDesc">统一管理已下载和已导入 Ollama 的模型</p>
-            </div>
-          </div>
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
+          <span class="view-category-label">模型 · 我的</span>
+        </div>
+        <div class="hub-tabs" data-hub="models">
+          <button type="button" class="hub-tab" data-hub-nav="models" data-models-mode="local">聊天模型</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="my-models" data-models-mode="local">我的模型</button>
+          <button type="button" class="hub-tab" data-hub-nav="downloads" data-models-mode="local">下载中</button>
+          <button type="button" class="hub-tab hub-tab--soon" disabled title="二期：ComfyUI 权重下载">创作模型</button>
         </div>
 
         <div id="my-models-content">
@@ -480,7 +879,7 @@
       <section id="view-settings" class="view">
         <div class="view-head">
           <div class="view-head__toolbar">
-            <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
+            <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
             <div class="view-head__main">
               <h2 data-i18n="pageSettingsTitle">软件设置</h2>
               <p data-i18n="pageSettingsDesc">下载、界面与更新选项</p>
@@ -527,8 +926,52 @@
             <input id="setting-auto-ollama" name="autoStartOllama" type="checkbox" />
             启动时自动启动 Ollama（若已安装未运行）
           </label>
+          <h3 class="settings-section-title">Agent 引导模型</h3>
+          <p class="settings-section-hint">
+            办事仍走本机 PAI。这里只配置「脑子」：答疑、引导、帮你写可执行指令。可选内置教程、本机 Ollama，或联网第一梯队（OpenAI 兼容）。
+          </p>
+          <label>Agent 通道
+            <select id="setting-agent-channel" name="agentBrainChannel">
+              <option value="builtin">内置教程（免模型）</option>
+              <option value="local">本机 Ollama 模型</option>
+              <option value="api">联网 API（OpenAI 兼容）</option>
+            </select>
+          </label>
+          <div id="setting-agent-local-block" class="settings-agent-block hidden">
+            <label>本地模型（Ollama 已导入）
+              <select id="setting-agent-local-model" name="agentLocalModel">
+                <option value="">请选择模型…</option>
+              </select>
+            </label>
+            <p class="settings-section-hint">没有可选模型时，请先到「模型」下载并导入 Ollama。</p>
+          </div>
+          <div id="setting-agent-api-block" class="settings-agent-block hidden">
+            <label>服务商预设
+              <select id="setting-agent-api-preset" name="agentApiPreset">
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="qwen">通义千问</option>
+                <option value="moonshot">月之暗面 Kimi</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            <label>API Base URL
+              <input id="setting-agent-api-base" name="agentApiBaseUrl" type="text" spellcheck="false" placeholder="https://api.deepseek.com/v1" />
+            </label>
+            <label>API Key
+              <input id="setting-agent-api-key" name="agentApiKey" type="password" spellcheck="false" placeholder="sk-…" autocomplete="off" />
+            </label>
+            <label>模型名
+              <input id="setting-agent-api-model" name="agentApiModel" type="text" spellcheck="false" placeholder="deepseek-chat" />
+            </label>
+          </div>
+          <div class="settings-inline-actions">
+            <button id="setting-agent-test-btn" class="btn btn--primary" type="button">测试 Agent 脑子</button>
+            <span id="setting-agent-test-status" class="settings-inline-status"></span>
+          </div>
+
           <h3 class="settings-section-title">AI 管家（PAI）</h3>
-          <p class="settings-section-hint">连接 E:\projects\PAI，用于开软件、ComfyUI 工作流、文件操作等。</p>
+          <p class="settings-section-hint">连接本机 PAI，用于开软件、ComfyUI 工作流、文件操作等。</p>
           <label>PAI 安装路径
             <input id="setting-pai-root" name="paiRoot" type="text" spellcheck="false" placeholder="E:\projects\PAI" />
           </label>
@@ -577,7 +1020,7 @@
       <section id="view-help" class="view">
         <div class="view-head">
           <div class="view-head__toolbar">
-            <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回首页</button>
+            <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
             <div class="view-head__main">
               <h2 data-i18n="pageHelpTitle">使用帮助</h2>
               <p data-i18n="pageHelpDesc">快速上手本地 AI 模型管理</p>
@@ -586,7 +1029,7 @@
         </div>
         <div class="help-content panel">
           <h4>这是什么？</h4>
-          <p><strong>蘑菇AI</strong> 帮助你在电脑上下载、管理并使用 AI 大语言模型，并集成 AI 执行管家完成 ComfyUI 出片、搜文件等任务。</p>
+          <p><strong>MOGU AI</strong> 帮助你在电脑上下载、管理并使用 AI 大语言模型，并集成 AI 执行管家完成 ComfyUI 出片、搜文件等任务。</p>
           <h4>需要什么？</h4>
           <p>使用<strong> AI 聊天</strong>前，请先安装并启动 <strong>Ollama</strong>。顶部显示「本地 AI 引擎已就绪」即可聊天；若显示「未运行」，请点击 <strong>启动 Ollama</strong>。</p>
           <h4>完整流程</h4>
@@ -595,10 +1038,11 @@
             <li>在「下载中心」查看进度，完成后会自动导入</li>
             <li>打开「聊天」，选择已导入的模型开始对话</li>
           </ol>
-          <h4>AI 聊天问答 vs AI 执行管家</h4>
+          <h4>Agent 怎么用</h4>
           <ul>
-            <li><strong>AI 聊天问答</strong>：和 Ollama 本地模型对话、写文案、问答。</li>
-            <li><strong>AI 执行管家</strong>：执行电脑任务——打开软件、列出 ComfyUI 工作流、搜文件、下载、备份等（由 PAI 引擎驱动）。</li>
+            <li><strong>Agent 对话窗</strong>：直接打字办事（打开 ComfyUI、列工作流、搜文件、备份、删文件等）或问「怎么用创作台」。</li>
+            <li><strong>模型闲聊</strong>：Agent 页右上角入口，用 Ollama 本地模型写文案、闲聊（需先下载并导入模型）。</li>
+            <li><strong>创作台</strong>：挂工作流出片；也可从 Agent 点「去创作台」。</li>
           </ul>
           <h4>常见问题</h4>
           <p>下载慢？可在「设置」中切换下载线路或开启「启动时自动启动 Ollama」。聊天/导入失败？请确认 Ollama 已启动。改保存位置后，<strong>已下载文件不会自动移动</strong>，仅新下载存到新目录。</p>
@@ -620,12 +1064,12 @@
   <div id="storage-path-modal" class="storage-path-modal hidden" role="dialog" aria-modal="true" aria-labelledby="storage-path-modal-title">
     <div class="storage-path-modal__backdrop" data-action="close-storage-modal"></div>
     <div class="storage-path-modal__panel">
-      <h3 id="storage-path-modal-title">更改模型保存位置</h3>
+      <h3 id="storage-path-modal-title">选择模型下载位置</h3>
       <p class="storage-path-modal__hint">
-        可直接输入完整路径（例如 <code>D:\模型下载</code>），或点击下方盘符 /「浏览文件夹」选择。
+        可直接输入完整路径（例如 <code>D:\模型下载</code>），或点击下方盘符 /「浏览文件夹」选择。本次下载将保存到该目录。
       </p>
       <p class="storage-path-modal__note">
-        注意：更改位置后，<strong>已下载的模型不会自动移动</strong>；之后新下载的模型将保存到新目录。
+        注意：已下载的模型不会自动移动；确认后会记住此目录，下次下载默认打开这里。
       </p>
       <div id="storage-drive-list" class="storage-drive-list"></div>
       <label class="storage-path-modal__field" for="storage-path-input">保存路径</label>
@@ -657,12 +1101,17 @@
   <script src="../shared/butler-risk.js"></script>
   <script src="../shared/pai-catalog.js"></script>
   <script src="app.js"></script>
+  <script src="models-hub.js"></script>
   <script src="page-controller.js"></script>
   <script src="pages/my-models-page.js"></script>
   <script src="chat-markdown.js"></script>
   <script src="chat.js"></script>
   <script src="butler.js"></script>
+  <script src="agent-panel.js"></script>
   <script src="comfyui-panel.js"></script>
+  <script src="setup-panel.js"></script>
+  <script src="studio-panel.js"></script>
+  <script src="compose-panel.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

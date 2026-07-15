@@ -73,7 +73,7 @@ function mergePresets(remotePresets) {
   });
 }
 
-const api = {
+const paiCatalogApi = {
   PRESET_COMMANDS,
   FALLBACK_PRESETS,
   FALLBACK_CAPABILITIES,
@@ -81,9 +81,9 @@ const api = {
 };
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = api;
+  module.exports = paiCatalogApi;
 }
 
 if (typeof window !== "undefined") {
-  window.PaiCatalog = api;
+  window.PaiCatalog = paiCatalogApi;
 }

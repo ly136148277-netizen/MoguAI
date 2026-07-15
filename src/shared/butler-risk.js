@@ -24,6 +24,7 @@ const L2_PATTERNS = [
   /确认ltx/i,
   /确认ace/i,
   /确认单镜头/i,
+  /确认创作台/i,
   /更新\s*comfyui/i,
   /winget/i,
   /检查软件更新/i,
@@ -36,6 +37,7 @@ const WORKFLOW_CONFIRM_PATTERNS = [
   /^确认ltx/i,
   /^确认ace/i,
   /^确认单镜头/i,
+  /^确认创作台/i,
   /^出片\s/i,
 ];
 
@@ -170,7 +172,7 @@ function assessPaiResponse(command, result) {
   };
 }
 
-const api = {
+const butlerRiskApi = {
   assess,
   assessPaiResponse,
   buildConfirmedCommand,
@@ -180,9 +182,9 @@ const api = {
 };
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = api;
+  module.exports = butlerRiskApi;
 }
 
 if (typeof window !== "undefined") {
-  window.ButlerRisk = api;
+  window.ButlerRisk = butlerRiskApi;
 }

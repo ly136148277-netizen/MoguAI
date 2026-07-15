@@ -24,7 +24,7 @@ const ComfyUiPanel = (() => {
     presets = window.PaiCatalog?.FALLBACK_PRESETS || [];
 
     els.refreshBtn?.addEventListener("click", () => loadPanel(true));
-    els.openBtn?.addEventListener("click", () => runButlerCommand("打开 ComfyUI", 1));
+    els.openBtn?.addEventListener("click", () => openComfyUiUi());
     window.AppRouter.onPage("comfyui", onPageEnter);
 
     if (window.modelManager?.onPaiRunProgress) {
@@ -301,6 +301,29 @@ const ComfyUiPanel = (() => {
       activeRunId = null;
       setBusy(false);
       await refreshComfyUiStatus();
+    }
+  }
+
+  async function openComfyUiUi() {
+    try {
+      const result = await window.modelManager.openComfyUiUi();
+      if (result?.ok) {
+        window.AppCore?.setStatus?.(`已打开 ComfyUI：${result.url}`);
+        return;
+      }
+      // API 未运行时：先让管家拉起进程，再绕过代理打开页面
+      await runButlerCommand("打开 ComfyUI", 1);
+      for (let i = 0; i < 20; i += 1) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const retry = await window.modelManager.openComfyUiUi();
+        if (retry?.ok) {
+          window.AppCore?.setStatus?.(`已打开 ComfyUI：${retry.url}`);
+          return;
+        }
+      }
+      window.AppCore?.setStatus?.(result?.error || "ComfyUI 页面打开失败（请检查系统代理）");
+    } catch (error) {
+      window.AppCore?.setStatus?.(`打开失败：${error.message}`);
     }
   }
 

@@ -1,4 +1,4 @@
-# Acceptance Report · 蘑菇AI v1.4.0
+# Acceptance Report · MOGU AI v1.4.0
 
 **Date / 日期:** 2026-07-11  
 **Command / 命令:** `npm run acceptance`  
@@ -49,7 +49,7 @@ node scripts/butler_smoke.js --integration
 
 ## Notes / 说明
 
-- **Setup silent `/S`:** NSIS silent install crashes on this host (exit `0xC0000005`). Acceptance uses **portable fresh-copy launch** (A18) + **Setup artifact integrity** (A22) instead. Interactive `蘑菇AI Setup 1.4.0.exe` install is verified manually once if needed.
+- **Setup silent `/S`:** NSIS silent install crashes on this host (exit `0xC0000005`). Acceptance uses **portable fresh-copy launch** (A18) + **Setup artifact integrity** (A22) instead. Interactive `MOGU AI Setup 1.4.0.exe` install is verified manually once if needed.
 - **ComfyUI full render:** Long GPU render not run in CI; queue + L2 gate + integration smoke cover the pipeline. Run `确认zimage` manually when ComfyUI is idle for end-to-end pixels.
 
 ---

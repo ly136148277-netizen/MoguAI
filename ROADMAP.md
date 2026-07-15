@@ -11,7 +11,7 @@
 | V1.0 | ✅ 已完成 | Electron 桌面应用基础框架 |
 | V1.1 | ✅ 已完成（v1.1.0） | 核心功能完整：仓库/下载/Ollama/聊天/设置/打包 |
 | V1.2 | ✅ 已完成（发版号 v1.2.1） | 体验优化 + 图标 + sha256 校验 |
-| V1.3 | ✅ 已完成（v1.3.0） | 蘑菇AI 品牌、聊天导出、Ollama 引导、保存路径提示 |
+| V1.3 | ✅ 已完成（v1.3.0） | MOGU AI 品牌、聊天导出、Ollama 引导、保存路径提示 |
 | V2.0 | 🔄 进行中 | Ollama 自动检测/启动已实现；管家 Phase 2 由并行 Agent 交付 |
 
 ---
@@ -133,7 +133,7 @@
 - [x] `.gitignore` 配置（忽略 node_modules、dist 等构建产物）
 
 ### Release-004 发版 v1.3.0 ✅
-- [x] 品牌统一（productName 蘑菇AI、i18n、帮助文案）
+- [x] 品牌统一（productName MOGU AI、i18n、帮助文案）
 - [x] 聊天导出 Markdown
 - [x] Ollama 未运行高亮引导
 - [x] 改保存路径提示（不自动迁移旧文件）
@@ -141,11 +141,11 @@
 
 ---
 
-## V1.3 — 蘑菇AI 品牌发版（v1.3.0）
+## V1.3 — MOGU AI 品牌发版（v1.3.0）
 
 **目标：** 桌面端（模型/聊天/壳）产品化收尾，与管家 Phase 2 并行
 
-- [x] `package.json` v1.3.0、`productName: 蘑菇AI`
+- [x] `package.json` v1.3.0、`productName: MOGU AI`
 - [x] 首页/帮助 i18n 文案
 - [x] Ollama 工具栏高亮 + 启动按钮脉冲
 - [x] 保存路径弹窗与状态栏说明

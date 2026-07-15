@@ -1,188 +1,181 @@
-# Mogu AI · 蘑菇AI
+# MOGU AI 1.5.3
 
 **English** | [简体中文](./README.zh-CN.md)
 
 <p align="center">
-  <strong>Download local AI models · Chat offline · Optional ComfyUI rendering</strong><br/>
-  <sub>One Windows desktop app — no terminal, your data stays on your PC.</sub>
+  <img src="assets/icon.png" width="112" alt="MOGU AI" />
 </p>
 
-[![Download](https://img.shields.io/github/v/release/ly136148277-netizen/mogu-ai-releases?label=download&sort=semver&color=0078D6)](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest)
+<p align="center">
+  <strong>Agent models · Local Agent · ComfyUI creation · Video compose</strong><br>
+  <sub>An open-source local AI creation desktop app for Windows. Your models and media stay on your PC.</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest"><strong>Download latest</strong></a>
+  ·
+  <a href="./docs/STUDIO_v1.5.md">Studio guide</a>
+  ·
+  <a href="./docs/SETUP_HUB_v1.5.md">Environment setup</a>
+  ·
+  <a href="https://github.com/ly136148277-netizen/MoguAI/issues">Report an issue</a>
+</p>
+
+[![Release](https://img.shields.io/github/v/release/ly136148277-netizen/mogu-ai-releases?label=download&sort=semver&color=0078D6)](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://github.com/ly136148277-netizen/MoguAI)
-[![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen)](#for-developers)
+[![Version](https://img.shields.io/badge/version-1.5.3-22c55e)](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/tag/v1.5.3)
 
 ---
 
-## What is Mogu AI?
+## What is MOGU AI?
 
-**Mogu AI** is a free, open-source desktop app for people who want **local AI** without juggling five different tools.
+MOGU AI brings local models, a desktop Agent, ComfyUI workflows, and video assembly into one window. Download Agent models, ask the Agent to operate your PC, run your own ComfyUI image/video workflows, and arrange generated shots into a longer video.
 
-| You want to… | Mogu AI helps by… |
-|--------------|-------------------|
-| Try Llama, Qwen, Phi, etc. | Browsing a curated **GGUF model store** with one-click download |
-| Chat without cloud APIs | Built-in **Ollama chat** — multi-session, Markdown, export |
-| Skip `ollama create` | **Auto-import** after download |
-| Render with ComfyUI *(optional)* | **Workflow panel** — drop JSON, refresh, run presets via PAI butler |
-
-Everything runs on your machine. After models are downloaded, chat works **fully offline**.
-
----
-
-## Screenshots
+It is not a cloud generation service. Ollama, PAI, ComfyUI, and FFmpeg run locally. Using an online model is always optional.
 
 <p align="center">
-  <img src="docs/images/01-home.png" alt="Mogu AI home — welcome and quick start" width="720" />
+  <img src="docs/images/01-home-v153.png" width="900" alt="MOGU AI 1.5.3 home" />
 </p>
+
+---
+
+## What's included
+
+### Agent models
+
+- Browse, search, and download GGUF models
+- Import completed downloads into Ollama for offline use
+- Manage downloaded models and active downloads
+- Choose a built-in guide, local Ollama model, or online API as the Agent's guidance model
+- Online presets for DeepSeek, OpenAI, Qwen, Kimi, and custom OpenAI-compatible endpoints
 
 <p align="center">
-  <img src="docs/images/02-models.png" alt="Model store — browse and download GGUF models" width="720" />
-  &nbsp;&nbsp;
-  <img src="docs/images/03-chat.png" alt="AI chat — offline Ollama conversations" width="720" />
+  <img src="docs/images/02-agent-models-v153.png" width="900" alt="Agent models" />
 </p>
+
+### Local Agent
+
+- Open ComfyUI, list workflows, search files, and back up projects with natural language
+- Ask how to install the environment or use Studio
+- PAI permission levels and confirmation for risky operations
+- Scheduled shutdown for long generation jobs
+- Local PAI executes tasks; guidance can be built-in, local, or online
 
 <p align="center">
-  <img src="docs/images/04-comfyui.png" alt="ComfyUI panel — workflow paths and API sync" width="720" />
+  <img src="docs/images/03-agent-v153.png" width="900" alt="MOGU AI Agent" />
 </p>
 
-<sub>Regenerate: <code>npm run screenshots</code> · See <a href="docs/images/README.md">docs/images</a></sub>
+### ComfyUI Studio
+
+- Import your own text-to-image and image-to-video workflows
+- Separate character and action prompts
+- Select resolution, quality, and video duration
+- Apply prompts and parameters to compatible ComfyUI API workflows
+- Pass a text-to-image result into the image-to-video stage
+- View progress and output previews, interrupt a task, and clear the queue
+
+Prefer **Save (API Format)** in ComfyUI. A workflow must match the task and model; uncommon nodes or wiring may prevent automatic parameter overrides.
+
+<p align="center">
+  <img src="docs/images/04-studio-v153.png" width="900" alt="ComfyUI Studio" />
+</p>
+
+### Video compose
+
+- Arrange generated clips on a timeline
+- Join clips end-to-end with FFmpeg
+- Prepare a portable FFmpeg automatically on first use
+- Preview the composed result
+- Continue editing in Shotcut, Jianying, or a custom external tool
+
+<p align="center">
+  <img src="docs/images/05-compose-v153.png" width="900" alt="Video compose timeline" />
+</p>
+
+### One-stop environment setup
+
+- Check and start Ollama
+- Install, select, and connect PAI
+- Scan for an existing ComfyUI installation
+- Install portable FFmpeg without manual PATH setup
+- See all four environment states on Home and Studio
+
+<p align="center">
+  <img src="docs/images/06-setup-v153.png" width="900" alt="Environment setup" />
+</p>
 
 ---
 
-## Screenshots & download
+## Download and install
 
-**Windows installers (recommended):**
+The recommended file is **`MOGU-AI-Setup-1.5.3.exe`**:
 
-👉 **[Download latest release](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest)**
+1. Download it from [Releases](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest)
+2. Run the installer and choose an installation directory
+3. Confirm installation; a round mushroom desktop shortcut is created automatically
+4. Open Environment on first launch and configure Ollama, PAI, ComfyUI, and FFmpeg as needed
 
-| File | Description |
-|------|-------------|
-| `蘑菇AI Setup x.y.z.exe` | Installer (recommended) |
-| `蘑菇AI x.y.z.exe` | Portable, no install |
+The portable build is **`MOGU.AI.1.5.3.exe`**. `latest.yml` and `.blockmap` are only for in-app updates.
 
-**Requirements:** [Ollama](https://ollama.com/) for chat · [PAI](https://github.com/) *(optional)* for butler & ComfyUI features
+### Requirements
 
----
-
-## Quick start — chat in 3 steps
-
-```
-Install Ollama → Download a model in Mogu AI → Start chatting
-```
-
-1. Install **[Ollama](https://ollama.com/)** and make sure it is running.
-2. Open **Model store** → pick a model (e.g. Qwen 2.5 7B) → **Download**.
-3. When import finishes, open **AI Chat** and send a message.
-
-No command line. No Modelfile editing.
+- Windows 10 / 11, 64-bit
+- About 300 MB for the app
+- Several additional GB for local models
+- [Ollama](https://ollama.com/) for local models and chat
+- PAI and ComfyUI for creation workflows
+- FFmpeg for video composition; it can be installed from the app
 
 ---
 
-## ComfyUI workflows — where do JSON files go?
+## ComfyUI workflows
 
-> **Full guide:** [`docs/COMFYUI_WORKFLOWS.md`](./docs/COMFYUI_WORKFLOWS.md)
+Place workflow JSON files in either location:
 
-This confuses many users, so here is the short version:
+- Recommended: `{PAI root}/workflows/`
+- ComfyUI default: `{ComfyUI}/ComfyUI/user/default/workflows/`
 
-### Put downloaded `.json` files here
+Then open ComfyUI Studio, select a workflow, and enter generation parameters. The GGUF Agent catalog and ComfyUI workflow catalog are separate.
 
-| Folder | When to use |
-|--------|-------------|
-| **`{PAI root}/workflows/`** | **Recommended** — Civitai / GitHub downloads. Example: `E:\projects\PAI\workflows\` |
-| **`{ComfyUI}/ComfyUI/user/default/workflows/`** | Workflows saved inside ComfyUI’s UI |
-
-Then in Mogu AI: **ComfyUI Render** → **Refresh list** (or butler command: `sync workflows`).
-
-The app shows **your real paths** on that page after you set PAI root in Settings.
-
-### Does it auto-extract API data?
-
-**Yes — already implemented** (R&D shipped in v1.3+):
-
-1. PAI **scans** the folders above  
-2. **Parses** each workflow JSON  
-3. **Validates** nodes against your ComfyUI instance  
-4. **Builds** API-ready prompts and lists them in the panel (**API ready** / **Needs check** / **Manual only**)
-
-First time? **AI Butler** → **Detect local setup** (writes ComfyUI path to PAI). Then drop JSON → **Refresh list**.
-
-> **Note:** GGUF models (`catalog/models.json`) and ComfyUI workflows (`/workflows/catalog`) are **two separate catalogs** — don’t mix them.
+See [`docs/COMFYUI_WORKFLOWS.md`](./docs/COMFYUI_WORKFLOWS.md) and [`docs/STUDIO_v1.5.md`](./docs/STUDIO_v1.5.md).
 
 ---
 
-## Features
-
-**Core (everyone)**
-
-- Model store with search, tags, favorites, online catalog sync  
-- Multi-thread downloads — resume, SHA256 verify, HF mirror preset  
-- My models — re-import, open folder, delete  
-- AI chat — streaming, Markdown, templates, session export  
-- Chinese / English UI · auto-update via GitHub Releases  
-
-**Optional (PAI butler)**
-
-- Natural-language desktop tasks with L1/L2/L3 safety levels  
-- ComfyUI status, queue, progress, 5 verified render presets  
-- Workflow catalog sync with automatic API extraction  
-
-**Bundled models (8):** Llama 3 8B · Qwen 2.5 7B/3B · Phi-3 Mini · Gemma 2 2B · DeepSeek R1 Distill 7B · Mistral 7B v0.3 · Nomic Embed v1.5
-
----
-
-## Architecture
-
-```mermaid
-flowchart LR
-  A[Mogu AI] --> B[Ollama]
-  A --> C[GGUF storage]
-  A --> D[PAI HTTP]
-  D --> E[ComfyUI]
-  C --> F[(catalog CDN)]
-```
-
-| Layer | Role |
-|-------|------|
-| **Chat** | Ollama local LLM |
-| **Models** | GGUF download + `catalog/models.json` CDN |
-| **Butler** | PAI → ComfyUI, file ops, backups |
-
-Docs: [`docs/RELEASE.md`](./docs/RELEASE.md) · [`docs/COMFYUI_WORKFLOWS.md`](./docs/COMFYUI_WORKFLOWS.md) · [`docs/BUTLER_SMOKE.md`](./docs/BUTLER_SMOKE.md)
-
----
-
-## For developers
+## Development
 
 ```bash
 git clone https://github.com/ly136148277-netizen/MoguAI.git
 cd MoguAI
 npm install
 npm start
+
+npm test
+npm run screenshots
+npm run dist
 ```
 
-```bash
-npm test      # 50 tests
-npm run dist  # Windows installer
+### Architecture
+
+```text
+Electron
+├── Agent models  → GGUF downloads / Ollama / online APIs
+├── Agent         → PAI HTTP / local capabilities
+├── Studio        → PAI Studio / ComfyUI workflows
+├── Video compose → FFmpeg / external editors
+└── Environment   → Ollama / PAI / ComfyUI / FFmpeg
 ```
 
-Related repos:
+### Related repositories
 
-| Repo | Purpose |
-|------|---------|
-| [MoguAI](https://github.com/ly136148277-netizen/MoguAI) | Source code (this repo) |
-| [mogu-ai-releases](https://github.com/ly136148277-netizen/mogu-ai-releases) | Installers |
-| [mogu-map](https://github.com/ly136148277-netizen/mogu-map) | GGUF model catalog CDN |
+- [`MoguAI`](https://github.com/ly136148277-netizen/MoguAI): Electron source
+- [`mogu-ai-releases`](https://github.com/ly136148277-netizen/mogu-ai-releases): installers and auto-update metadata
+- [`mogu-map`](https://github.com/ly136148277-netizen/mogu-map): GGUF catalog CDN
 
-Contributing: [CONTRIBUTING.md](./CONTRIBUTING.md) · Issues: [GitHub Issues](https://github.com/ly136148277-netizen/MoguAI/issues)
+See [`docs/RELEASE.md`](./docs/RELEASE.md) for releases and [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution guidelines.
 
 ---
 
 ## License
 
 [MIT](./LICENSE) — free for personal and commercial use.
-
----
-
-<p align="center">
-  If Mogu AI saves you time, a ⭐ on GitHub helps others find it. Thank you!
-</p>

@@ -1,7 +1,7 @@
-{
-  "provider": "github",
-  "owner": "ly136148277-netizen",
-  "repo": "mogu-ai-releases",
-  "url": "",
-  "notes": "GitHub Releases 自动更新。发版：scripts/publish_mogu_releases.ps1"
+﻿{
+    "provider":  "github",
+    "url":  "",
+    "owner":  "ly136148277-netizen",
+    "repo":  "mogu-ai-releases",
+    "notes":  "GitHub Releases auto-update. Release: ly136148277-netizen/mogu-ai-releases/releases/tag/v1.5.3"
 }

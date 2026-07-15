@@ -1,7 +1,7 @@
 {
   "name": "ai-model-manager",
-  "version": "1.4.0",
-  "description": "Mogu AI (蘑菇AI) — GGUF downloads, Ollama chat & optional AI butler desktop app",
+  "version": "1.5.3",
+  "description": "MOGU AI — 本地 Agent 与 ComfyUI 创作台",
   "homepage": "https://github.com/ly136148277-netizen/MoguAI#readme",
   "repository": {
     "type": "git",
@@ -11,7 +11,7 @@
     "url": "https://github.com/ly136148277-netizen/MoguAI/issues"
   },
   "main": "src/main/main.js",
-  "author": "蘑菇AI",
+  "author": "MOGU AI",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -29,7 +29,7 @@
     "ollama",
     "local-ai",
     "mogu-ai",
-    "蘑菇ai",
+    "MOGU AI",
     "desktop-app"
   ],
   "dependencies": {
@@ -39,12 +39,13 @@
   },
   "devDependencies": {
     "electron": "^35.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "rcedit": "^5.0.1"
   },
   "build": {
     "appId": "com.aimodel.manager",
-    "productName": "蘑菇AI",
-    "icon": "assets/icon.png",
+    "productName": "MOGU AI",
+    "icon": "assets/icon.ico",
     "directories": {
       "output": "dist"
     },
@@ -53,6 +54,7 @@
       "config/**/*",
       "catalog/**/*",
       "assets/icon.png",
+      "assets/icon.ico",
       "models.json",
       "package.json"
     ],
@@ -63,6 +65,7 @@
       }
     ],
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -70,9 +73,25 @@
       "signAndEditExecutable": false,
       "signDlls": false
     },
+    "afterPack": "build/afterPack.js",
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/installerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
+      "include": "build/installer.nsh",
+      "shortcutName": "MOGU AI",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "menuCategory": false,
+      "artifactName": "MOGU-AI-Setup-${version}.${ext}"
     }
   }
 }

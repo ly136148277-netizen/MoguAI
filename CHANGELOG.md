@@ -5,6 +5,29 @@
 
 ---
 
+## [1.5.3] - 2026-07-15
+
+### Added
+- **Agent 模型中心**：区分本地 GGUF / Ollama 与联网 API 引导模型
+- **统一 Agent 对话窗**：打开软件、列工作流、搜文件、备份、答疑与定时关机
+- **ComfyUI 创作台**：人物/动作双提示词、T2I/I2V 工作流、尺寸/清晰度/时长参数
+- **视频合成**：短片时间线、FFmpeg 一键拼接、外部剪辑工具衔接
+- **环境中心**：统一检测和配置 Ollama、PAI、ComfyUI、FFmpeg
+- 当前 1.5.3 界面的六张 README 截图
+
+### Changed
+- 首页与侧栏收敛为 Agent模型、Agent、ComfyUI创作、视频合成、环境
+- 安装程序改为可选目录并在安装前确认，完成后自动创建快捷方式
+- Windows 程序、安装程序和快捷方式统一使用圆形蘑菇图标
+- 发版脚本适配 `MOGU-AI-Setup-${version}.exe`，保留历史 Release
+
+### Fixed
+- 生成任务取消后立即停止进度并恢复执行按钮
+- ComfyUI 任务中断与队列清理
+- 安装包未写入应用图标导致显示 Electron 默认图标
+
+---
+
 ## [1.4.0] - 2026-07-11
 
 ### Added
@@ -23,7 +46,7 @@
 ## [1.3.0] - 2026-07-11
 
 ### Added
-- **蘑菇AI 品牌发版**：安装包 productName、首页与帮助文案统一为蘑菇AI
+- **MOGU AI 品牌发版**：安装包 productName、首页与帮助文案统一为MOGU AI
 - 聊天会话 **导出 Markdown**（`chat:sessions:export` + 聊天页「导出 Markdown」按钮）
 - Ollama 未运行时顶部工具栏高亮 +「启动 Ollama」按钮脉冲提示
 - 更改模型保存位置时说明：**已下载文件不会自动移动**
@@ -38,7 +61,7 @@
 
 ### Added
 - **AI 执行管家 Phase 2**：L2/L3 二次确认（`butler-risk.js`）、ComfyUI 出片面板与进度轮询
-- **蘑菇AI · AI 执行管家**：PAI HTTP 桥接（`pai-bridge.js`）、管家页（`butler.js`）、17 项 Capability 快捷指令
+- **MOGU AI · AI 执行管家**：PAI HTTP 桥接（`pai-bridge.js`）、管家页（`butler.js`）、17 项 Capability 快捷指令
 - **一键识别本机环境**：扫描 Ollama / ComfyUI / PAI，Doctor 抽检，可选写入 `pai.yaml`（`env-scan.js`）
 - 侧边栏分组：**AI 聊天问答** / **AI 执行管家**（含子入口）
 - 权限等级自定义下拉（替代 Windows 原生 select 白底问题）
@@ -50,7 +73,7 @@
 - IPC：`ollama:start`、`ollama:open-install`、`pai:*`、`env:scan`、`env:apply-comfyui`、`comfyui:status`
 
 ### Changed
-- 品牌与窗口标题：**蘑菇AI**（模型管理 · 电脑管家 · 视频出片）
+- 品牌与窗口标题：**MOGU AI**（模型管理 · 电脑管家 · 视频出片）
 - 全应用可点击按钮统一蓝色主按钮（危险/取消操作保留红/灰）
 
 ### Fixed

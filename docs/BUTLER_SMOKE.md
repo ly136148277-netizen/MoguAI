@@ -9,7 +9,7 @@
 | PAI 路径 | `E:\projects\PAI`（或设置里 `paiRoot`） |
 | PAI HTTP | `http://127.0.0.1:8765`（改代码后需 **重启** `pai serve`） |
 | ComfyUI | `http://127.0.0.1:8189`（F 盘实例，PAI yaml 已指向） |
-| 桌面应用 | 蘑菇AI ≥ v1.3（含管家 / ComfyUI 面板） |
+| 桌面应用 | MOGU AI ≥ v1.3（含管家 / ComfyUI 面板） |
 
 ## 工作流 JSON 放哪里？
 
@@ -23,7 +23,7 @@ PAI 会扫描 **两个目录**（见 `gateway/video_factory/config.py` → `work
 
 放入后：
 
-1. 蘑菇AI → **ComfyUI 出片** → **刷新列表**（或管家输入 `同步工作流` / `列出工作流`）
+1. MOGU AI → **ComfyUI 出片** → **刷新列表**（或管家输入 `同步工作流` / `列出工作流`）
 2. PAI 解析 JSON → 对照 ComfyUI `object_info` 校验节点 → 写入 `data/workflows/` catalog + API prompt
 3. 面板显示 **可 API** / **待校验** / **仅手动** 徽章
 
@@ -66,7 +66,7 @@ Electron fallback：`src/shared/pai-catalog.js` → `PRESET_COMMANDS`
 
 ### 1. 启动链路
 
-1. 打开蘑菇AI → **设置** → 确认 PAI 根目录与 API 地址
+1. 打开MOGU AI → **设置** → 确认 PAI 根目录与 API 地址
 2. 进入 **AI 执行管家** → 点「连接 PAI」或等待自动 `ensureRunning`
 3. 状态应显示：PAI **运行中**、`/health` 正常
 

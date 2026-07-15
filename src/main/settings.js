@@ -12,15 +12,25 @@ const DEFAULT_SETTINGS = {
   autoCheckUpdates: true,
   autoStartOllama: false,
   modelStoragePath: "",
-  paiRoot: "E:\\projects\\PAI",
+  paiRoot: "",
   paiApiUrl: "http://127.0.0.1:8765",
+  paiRuntimeUrl: "",
+  comfyUiDownloadUrl: "",
   autoStartPai: true,
   paiDefaultLevel: 2,
   comfyUiPollIntervalMs: 2500,
+  showSetupWizard: true,
   showWelcomeCard: true,
   theme: "dark",
   locale: "zh",
   favoritePrompts: [],
+  /** Agent 引导脑子：builtin | local | api */
+  agentBrainChannel: "builtin",
+  agentLocalModel: "",
+  agentApiPreset: "deepseek",
+  agentApiBaseUrl: "https://api.deepseek.com/v1",
+  agentApiKey: "",
+  agentApiModel: "deepseek-chat",
 };
 
 class SettingsStore {

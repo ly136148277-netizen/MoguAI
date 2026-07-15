@@ -45,14 +45,64 @@ const settingAutoPaiEl = document.getElementById("setting-auto-pai");
 const settingComfyUiPollEl = document.getElementById("setting-comfyui-poll");
 const settingPaiDoctorBtn = document.getElementById("setting-pai-doctor-btn");
 const settingPaiStatusEl = document.getElementById("setting-pai-status");
+const settingAgentChannelEl = document.getElementById("setting-agent-channel");
+const settingAgentLocalBlock = document.getElementById("setting-agent-local-block");
+const settingAgentApiBlock = document.getElementById("setting-agent-api-block");
+const settingAgentLocalModelEl = document.getElementById("setting-agent-local-model");
+const settingAgentApiPresetEl = document.getElementById("setting-agent-api-preset");
+const settingAgentApiBaseEl = document.getElementById("setting-agent-api-base");
+const settingAgentApiKeyEl = document.getElementById("setting-agent-api-key");
+const settingAgentApiModelEl = document.getElementById("setting-agent-api-model");
+const settingAgentTestBtn = document.getElementById("setting-agent-test-btn");
+const settingAgentTestStatusEl = document.getElementById("setting-agent-test-status");
 const settingThemeEl = document.getElementById("setting-theme");
 const settingLocaleEl = document.getElementById("setting-locale");
+
+const AGENT_API_PRESETS = {
+  deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+  openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+  qwen: { baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+  moonshot: { baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
+  custom: { baseUrl: "", model: "" },
+};
+
+function syncAgentBrainBlocks() {
+  const channel = settingAgentChannelEl?.value || "builtin";
+  settingAgentLocalBlock?.classList.toggle("hidden", channel !== "local");
+  settingAgentApiBlock?.classList.toggle("hidden", channel !== "api");
+}
+
+async function fillAgentLocalModels(selected) {
+  if (!settingAgentLocalModelEl) return;
+  let names = [];
+  try {
+    const list = await window.modelManager.listOllamaModels();
+    names = (list || [])
+      .map((item) => (typeof item === "string" ? item : item.name || item.model || ""))
+      .filter(Boolean);
+  } catch {
+    names = [];
+  }
+  const current = selected || settingAgentLocalModelEl.value || "";
+  settingAgentLocalModelEl.innerHTML =
+    `<option value="">${names.length ? "请选择模型…" : "暂无已导入模型"}</option>` +
+    names.map((name) => `<option value="${name}">${name}</option>`).join("");
+  if (current && names.includes(current)) {
+    settingAgentLocalModelEl.value = current;
+  }
+}
 const appVersionTextEl = document.getElementById("app-version-text");
 const sidebarVersionEl = document.getElementById("sidebar-version");
 const openLogsBtn = document.getElementById("open-logs-btn");
 const startExperienceBtn = document.getElementById("start-experience-btn");
 const homeGotoChatBtn = document.getElementById("home-goto-chat-btn");
 const homeGotoButlerBtn = document.getElementById("home-goto-butler-btn");
+const homeGotoStudioBtn = document.getElementById("home-goto-studio-btn");
+const homeGotoSetupBtn = document.getElementById("home-goto-setup-btn");
+const homeLightOllama = document.getElementById("home-light-ollama");
+const homeLightPai = document.getElementById("home-light-pai");
+const homeLightComfy = document.getElementById("home-light-comfy");
+const homeLightFfmpeg = document.getElementById("home-light-ffmpeg");
 const recentDownloadsEl = document.getElementById("recent-downloads");
 const recentSessionsEl = document.getElementById("recent-sessions");
 const recentImportedEl = document.getElementById("recent-imported");
@@ -278,6 +328,23 @@ async function loadSettingsForm() {
   }
   settingThemeEl.value = settings.theme || "dark";
   settingLocaleEl.value = settings.locale || "zh";
+  if (settingAgentChannelEl) {
+    settingAgentChannelEl.value = settings.agentBrainChannel || "builtin";
+  }
+  if (settingAgentApiPresetEl) {
+    settingAgentApiPresetEl.value = settings.agentApiPreset || "deepseek";
+  }
+  if (settingAgentApiBaseEl) {
+    settingAgentApiBaseEl.value = settings.agentApiBaseUrl || "";
+  }
+  if (settingAgentApiKeyEl) {
+    settingAgentApiKeyEl.value = settings.agentApiKey || "";
+  }
+  if (settingAgentApiModelEl) {
+    settingAgentApiModelEl.value = settings.agentApiModel || "";
+  }
+  await fillAgentLocalModels(settings.agentLocalModel || "");
+  syncAgentBrainBlocks();
   window.AppI18n.setTheme(settings.theme || "dark");
   window.AppI18n.setLocale(settings.locale || "zh");
 
@@ -422,7 +489,7 @@ function renderHomeImportPanel() {
 async function runHomeImportFlow() {
   const pending = getPendingImportModels();
   if (!pending.length) {
-    window.AppRouter.navigate("models");
+    window.AppRouter.navigate("models", { modelsMode: "local" });
     filterSelectEl.value = "installed";
     await loadModels();
     setStatus("请在模型仓库查看已下载模型；下载完成后也会自动导入");
@@ -448,6 +515,36 @@ async function importPendingModels(models) {
   setStatus("导入任务已完成，可在「我的模型」或「AI 聊天」中使用");
 }
 
+function setHomeEnvChip(el, label, ok) {
+  if (!el) return;
+  el.textContent = `${label} ${ok ? "✓" : "✗"}`;
+  el.classList.toggle("home-env-chip--ok", Boolean(ok));
+  el.classList.toggle("home-env-chip--bad", !ok);
+}
+
+async function loadHomeEnvLights() {
+  try {
+    const status = await window.modelManager.getSetupStatus();
+    const ollamaOk = Boolean(status.ready?.ollama);
+    const paiOk = Boolean(status.ready?.pai);
+    const comfyOk = Boolean(status.ready?.comfyui);
+    const ffmpegOk = Boolean(status.ready?.ffmpeg);
+    const allOk = Boolean(status.allReady) || (ollamaOk && paiOk && comfyOk);
+    setHomeEnvChip(homeLightOllama, "Ollama", ollamaOk);
+    setHomeEnvChip(homeLightPai, "PAI", paiOk);
+    setHomeEnvChip(homeLightComfy, "ComfyUI", comfyOk);
+    setHomeEnvChip(homeLightFfmpeg, "FFmpeg", ffmpegOk);
+    // 「环境」入口：核心三件套齐全即可绿；FFmpeg 单独一灯
+    setHomeEnvChip(homeGotoSetupBtn, "环境", allOk);
+  } catch {
+    setHomeEnvChip(homeLightOllama, "Ollama", false);
+    setHomeEnvChip(homeLightPai, "PAI", false);
+    setHomeEnvChip(homeLightComfy, "ComfyUI", false);
+    setHomeEnvChip(homeLightFfmpeg, "FFmpeg", false);
+    setHomeEnvChip(homeGotoSetupBtn, "环境", false);
+  }
+}
+
 async function loadDashboard() {
   try {
     const stats = await window.modelManager.getDashboardStats();
@@ -466,6 +563,7 @@ async function loadDashboard() {
   }
 
   renderHomeImportPanel();
+  await loadHomeEnvLights();
 }
 
 async function syncModelCache() {
@@ -508,9 +606,19 @@ async function refreshAll() {
 
 async function handleDownload(modelId) {
   try {
+    const current = await window.modelManager.getStoragePath();
+    const picked = await window.modelManager.pickStoragePath(current);
+    if (!picked) {
+      setStatus("已取消选择保存位置");
+      return;
+    }
+    const resolved = await window.modelManager.setStoragePath(picked);
+    if (storagePathEl) {
+      storagePathEl.value = resolved || picked;
+    }
     await window.modelManager.startDownload(modelId);
     await refreshAll();
-    setStatus("已加入下载队列");
+    setStatus(`已加入下载队列 → ${resolved || picked}`);
     window.AppRouter.navigate("downloads");
   } catch (error) {
     setStatus(`下载启动失败：${error.message}`);
@@ -615,31 +723,25 @@ searchInputEl.addEventListener("input", () => {
   window.__searchTimer = setTimeout(() => loadModels(), 250);
 });
 
-refreshBtn.addEventListener("click", () => {
+refreshBtn?.addEventListener("click", () => {
   loadStoragePath();
   refreshAll();
 });
 
-changeStorageBtn.addEventListener("click", () => {
+changeStorageBtn?.addEventListener("click", () => {
   openStoragePathModal().catch((error) => {
     setStatus(`打开设置窗口失败：${error.message}`);
   });
 });
 
-storagePathEl.addEventListener("dblclick", () => {
-  openStoragePathModal().catch((error) => {
-    setStatus(`打开设置窗口失败：${error.message}`);
-  });
-});
-
-storagePathCancelBtn.addEventListener("click", closeStoragePathModal);
-storagePathModalEl.addEventListener("click", (event) => {
+storagePathCancelBtn?.addEventListener("click", closeStoragePathModal);
+storagePathModalEl?.addEventListener("click", (event) => {
   if (event.target.dataset.action === "close-storage-modal") {
     closeStoragePathModal();
   }
 });
 
-storageDriveListEl.addEventListener("click", (event) => {
+storageDriveListEl?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-drive]");
   if (!button) {
     return;
@@ -648,11 +750,11 @@ storageDriveListEl.addEventListener("click", (event) => {
   renderStorageDriveButtons();
 });
 
-storagePathInputEl.addEventListener("input", () => {
+storagePathInputEl?.addEventListener("input", () => {
   renderStorageDriveButtons();
 });
 
-storagePathBrowseBtn.addEventListener("click", async () => {
+storagePathBrowseBtn?.addEventListener("click", async () => {
   try {
     const picked = await window.modelManager.pickStoragePath(storagePathInputEl.value.trim());
     if (picked) {
@@ -664,7 +766,7 @@ storagePathBrowseBtn.addEventListener("click", async () => {
   }
 });
 
-storagePathConfirmBtn.addEventListener("click", async () => {
+storagePathConfirmBtn?.addEventListener("click", async () => {
   try {
     await applyStoragePath(storagePathInputEl.value);
   } catch (error) {
@@ -672,7 +774,7 @@ storagePathConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-storagePathInputEl.addEventListener("keydown", (event) => {
+storagePathInputEl?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     storagePathConfirmBtn.click();
@@ -723,9 +825,50 @@ settingsFormEl.addEventListener("submit", async (event) => {
     comfyUiPollIntervalMs: Number(settingComfyUiPollEl?.value || 2500),
     theme: settingThemeEl.value,
     locale: settingLocaleEl.value,
+    agentBrainChannel: settingAgentChannelEl?.value || "builtin",
+    agentLocalModel: settingAgentLocalModelEl?.value || "",
+    agentApiPreset: settingAgentApiPresetEl?.value || "custom",
+    agentApiBaseUrl: settingAgentApiBaseEl?.value?.trim() || "",
+    agentApiKey: settingAgentApiKeyEl?.value?.trim() || "",
+    agentApiModel: settingAgentApiModelEl?.value?.trim() || "",
   });
   await loadSettingsForm();
   setStatus("设置已保存");
+});
+
+settingAgentChannelEl?.addEventListener("change", syncAgentBrainBlocks);
+
+settingAgentApiPresetEl?.addEventListener("change", () => {
+  const preset = AGENT_API_PRESETS[settingAgentApiPresetEl.value];
+  if (!preset || settingAgentApiPresetEl.value === "custom") return;
+  if (settingAgentApiBaseEl) settingAgentApiBaseEl.value = preset.baseUrl;
+  if (settingAgentApiModelEl) settingAgentApiModelEl.value = preset.model;
+});
+
+settingAgentTestBtn?.addEventListener("click", async () => {
+  // 先把当前表单写入，再测
+  settingAgentTestBtn.disabled = true;
+  if (settingAgentTestStatusEl) settingAgentTestStatusEl.textContent = "测试中…";
+  try {
+    await window.modelManager.updateSettings({
+      agentBrainChannel: settingAgentChannelEl?.value || "builtin",
+      agentLocalModel: settingAgentLocalModelEl?.value || "",
+      agentApiPreset: settingAgentApiPresetEl?.value || "custom",
+      agentApiBaseUrl: settingAgentApiBaseEl?.value?.trim() || "",
+      agentApiKey: settingAgentApiKeyEl?.value?.trim() || "",
+      agentApiModel: settingAgentApiModelEl?.value?.trim() || "",
+    });
+    const result = await window.modelManager.testAgentBrain();
+    if (settingAgentTestStatusEl) {
+      settingAgentTestStatusEl.textContent = result.message || "OK";
+    }
+    setStatus(result.message || "Agent 脑子测试完成");
+  } catch (error) {
+    if (settingAgentTestStatusEl) settingAgentTestStatusEl.textContent = error.message;
+    setStatus(`测试失败：${error.message}`);
+  } finally {
+    settingAgentTestBtn.disabled = false;
+  }
 });
 
 openLogsBtn.addEventListener("click", async () => {
@@ -855,17 +998,33 @@ settingCheckUpdateBtn?.addEventListener("click", async () => {
   }
 });
 
-startExperienceBtn.addEventListener("click", () => {
-  window.AppRouter.navigate("models");
+startExperienceBtn?.addEventListener("click", () => {
+  window.AppRouter.navigate("models", { modelsMode: "local" });
   setStatus("请选择一个模型，点击「下载」开始使用");
 });
 
-homeGotoChatBtn.addEventListener("click", () => {
+homeGotoChatBtn?.addEventListener("click", () => {
   window.AppRouter.navigate("chat");
 });
 
-homeGotoButlerBtn.addEventListener("click", () => {
-  window.AppRouter.navigate("butler");
+homeGotoStudioBtn?.addEventListener("click", () => {
+  window.AppRouter.navigate("studio");
+});
+
+homeGotoSetupBtn?.addEventListener("click", () => {
+  window.AppRouter.navigate("setup");
+});
+
+homeGotoButlerBtn?.addEventListener("click", () => {
+  window.AppRouter.navigate("agent-intro");
+});
+
+document.getElementById("agent-intro-goto-agent-btn")?.addEventListener("click", () => {
+  window.AppRouter.navigate("chat");
+});
+
+document.getElementById("agent-intro-goto-setup-btn")?.addEventListener("click", () => {
+  window.AppRouter.navigate("setup");
 });
 
 homeImportOllamaBtn.addEventListener("click", () => {
@@ -877,7 +1036,7 @@ homeImportAllBtn.addEventListener("click", () => {
 });
 
 homeGotoModelsBtn.addEventListener("click", () => {
-  window.AppRouter.navigate("models");
+  window.AppRouter.navigate("models", { modelsMode: "gate" });
 });
 
 homeImportListEl.addEventListener("click", async (event) => {
@@ -896,7 +1055,7 @@ homeImportListEl.addEventListener("click", async (event) => {
   await refreshAll();
 });
 
-homeHelpBtn.addEventListener("click", () => {
+homeHelpBtn?.addEventListener("click", () => {
   window.AppRouter.navigate("help");
 });
 
@@ -1007,10 +1166,11 @@ async function applyStoragePath(dirPath) {
 }
 
 async function loadStoragePath() {
+  if (!storagePathEl) return;
   try {
     storagePathEl.value = await window.modelManager.getStoragePath();
   } catch {
-    storagePathEl.value = "无法读取存储路径";
+    storagePathEl.value = "";
   }
 }
 
@@ -1037,6 +1197,9 @@ window.AppCore = {
   window.ChatUI.init();
   window.ButlerUI.init();
   window.ComfyUiPanel.init();
+  window.SetupPanel?.init();
+  window.StudioPanel?.init();
+  window.ComposePanel?.init();
   window.PageController.init();
 
   await loadMeta();

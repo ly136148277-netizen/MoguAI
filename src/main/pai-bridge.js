@@ -13,7 +13,24 @@ class PaiBridge {
   }
 
   resolvePaiRoot(settings) {
-    return settings.paiRoot || process.env.PAI_ROOT || DEFAULT_PAI_ROOT;
+    if (settings.paiRoot) {
+      return settings.paiRoot;
+    }
+    if (process.env.PAI_ROOT) {
+      return process.env.PAI_ROOT;
+    }
+    const local = path.join(process.env.LOCALAPPDATA || "", "ai-model-manager", "pai");
+    try {
+      if (fs.pathExistsSync(path.join(local, ".venv", "Scripts", "python.exe"))) {
+        return local;
+      }
+      if (fs.pathExistsSync(path.join(DEFAULT_PAI_ROOT, ".venv", "Scripts", "python.exe"))) {
+        return DEFAULT_PAI_ROOT;
+      }
+    } catch {
+      // fall through
+    }
+    return DEFAULT_PAI_ROOT;
   }
 
   resolveApiUrl(settings) {
@@ -144,6 +161,33 @@ class PaiBridge {
     const apiUrl = this.resolveApiUrl(settings);
     const response = await axios.get(`${apiUrl}/capabilities`, { timeout: 15_000 });
     return response.data;
+  }
+
+  async runStudio(settings, payload = {}) {
+    const apiUrl = this.resolveApiUrl(settings);
+    const level = payload.level ?? settings.paiDefaultLevel ?? 2;
+    try {
+      const response = await axios.post(
+        `${apiUrl}/studio/run`,
+        { ...payload, level },
+        { timeout: 3_600_000 }
+      );
+      return response.data;
+    } catch (error) {
+      if (error.response?.data) {
+        const body = error.response.data;
+        if (body.needs_confirm) {
+          return { ok: false, ...body };
+        }
+        const wrapped = new Error(body.error || body.reason || `创作台请求失败 (${error.response.status})`);
+        wrapped.response = error.response;
+        throw wrapped;
+      }
+      if (error.code === "ECONNREFUSED") {
+        throw new Error(`无法连接 PAI（${apiUrl}）。请先在「环境」页安装/启动 PAI。`);
+      }
+      throw error;
+    }
   }
 
   shutdown() {

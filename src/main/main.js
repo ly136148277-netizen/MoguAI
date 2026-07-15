@@ -1,6 +1,21 @@
-const { app, BrowserWindow, ipcMain, shell, Menu, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog, session, protocol, net } = require("electron");
 const path = require("path");
 const fs = require("fs-extra");
+const { spawn } = require("child_process");
+const { pathToFileURL } = require("url");
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "mogu-media",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: true,
+    },
+  },
+]);
 
 const { ModelRepository } = require("./repo");
 const { StorageManager } = require("./storage");
@@ -11,9 +26,28 @@ const { listMirrorOptions } = require("./mirrors");
 const { ChatSessionStore, exportSessionToMarkdown } = require("./chat-sessions");
 const { Logger } = require("./logger");
 const { PaiBridge } = require("./pai-bridge");
-const { getComfyUiStatus, fetchQueue, collectPromptIds, getProgressSnapshot } = require("./comfyui-bridge");
+const {
+  getComfyUiStatus,
+  fetchQueue,
+  collectPromptIds,
+  getProgressSnapshot,
+  interruptComfyUi,
+  openComfyUiInBrowser,
+} = require("./comfyui-bridge");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
+const {
+  getSetupStatus,
+  installOllama,
+  installPaiRuntime,
+  installFfmpeg,
+  bindPaiRoot,
+  openComfyGuide,
+  scanAndApplyComfyUi,
+} = require("./setup-hub");
+const { StudioStore } = require("./studio-store");
 const { initAutoUpdater } = require("./updater");
+const { chatWithBrain, testBrain, API_PRESETS } = require("./agent-brain");
+const powerControl = require("./power-control");
 
 let mainWindow = null;
 let repo = null;
@@ -25,8 +59,78 @@ let chatSessions = null;
 let logger = null;
 let paiBridge = null;
 let appUpdater = null;
+let studioStore = null;
 let allModelsCache = [];
 let promptTemplates = [];
+
+function readUserEnv(name) {
+  try {
+    return require("child_process")
+      .execFileSync(
+        "powershell",
+        ["-NoProfile", "-Command", `[Environment]::GetEnvironmentVariable('${name}','User')`],
+        { encoding: "utf8", windowsHide: true, timeout: 5000 }
+      )
+      .trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Follow OS / v2rayN system proxy. No settings toggle needed.
+ * Always keep loopback out of proxy (ComfyUI/PAI/Ollama on 127.0.0.1).
+ * Call again after changing v2rayN — refresh is enough, full restart not required.
+ */
+async function applyProxyPolicy() {
+  const httpProxy = readUserEnv("HTTP_PROXY");
+  const httpsProxy = readUserEnv("HTTPS_PROXY") || httpProxy;
+  const userNoProxy = readUserEnv("NO_PROXY");
+
+  if (httpProxy) {
+    process.env.HTTP_PROXY = httpProxy;
+    process.env.http_proxy = httpProxy;
+  } else {
+    delete process.env.HTTP_PROXY;
+    delete process.env.http_proxy;
+  }
+  if (httpsProxy) {
+    process.env.HTTPS_PROXY = httpsProxy;
+    process.env.https_proxy = httpsProxy;
+  } else {
+    delete process.env.HTTPS_PROXY;
+    delete process.env.https_proxy;
+  }
+
+  const extras = ["127.0.0.1", "localhost", "::1", ".local"];
+  const current = String(userNoProxy || process.env.NO_PROXY || "")
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const merged = [...new Set([...current, ...extras])].join(",");
+  process.env.NO_PROXY = merged;
+  process.env.no_proxy = merged;
+
+  try {
+    await session.defaultSession.setProxy({ mode: "direct" });
+    await session.defaultSession.setProxy({ mode: "system" });
+    await session.defaultSession.clearAuthCache();
+    logger?.info?.("网络代理已刷新：跟随系统，本机地址直连", {
+      HTTP_PROXY: process.env.HTTP_PROXY || "",
+      NO_PROXY: process.env.NO_PROXY || "",
+    });
+    return {
+      ok: true,
+      httpProxy: process.env.HTTP_PROXY || "",
+      httpsProxy: process.env.HTTPS_PROXY || "",
+      noProxy: process.env.NO_PROXY || "",
+      mode: "system",
+    };
+  } catch (error) {
+    logger?.warn?.("设置系统代理模式失败", { message: error.message });
+    return { ok: false, error: error.message };
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -34,8 +138,20 @@ function createWindow() {
     height: 820,
     minWidth: 960,
     minHeight: 680,
-    title: "蘑菇AI",
+    title: "MOGU AI",
+    icon: path.join(__dirname, "../../assets/icon.png"),
+    backgroundColor: "#0f1419",
     autoHideMenuBar: true,
+    ...(process.platform === "win32"
+      ? {
+          titleBarStyle: "hidden",
+          titleBarOverlay: {
+            color: "#0f1419",
+            symbolColor: "#e5e7eb",
+            height: 28,
+          },
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
@@ -79,6 +195,7 @@ function initServices() {
   storage = new StorageManager();
   settingsStore = new SettingsStore(path.join(app.getPath("userData"), "settings.json"));
   chatSessions = new ChatSessionStore(path.join(app.getPath("userData"), "chat-sessions"));
+  studioStore = new StudioStore(path.join(app.getPath("userData"), "studio-pipeline.json"));
   logger = new Logger(path.join(app.getPath("userData"), "logs"));
   paiBridge = new PaiBridge();
   ollama = new OllamaService();
@@ -338,6 +455,23 @@ function registerIpcHandlers() {
     return settingsStore.load();
   });
 
+  ipcMain.handle("agent:brain-presets", async () => API_PRESETS);
+
+  ipcMain.handle("agent:brain-chat", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    return chatWithBrain({
+      settings,
+      ollama,
+      userText: String(payload.text || "").trim(),
+      history: Array.isArray(payload.history) ? payload.history : [],
+    });
+  });
+
+  ipcMain.handle("agent:brain-test", async () => {
+    const settings = await settingsStore.load();
+    return testBrain({ settings, ollama });
+  });
+
   ipcMain.handle("storage:get-path", async () => {
     await storage.ensureStorageDir();
     return storage.storageDir;
@@ -365,9 +499,9 @@ function registerIpcHandlers() {
       mainWindow.focus();
     }
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: "选择模型保存位置",
-      message: "请选中目标文件夹，再点击窗口底部的「选择文件夹」按钮确认",
-      buttonLabel: "选择此文件夹",
+      title: "选择模型下载位置",
+      message: "请选中要保存模型的文件夹，再点击「选择文件夹」确认",
+      buttonLabel: "下载到此文件夹",
       defaultPath: defaultPath || storage.storageDir,
       properties: ["openDirectory", "createDirectory", "promptToCreate"],
     });
@@ -598,6 +732,20 @@ function registerIpcHandlers() {
     name: app.getName(),
   }));
 
+  ipcMain.handle("power:shutdown-status", async () => powerControl.getStatus());
+  ipcMain.handle("power:shutdown-schedule", async (_event, payload = {}) => {
+    if (process.platform !== "win32") {
+      throw new Error("定时关机目前仅支持 Windows");
+    }
+    return powerControl.scheduleShutdown(payload);
+  });
+  ipcMain.handle("power:shutdown-cancel", async () => {
+    if (process.platform !== "win32") {
+      throw new Error("定时关机目前仅支持 Windows");
+    }
+    return powerControl.cancelShutdown();
+  });
+
   ipcMain.handle("app:check-update", async () => appUpdater.checkForUpdates({ manual: true }));
 
   ipcMain.handle("app:download-update", async () => appUpdater.downloadUpdate());
@@ -713,10 +861,22 @@ function registerIpcHandlers() {
     return getComfyUiStatus(paiRoot);
   });
 
+  ipcMain.handle("comfyui:open-ui", async () => {
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    return openComfyUiInBrowser(paiRoot);
+  });
+
   ipcMain.handle("comfyui:progress", async (_event, payload) => {
     const settings = await settingsStore.load();
     const paiRoot = paiBridge.resolvePaiRoot(settings);
     return getProgressSnapshot(paiRoot, payload || {});
+  });
+
+  ipcMain.handle("studio:cancel", async () => {
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    return interruptComfyUi(paiRoot);
   });
 
   ipcMain.handle("pai:catalog", async () => {
@@ -820,13 +980,459 @@ function registerIpcHandlers() {
     logger.info("已写入 ComfyUI 配置到 PAI", result);
     return result;
   });
+
+  ipcMain.handle("setup:status", async () => {
+    const settings = await settingsStore.load();
+    return getSetupStatus({
+      paiBridge,
+      ollamaService: ollama,
+      settings,
+      userDataPath: app.getPath("userData"),
+      logger,
+    });
+  });
+
+  ipcMain.handle("setup:refresh-network", async () => applyProxyPolicy());
+
+  ipcMain.handle("setup:install-ollama", async () => {
+    return installOllama({
+      onProgress: (payload) => sendToRenderer("setup-progress", { target: "ollama", ...payload }),
+    });
+  });
+
+  ipcMain.handle("setup:install-pai", async () => {
+    const settings = await settingsStore.load();
+    const result = await installPaiRuntime({
+      userDataPath: app.getPath("userData"),
+      runtimeUrl: settings.paiRuntimeUrl || undefined,
+      onProgress: (payload) => sendToRenderer("setup-progress", { target: "pai", ...payload }),
+    });
+    if (result.ok && result.paiRoot) {
+      await settingsStore.update({ paiRoot: result.paiRoot });
+      try {
+        await paiBridge.ensureRunning({ ...settings, paiRoot: result.paiRoot }, logger);
+      } catch (error) {
+        result.serveError = error.message;
+      }
+    }
+    return result;
+  });
+
+  ipcMain.handle("setup:pick-pai-root", async () => {
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: "选择 PAI 根目录",
+      properties: ["openDirectory"],
+    });
+    if (picked.canceled || !picked.filePaths?.[0]) {
+      return { ok: false, cancelled: true };
+    }
+    const root = picked.filePaths[0];
+    const bound = await bindPaiRoot(root);
+    await settingsStore.update({ paiRoot: bound.paiRoot });
+    return bound;
+  });
+
+  ipcMain.handle("setup:open-comfy-guide", async () => {
+    const settings = await settingsStore.load();
+    return openComfyGuide(settings.comfyUiDownloadUrl || undefined);
+  });
+
+  ipcMain.handle("setup:scan-comfyui", async () => {
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    if (!(await fs.pathExists(path.join(paiRoot, "config", "pai.yaml")))) {
+      throw new Error("请先安装或绑定 PAI 引擎，再扫描 ComfyUI");
+    }
+    return scanAndApplyComfyUi(paiRoot, logger);
+  });
+
+  ipcMain.handle("setup:install-ffmpeg", async () => {
+    return installFfmpeg({
+      onProgress: (payload) => sendToRenderer("setup-progress", { target: "ffmpeg", ...payload }),
+    });
+  });
+
+  ipcMain.handle("setup:dismiss-wizard", async () => {
+    await settingsStore.update({ showSetupWizard: false });
+    return { ok: true };
+  });
+
+  ipcMain.handle("studio:get-pipeline", async () => studioStore.load());
+  ipcMain.handle("studio:save-pipeline", async (_event, partial) => studioStore.update(partial || {}));
+
+  ipcMain.handle("studio:add-custom-tool", async () => {
+    const desktop = app.getPath("desktop");
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: "选择剪辑工具（可从桌面选快捷方式或 .exe）",
+      defaultPath: desktop,
+      properties: ["openFile"],
+      filters: [
+        { name: "程序 / 快捷方式", extensions: ["exe", "bat", "cmd", "lnk"] },
+        { name: "所有文件", extensions: ["*"] },
+      ],
+    });
+    if (picked.canceled || !picked.filePaths?.[0]) {
+      return { ok: false, cancelled: true };
+    }
+
+    let exePath = picked.filePaths[0];
+    let defaultName = path.basename(exePath, path.extname(exePath));
+    if (path.extname(exePath).toLowerCase() === ".lnk") {
+      try {
+        const info = shell.readShortcutLink(exePath);
+        if (info?.target) {
+          exePath = info.target;
+          defaultName = path.basename(exePath, path.extname(exePath)) || defaultName;
+        }
+      } catch (error) {
+        throw new Error(`无法读取快捷方式：${error.message}`);
+      }
+    }
+
+    const nameResult = await dialog.showMessageBox(mainWindow, {
+      type: "question",
+      buttons: ["用这个名字", "取消"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "添加工具",
+      message: `将添加后期工具：\n${defaultName}\n\n路径：${exePath}`,
+      detail: "出片完成后会用该程序打开成品视频。可在工具列表里选中后点「移除」。",
+    });
+    if (nameResult.response !== 0) {
+      return { ok: false, cancelled: true };
+    }
+
+    return studioStore.addCustomTool({ name: defaultName, path: exePath });
+  });
+
+  ipcMain.handle("studio:remove-custom-tool", async (_event, toolId) => {
+    return studioStore.removeCustomTool(toolId);
+  });
+
+  ipcMain.handle("studio:media-url", async (_event, filePath) => {
+    const abs = path.resolve(String(filePath || ""));
+    if (!(await fs.pathExists(abs))) {
+      throw new Error(`文件不存在：${abs}`);
+    }
+    const ext = path.extname(abs).toLowerCase();
+    const kind = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".gif"].includes(ext)
+      ? "video"
+      : [".png", ".jpg", ".jpeg", ".webp", ".bmp"].includes(ext)
+        ? "image"
+        : "file";
+
+    // 图片用 data URL，避免自定义协议在 img 上加载失败
+    if (kind === "image") {
+      const buf = await fs.readFile(abs);
+      const mime =
+        ext === ".jpg" || ext === ".jpeg"
+          ? "image/jpeg"
+          : ext === ".webp"
+            ? "image/webp"
+            : ext === ".bmp"
+              ? "image/bmp"
+              : "image/png";
+      return {
+        ok: true,
+        path: abs,
+        url: `data:${mime};base64,${buf.toString("base64")}`,
+        kind,
+      };
+    }
+
+    return { ok: true, path: abs, url: toMoguMediaUrl(abs), kind };
+  });
+
+  ipcMain.handle("studio:pick-image", async () => {
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: "选择参考照片",
+      properties: ["openFile"],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp"] }],
+    });
+    if (picked.canceled || !picked.filePaths?.[0]) {
+      return { ok: false, cancelled: true };
+    }
+    const imagePath = picked.filePaths[0];
+    await studioStore.update({ imagePath });
+    return { ok: true, imagePath };
+  });
+
+  ipcMain.handle("studio:import-workflow", async (_event, payload) => {
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    const workflowsDir = path.join(paiRoot, "workflows");
+    await fs.ensureDir(workflowsDir);
+    let source = payload?.filePath;
+    if (!source) {
+      const picked = await dialog.showOpenDialog(mainWindow, {
+        title: "选择工作流 JSON",
+        properties: ["openFile"],
+        filters: [{ name: "ComfyUI Workflow", extensions: ["json"] }],
+      });
+      if (picked.canceled || !picked.filePaths?.[0]) {
+        return { ok: false, cancelled: true };
+      }
+      source = picked.filePaths[0];
+    }
+    const dest = path.join(workflowsDir, path.basename(source));
+    await fs.copy(source, dest);
+    try {
+      await paiBridge.run(settings, "同步工作流", 1);
+    } catch {
+      // catalog sync best-effort
+    }
+    return { ok: true, path: dest, name: path.basename(source, ".json") };
+  });
+
+  ipcMain.handle("pai:studio-run", async (_event, payload) => {
+    const settings = await settingsStore.load();
+    await paiBridge.ensureRunning(settings, logger);
+    const runId = payload?.runId || `studio-${Date.now()}`;
+    sendToRenderer("pai-run-progress", {
+      runId,
+      phase: "submitting",
+      message: "创作台任务提交中…",
+    });
+    try {
+      const result = await paiBridge.runStudio(settings, {
+        ...payload,
+        level: payload?.level ?? 2,
+      });
+      // 短片出片不再自动打开剪辑工具；长片请到「视频合成」
+      const tool = String(payload?.tool || "none").toLowerCase();
+      if (result?.ok && result?.path && tool && tool !== "none") {
+        const pipeline = await studioStore.load();
+        result.postTool = await openStudioPostTool(payload?.tool, result.path, pipeline.customTools || []);
+      }
+      sendToRenderer("pai-run-progress", {
+        runId,
+        phase: result?.ok ? "completed" : "failed",
+        message: result?.message || result?.error || (result?.ok ? "完成" : "失败"),
+        path: result?.path,
+      });
+      return { runId, result };
+    } catch (error) {
+      sendToRenderer("pai-run-progress", {
+        runId,
+        phase: "failed",
+        message: error.message,
+      });
+      throw error;
+    }
+  });
+
+  ipcMain.handle("compose:list-clips", async () => {
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    const roots = [
+      path.join(paiRoot, "output", "final"),
+      path.join(paiRoot, "output"),
+    ];
+    const exts = new Set([".mp4", ".webm", ".mov", ".mkv", ".avi", ".gif"]);
+    const seen = new Set();
+    const clips = [];
+    for (const root of roots) {
+      if (!(await fs.pathExists(root))) continue;
+      let entries = [];
+      try {
+        entries = await fs.readdir(root);
+      } catch {
+        continue;
+      }
+      for (const name of entries) {
+        const full = path.join(root, name);
+        if (seen.has(full)) continue;
+        const ext = path.extname(name).toLowerCase();
+        if (!exts.has(ext)) continue;
+        try {
+          const st = await fs.stat(full);
+          if (!st.isFile()) continue;
+          seen.add(full);
+          clips.push({
+            path: full,
+            name,
+            sizeBytes: st.size,
+            mtimeMs: st.mtimeMs,
+          });
+        } catch {
+          /* skip */
+        }
+      }
+    }
+    clips.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return { ok: true, clips: clips.slice(0, 40), outputDir: roots[0] };
+  });
+
+  ipcMain.handle("compose:pick-media", async () => {
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    const finalDir = path.join(paiRoot, "output", "final");
+    const outputDir = path.join(paiRoot, "output");
+    const defaultPath = (await fs.pathExists(finalDir))
+      ? finalDir
+      : (await fs.pathExists(outputDir))
+        ? outputDir
+        : undefined;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "选择要加入时间线的视频",
+      defaultPath,
+      properties: ["openFile", "multiSelections"],
+      filters: [
+        { name: "视频", extensions: ["mp4", "webm", "mov", "mkv", "avi", "gif"] },
+        { name: "全部", extensions: ["*"] },
+      ],
+    });
+    if (result.canceled || !result.filePaths?.length) {
+      return { cancelled: true, paths: [] };
+    }
+    return { cancelled: false, paths: result.filePaths };
+  });
+
+  ipcMain.handle("compose:open-tool", async (_event, payload = {}) => {
+    const pipeline = await studioStore.load();
+    const tool = payload.tool || pipeline.tool || "shotcut";
+    const mediaPath = payload.path || payload.mediaPath || "";
+    if (!mediaPath) {
+      const settings = await settingsStore.load();
+      const paiRoot = paiBridge.resolvePaiRoot(settings);
+      const folder = path.join(paiRoot, "output", "final");
+      const target = (await fs.pathExists(folder)) ? folder : path.join(paiRoot, "output");
+      await shell.openPath(target);
+      return { ok: true, message: `已打开成品目录：${target}` };
+    }
+    return openStudioPostTool(tool, mediaPath, pipeline.customTools || []);
+  });
+
+  ipcMain.handle("compose:open-output-folder", async () => {
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    const folder = path.join(paiRoot, "output", "final");
+    const target = (await fs.pathExists(folder)) ? folder : path.join(paiRoot, "output");
+    await fs.ensureDir(target);
+    await shell.openPath(target);
+    return { ok: true, path: target };
+  });
+
+  ipcMain.handle("compose:ensure-ffmpeg", async () => {
+    const { ensureFfmpeg } = require("./ffmpeg-tools");
+    return ensureFfmpeg({
+      onProgress: (payload) => sendToRenderer("compose-progress", payload),
+    });
+  });
+
+  ipcMain.handle("compose:concat", async (_event, payload = {}) => {
+    const { concatVideos } = require("./ffmpeg-tools");
+    const paths = Array.isArray(payload.paths) ? payload.paths : [];
+    const settings = await settingsStore.load();
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    const outDir = path.join(paiRoot, "output", "final");
+    await fs.ensureDir(outDir);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const outputPath = path.join(outDir, `compose_${stamp}.mp4`);
+    const result = await concatVideos(paths, {
+      outputPath,
+      onProgress: (payloadProgress) => sendToRenderer("compose-progress", payloadProgress),
+    });
+    return result;
+  });
+}
+
+async function findShotcutExe() {
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "Shotcut", "shotcut.exe"),
+    path.join(process.env.ProgramFiles || "", "Shotcut", "shotcut.exe"),
+    path.join(process.env["ProgramFiles(x86)"] || "", "Shotcut", "shotcut.exe"),
+  ];
+  for (const candidate of candidates) {
+    if (candidate && (await fs.pathExists(candidate))) return candidate;
+  }
+  return null;
+}
+
+async function openStudioPostTool(tool, mediaPath, customTools = []) {
+  const chosen = String(tool || "none");
+  const chosenLower = chosen.toLowerCase();
+  if (!mediaPath || chosenLower === "none" || chosen === "无") {
+    return { tool: "none", ok: true, message: "已出片（未打开后期工具）" };
+  }
+
+  const abs = path.resolve(mediaPath);
+  const folder = path.dirname(abs);
+
+  if (chosen.startsWith("custom:") || chosenLower.startsWith("custom:")) {
+    const id = chosen.slice("custom:".length);
+    const custom = (customTools || []).find((t) => t.id === id);
+    if (!custom?.path) {
+      await shell.openPath(folder);
+      return { tool: chosen, ok: false, message: "自定义工具不存在，已打开成品目录" };
+    }
+    if (!(await fs.pathExists(custom.path))) {
+      await shell.openPath(folder);
+      return {
+        tool: chosen,
+        ok: false,
+        message: `找不到 ${custom.name}（${custom.path}），已打开成品目录`,
+      };
+    }
+    spawn(custom.path, [abs], { detached: true, stdio: "ignore" }).unref();
+    return { tool: chosen, ok: true, message: `已用 ${custom.name} 打开：${abs}` };
+  }
+
+  if (chosenLower === "shotcut") {
+    const exe = await findShotcutExe();
+    if (!exe) {
+      await shell.openPath(folder);
+      return {
+        tool: "shotcut",
+        ok: false,
+        message: "未找到 Shotcut，已打开成品目录。请安装 Shotcut 或到环境页检查。",
+      };
+    }
+    spawn(exe, [abs], { detached: true, stdio: "ignore" }).unref();
+    return { tool: "shotcut", ok: true, message: `已用 Shotcut 打开：${abs}` };
+  }
+
+  if (chosenLower === "ffmpeg") {
+    await shell.openPath(folder);
+    return {
+      tool: "ffmpeg",
+      ok: true,
+      message: `已打开成品目录。FFmpeg 无窗口，可在 Agent 说「用 ffmpeg 处理该视频」，或本机命令行调用。`,
+    };
+  }
+
+  if (chosenLower === "jianying" || chosen === "剪映") {
+    await shell.openPath(folder);
+    return { tool: "jianying", ok: true, message: `已打开成品目录（剪映）：${folder}` };
+  }
+
+  return { tool: chosen, ok: true, message: `后期工具：${chosen}` };
+}
+
+function toMoguMediaUrl(filePath) {
+  const abs = path.resolve(filePath);
+  return `mogu-media://local/?p=${encodeURIComponent(abs)}`;
 }
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  protocol.handle("mogu-media", (request) => {
+    try {
+      const parsed = new URL(request.url);
+      const filePath = path.normalize(parsed.searchParams.get("p") || "");
+      if (!filePath || !fs.existsSync(filePath)) {
+        return new Response("not found", { status: 404 });
+      }
+      return net.fetch(pathToFileURL(filePath).href);
+    } catch (error) {
+      return new Response(`media error: ${error.message}`, { status: 400 });
+    }
+  });
+
   initServices();
 
   await logger.initialize();
+  await applyProxyPolicy();
   await chatSessions.initialize();
 
   const settings = await settingsStore.load();
@@ -850,6 +1456,15 @@ app.whenReady().then(async () => {
 
   createWindow();
   logger.info("应用启动", { version: app.getVersion() });
+
+  // Returning from v2rayN: re-read system proxy without full restart
+  let proxyFocusTimer = null;
+  app.on("browser-window-focus", () => {
+    clearTimeout(proxyFocusTimer);
+    proxyFocusTimer = setTimeout(() => {
+      applyProxyPolicy().catch(() => {});
+    }, 400);
+  });
 
   process.on("uncaughtException", (error) => {
     logger.error("未捕获异常", { message: error.message, stack: error.stack });

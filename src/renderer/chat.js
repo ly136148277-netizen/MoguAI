@@ -39,10 +39,12 @@ const ChatUI = (() => {
       stickToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
     });
     els.exportBtn.addEventListener("click", handleExport);
-    els.gotoModelsBtn.addEventListener("click", () => window.AppRouter.navigate("models"));
+    els.gotoModelsBtn.addEventListener("click", () =>
+      window.AppRouter.navigate("models", { modelsMode: "local" })
+    );
     els.changeModelBtn.addEventListener("click", () => showPicker());
 
-    window.AppRouter.onPage("chat", onChatPageEnter);
+    // Agent 页由 AgentPanel 接管；模型闲聊走 onAgentHandoff
 
     window.modelManager.onOllamaChatChunk((payload) => {
       if (payload.sessionId !== activeSessionId) return;
@@ -54,11 +56,15 @@ const ChatUI = (() => {
     });
   }
 
-  function onChatPageEnter() {
+  function onAgentHandoff() {
     if (pendingModel) {
       const model = pendingModel;
       pendingModel = null;
       open(model);
+      return;
+    }
+    if (activeModel && activeSessionId) {
+      showWorkspace();
       return;
     }
     showPicker();
@@ -71,6 +77,7 @@ const ChatUI = (() => {
     }
     pendingModel = model;
     window.AppRouter.navigate("chat");
+    queueMicrotask(() => window.AgentPanel?.enterModelMode?.());
     return true;
   }
 
@@ -418,7 +425,7 @@ const ChatUI = (() => {
     return window.ChatMarkdown.escapeHtml(text).replace(/\n/g, "<br>");
   }
 
-  return { init, open, showPicker, renderReadyModels, onChatPageEnter, enterWithModel };
+  return { init, open, showPicker, renderReadyModels, onAgentHandoff, enterWithModel };
 })();
 
 window.ChatUI = ChatUI;

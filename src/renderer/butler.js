@@ -60,6 +60,15 @@ const ButlerUI = (() => {
     window.AppRouter.onPage("butler", onPageEnter);
   }
 
+  /** Agent 页复用同一套消息渲染时切换目标容器 */
+  function bindMessages(el) {
+    if (el) {
+      els.messages = el;
+    } else {
+      els.messages = document.getElementById("butler-messages");
+    }
+  }
+
   function initLevelPicker() {
     els.levelTrigger.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -270,6 +279,7 @@ const ButlerUI = (() => {
   }
 
   async function onPageEnter() {
+    bindMessages(document.getElementById("butler-messages"));
     await refreshStatus();
     const prefill = sessionStorage.getItem("butlerPrefill");
     if (prefill != null) {
@@ -386,9 +396,10 @@ const ButlerUI = (() => {
   }
 
   function setBusy(busy) {
-    els.input.disabled = busy;
-    els.form.querySelector('button[type="submit"]').disabled = busy;
-    els.levelTrigger.disabled = busy;
+    if (els.input) els.input.disabled = busy;
+    const submit = els.form?.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = busy;
+    if (els.levelTrigger) els.levelTrigger.disabled = busy;
     if (els.scanEnvBtn) {
       els.scanEnvBtn.disabled = busy;
     }
@@ -618,7 +629,7 @@ const ButlerUI = (() => {
       .replace(/"/g, "&quot;");
   }
 
-  return { init, runCommand, showConfirmModal };
+  return { init, runCommand, showConfirmModal, bindMessages };
 })();
 
 window.ButlerUI = ButlerUI;

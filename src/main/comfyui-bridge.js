@@ -279,6 +279,77 @@ async function getProgressSnapshot(paiRoot, options = {}) {
   };
 }
 
+/**
+ * Interrupt current ComfyUI execution and clear the queue.
+ */
+async function interruptComfyUi(paiRoot) {
+  const configured = readConfiguredComfyUi(paiRoot);
+  const api = (configured?.api || "").replace(/\/$/, "");
+  if (!api) {
+    return { ok: false, error: "ComfyUI API 未配置" };
+  }
+  const results = { interrupt: false, clearQueue: false };
+  try {
+    await axios.post(`${api}/interrupt`, {}, { timeout: 8000 });
+    results.interrupt = true;
+  } catch (error) {
+    return { ok: false, error: `中断失败：${error.message}`, api, ...results };
+  }
+  try {
+    await axios.post(`${api}/queue`, { clear: true }, { timeout: 8000 });
+    results.clearQueue = true;
+  } catch {
+    // queue clear best-effort
+  }
+  return {
+    ok: true,
+    message: "已请求取消：正在中断 ComfyUI 当前任务并清空队列",
+    api,
+    ...results,
+  };
+}
+
+/**
+ * Open ComfyUI web UI, bypassing dead HTTP_PROXY (Edge ERR_PROXY_CONNECTION_FAILED).
+ */
+async function openComfyUiInBrowser(paiRoot) {
+  const { spawn } = require("child_process");
+  const { shell } = require("electron");
+  const status = await getComfyUiStatus(paiRoot);
+  const api = (status.api || status.configured?.api || "http://127.0.0.1:8189").replace(/\/$/, "");
+  const url = `${api}/`;
+
+  if (!status.running) {
+    const start = status.configured?.start_command || status.startScript;
+    // best-effort: caller may start via butler; still return URL
+    return {
+      ok: false,
+      running: false,
+      url,
+      error: "ComfyUI API 未运行。请先启动 ComfyUI，或在管家说「打开 ComfyUI」。",
+      path: status.path || status.configured?.path || null,
+    };
+  }
+
+  const bypass = "<-loopback>;127.0.0.1;localhost";
+  for (const browser of ["msedge", "chrome"]) {
+    try {
+      spawn(browser, [`--proxy-bypass-list=${bypass}`, url], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        shell: true,
+      }).unref();
+      return { ok: true, running: true, url, method: browser, path: status.path };
+    } catch {
+      // try next
+    }
+  }
+
+  await shell.openExternal(url);
+  return { ok: true, running: true, url, method: "shell.openExternal", path: status.path };
+}
+
 module.exports = {
   readConfiguredComfyUi,
   normalizeQueueEntry,
@@ -291,4 +362,6 @@ module.exports = {
   getComfyUiStatus,
   getProgressSnapshot,
   formatElapsed,
+  interruptComfyUi,
+  openComfyUiInBrowser,
 };

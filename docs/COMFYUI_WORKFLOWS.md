@@ -74,7 +74,7 @@ Model store updates ≠ workflow list updates. They are separate by design.
 
 ### 下载的工作流 JSON 放哪里？
 
-不要把文件放进蘑菇AI安装目录。请放到下面**任一文件夹**，PAI 会自动扫描：
+不要把文件放进MOGU AI安装目录。请放到下面**任一文件夹**，PAI 会自动扫描：
 
 | 目录 | 适用场景 |
 |------|----------|
