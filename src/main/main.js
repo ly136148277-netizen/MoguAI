@@ -4,6 +4,11 @@ const fs = require("fs-extra");
 const { spawn } = require("child_process");
 const { pathToFileURL } = require("url");
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "mogu-media",
@@ -22,6 +27,7 @@ const { StorageManager } = require("./storage");
 const { DownloadEngine } = require("./download-engine");
 const { OllamaService, resolveOllamaName, OLLAMA_INSTALL_URL } = require("./ollama");
 const { SettingsStore } = require("./settings");
+const { SecretStore } = require("./secret-store");
 const { listMirrorOptions } = require("./mirrors");
 const { ChatSessionStore, exportSessionToMarkdown } = require("./chat-sessions");
 const { Logger } = require("./logger");
@@ -31,9 +37,14 @@ const {
   fetchQueue,
   collectPromptIds,
   getProgressSnapshot,
-  interruptComfyUi,
+  cancelComfyUiJob,
   openComfyUiInBrowser,
+  readConfiguredComfyUi,
 } = require("./comfyui-bridge");
+const {
+  buildMediaAllowRoots,
+  assertAllowedMediaPath,
+} = require("./media-path");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
 const {
   getSetupStatus,
@@ -55,6 +66,7 @@ let storage = null;
 let downloader = null;
 let ollama = null;
 let settingsStore = null;
+let secretStore = null;
 let chatSessions = null;
 let logger = null;
 let paiBridge = null;
@@ -62,6 +74,103 @@ let appUpdater = null;
 let studioStore = null;
 let allModelsCache = [];
 let promptTemplates = [];
+
+/** @type {Map<string, { promptId: string|null, source: string, startedAt: number }>} */
+const activeComfyJobs = new Map();
+
+if (gotSingleInstanceLock) {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
+function trackComfyJob(runId, meta = {}) {
+  if (!runId) return;
+  activeComfyJobs.set(runId, {
+    promptId: meta.promptId || null,
+    source: meta.source || "unknown",
+    startedAt: meta.startedAt || Date.now(),
+  });
+}
+
+function updateTrackedPromptId(runId, promptId) {
+  if (!promptId || !runId || !activeComfyJobs.has(runId)) return;
+  const job = activeComfyJobs.get(runId);
+  job.promptId = String(promptId);
+  activeComfyJobs.set(runId, job);
+}
+
+function clearTrackedJob(runId) {
+  if (runId) activeComfyJobs.delete(runId);
+}
+
+/**
+ * Bind cancel to the caller-specified run only. Never guess another job's promptId.
+ */
+function resolveCancelTarget(payload = {}) {
+  const runId = payload?.runId ? String(payload.runId) : null;
+  if (payload?.promptId) {
+    return { runId, promptId: String(payload.promptId) };
+  }
+  if (runId && activeComfyJobs.has(runId)) {
+    const job = activeComfyJobs.get(runId);
+    return { runId, promptId: job.promptId || null };
+  }
+  return { runId, promptId: null };
+}
+
+async function migrateAgentApiKeyToSecretStore(settings) {
+  const plaintext = String(settings?.agentApiKey || "").trim();
+  if (!plaintext || !secretStore) return settings;
+  const saved = await secretStore.set("agentApiKey", plaintext);
+  if (!saved?.ok) {
+    const next = { ...settings, agentApiKey: "" };
+    await settingsStore.save(next);
+    logger?.warn?.("无法安全迁移 API Key，已清除 settings.json 中的明文；请在安全存储可用后重新填写", {
+      message: saved?.error,
+    });
+    return next;
+  }
+  const next = { ...settings, agentApiKey: "" };
+  await settingsStore.save(next);
+  logger?.info?.("已将 agentApiKey 迁出 settings.json 至加密存储");
+  return next;
+}
+
+async function loadSettingsInternal() {
+  let settings = await settingsStore.load();
+  settings = await migrateAgentApiKeyToSecretStore(settings);
+  const key = secretStore ? await secretStore.get("agentApiKey") : "";
+  return { ...settings, agentApiKey: key || "" };
+}
+
+async function getPublicSettings() {
+  let settings = await settingsStore.load();
+  settings = await migrateAgentApiKeyToSecretStore(settings);
+  const configured = secretStore ? await secretStore.has("agentApiKey") : false;
+  const secureStorageAvailable = secretStore ? secretStore.isEncryptionAvailable() : false;
+  return {
+    ...settings,
+    agentApiKey: "",
+    agentApiKeyConfigured: configured,
+    secureStorageAvailable,
+  };
+}
+
+async function resolveMediaAllowRoots(settings) {
+  const paiRoot = paiBridge.resolvePaiRoot(settings);
+  const configured = readConfiguredComfyUi(paiRoot);
+  await storage.ensureStorageDir();
+  return buildMediaAllowRoots({
+    paiRoot,
+    comfyUiPath: configured?.path || null,
+    modelStoragePath: storage.storageDir,
+    userDataPath: app.getPath("userData"),
+  });
+}
 
 function readUserEnv(name) {
   try {
@@ -193,10 +302,11 @@ function initServices() {
     }
   );
   storage = new StorageManager();
-  settingsStore = new SettingsStore(path.join(app.getPath("userData"), "settings.json"));
-  chatSessions = new ChatSessionStore(path.join(app.getPath("userData"), "chat-sessions"));
-  studioStore = new StudioStore(path.join(app.getPath("userData"), "studio-pipeline.json"));
-  logger = new Logger(path.join(app.getPath("userData"), "logs"));
+  settingsStore = new SettingsStore(path.join(userData, "settings.json"));
+  secretStore = new SecretStore(path.join(userData, "secrets.json"));
+  chatSessions = new ChatSessionStore(path.join(userData, "chat-sessions"));
+  studioStore = new StudioStore(path.join(userData, "studio-pipeline.json"));
+  logger = new Logger(path.join(userData, "logs"));
   paiBridge = new PaiBridge();
   ollama = new OllamaService();
   downloader = new DownloadEngine(storage, settingsStore, {
@@ -448,17 +558,35 @@ function registerIpcHandlers() {
     return buildModelList();
   });
 
-  ipcMain.handle("settings:get", async () => settingsStore.load());
+  ipcMain.handle("settings:get", async () => getPublicSettings());
 
-  ipcMain.handle("settings:update", async (_event, partial) => {
-    await settingsStore.update(partial);
-    return settingsStore.load();
+  ipcMain.handle("settings:update", async (_event, partial = {}) => {
+    const next = { ...(partial || {}) };
+    if (Object.prototype.hasOwnProperty.call(next, "agentApiKey")) {
+      const key = String(next.agentApiKey || "").trim();
+      if (key) {
+        const saved = await secretStore.set("agentApiKey", key);
+        if (!saved?.ok) {
+          throw new Error(saved?.error || "无法安全存储 API Key");
+        }
+      } else if (next.clearAgentApiKey === true) {
+        await secretStore.delete("agentApiKey");
+      }
+      delete next.agentApiKey;
+    }
+    delete next.clearAgentApiKey;
+    delete next.agentApiKeyConfigured;
+    delete next.secureStorageAvailable;
+    if (Object.keys(next).length) {
+      await settingsStore.update(next);
+    }
+    return getPublicSettings();
   });
 
   ipcMain.handle("agent:brain-presets", async () => API_PRESETS);
 
   ipcMain.handle("agent:brain-chat", async (_event, payload = {}) => {
-    const settings = await settingsStore.load();
+    const settings = await loadSettingsInternal();
     return chatWithBrain({
       settings,
       ollama,
@@ -468,7 +596,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("agent:brain-test", async () => {
-    const settings = await settingsStore.load();
+    const settings = await loadSettingsInternal();
     return testBrain({ settings, ollama });
   });
 
@@ -873,10 +1001,24 @@ function registerIpcHandlers() {
     return getProgressSnapshot(paiRoot, payload || {});
   });
 
-  ipcMain.handle("studio:cancel", async () => {
+  ipcMain.handle("studio:cancel", async (_event, payload = {}) => {
     const settings = await settingsStore.load();
     const paiRoot = paiBridge.resolvePaiRoot(settings);
-    return interruptComfyUi(paiRoot);
+    const { runId, promptId } = resolveCancelTarget(payload || {});
+    const result = await cancelComfyUiJob(paiRoot, {
+      promptId,
+      forceGlobal: payload?.forceGlobal === true,
+    });
+    if (result?.ok && (result?.precise || result?.forceGlobal)) {
+      if (runId) {
+        activeComfyJobs.delete(runId);
+      } else if (promptId) {
+        for (const [id, job] of activeComfyJobs.entries()) {
+          if (job.promptId === promptId) activeComfyJobs.delete(id);
+        }
+      }
+    }
+    return { ...result, runId, promptId: promptId || result?.promptId || null };
   });
 
   ipcMain.handle("pai:catalog", async () => {
@@ -920,6 +1062,7 @@ function registerIpcHandlers() {
     const paiRoot = paiBridge.resolvePaiRoot(settings);
     const startedAt = Date.now();
     let promptId = payload?.promptId || null;
+    trackComfyJob(runId, { promptId, source: "pai", startedAt });
 
     let baselineIds = new Set();
     try {
@@ -941,6 +1084,7 @@ function registerIpcHandlers() {
         });
         if (snap.promptId && !promptId) {
           promptId = snap.promptId;
+          updateTrackedPromptId(runId, promptId);
         }
         event.sender.send("pai-run-progress", { runId, ...snap, ...extra });
       } catch (error) {
@@ -963,9 +1107,10 @@ function registerIpcHandlers() {
     try {
       const result = await paiBridge.run(settings, command.trim(), level);
       await emitProgress({ done: true, resultOk: result?.ok === true });
-      return { runId, result };
+      return { runId, result, promptId };
     } finally {
       clearInterval(pollTimer);
+      clearTrackedJob(runId);
     }
   });
 
@@ -1110,11 +1255,13 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("studio:media-url", async (_event, filePath) => {
-    const abs = path.resolve(String(filePath || ""));
-    if (!(await fs.pathExists(abs))) {
-      throw new Error(`文件不存在：${abs}`);
+    const settings = await settingsStore.load();
+    const allowRoots = await resolveMediaAllowRoots(settings);
+    const checked = await assertAllowedMediaPath(filePath, { allowRoots });
+    if (!checked.ok) {
+      throw new Error(checked.error);
     }
-    const ext = path.extname(abs).toLowerCase();
+    const { abs, ext } = checked;
     const kind = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".gif"].includes(ext)
       ? "video"
       : [".png", ".jpg", ".jpeg", ".webp", ".bmp"].includes(ext)
@@ -1188,11 +1335,46 @@ function registerIpcHandlers() {
     const settings = await settingsStore.load();
     await paiBridge.ensureRunning(settings, logger);
     const runId = payload?.runId || `studio-${Date.now()}`;
-    sendToRenderer("pai-run-progress", {
-      runId,
-      phase: "submitting",
-      message: "创作台任务提交中…",
-    });
+    const paiRoot = paiBridge.resolvePaiRoot(settings);
+    const startedAt = Date.now();
+    const pollMs = Math.max(1000, Number(settings.comfyUiPollIntervalMs) || 2500);
+    let promptId = payload?.promptId || null;
+    trackComfyJob(runId, { promptId, source: "studio", startedAt });
+
+    let baselineIds = new Set();
+    try {
+      const status = await getComfyUiStatus(paiRoot);
+      if (status?.api && status.running) {
+        baselineIds = collectPromptIds(await fetchQueue(status.api));
+      }
+    } catch (error) {
+      logger?.warn("创作台进度基线失败", { message: error.message });
+    }
+
+    const emitProgress = async (extra = {}) => {
+      try {
+        const snap = await getProgressSnapshot(paiRoot, { promptId, baselineIds, startedAt });
+        if (snap.promptId && !promptId) {
+          promptId = snap.promptId;
+          updateTrackedPromptId(runId, promptId);
+        }
+        sendToRenderer("pai-run-progress", { runId, ...snap, ...extra });
+      } catch (error) {
+        sendToRenderer("pai-run-progress", {
+          runId,
+          ok: false,
+          phase: "offline",
+          message: error.message,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
+    };
+
+    await emitProgress({ phase: "submitting", message: "创作台任务提交中…" });
+    const pollTimer = setInterval(() => {
+      emitProgress().catch(() => {});
+    }, pollMs);
+
     try {
       const result = await paiBridge.runStudio(settings, {
         ...payload,
@@ -1204,20 +1386,20 @@ function registerIpcHandlers() {
         const pipeline = await studioStore.load();
         result.postTool = await openStudioPostTool(payload?.tool, result.path, pipeline.customTools || []);
       }
-      sendToRenderer("pai-run-progress", {
-        runId,
+      await emitProgress({
         phase: result?.ok ? "completed" : "failed",
         message: result?.message || result?.error || (result?.ok ? "完成" : "失败"),
         path: result?.path,
+        done: true,
+        resultOk: result?.ok === true,
       });
-      return { runId, result };
+      return { runId, result, promptId };
     } catch (error) {
-      sendToRenderer("pai-run-progress", {
-        runId,
-        phase: "failed",
-        message: error.message,
-      });
+      await emitProgress({ phase: "failed", message: error.message });
       throw error;
+    } finally {
+      clearInterval(pollTimer);
+      clearTrackedJob(runId);
     }
   });
 
@@ -1415,21 +1597,27 @@ function toMoguMediaUrl(filePath) {
 }
 
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) {
+    return;
+  }
   Menu.setApplicationMenu(null);
-  protocol.handle("mogu-media", (request) => {
+  initServices();
+
+  protocol.handle("mogu-media", async (request) => {
     try {
       const parsed = new URL(request.url);
-      const filePath = path.normalize(parsed.searchParams.get("p") || "");
-      if (!filePath || !fs.existsSync(filePath)) {
-        return new Response("not found", { status: 404 });
+      const filePath = path.normalize(decodeURIComponent(parsed.searchParams.get("p") || ""));
+      const settings = await settingsStore.load();
+      const allowRoots = await resolveMediaAllowRoots(settings);
+      const checked = await assertAllowedMediaPath(filePath, { allowRoots });
+      if (!checked.ok) {
+        return new Response(checked.error || "forbidden", { status: 403 });
       }
-      return net.fetch(pathToFileURL(filePath).href);
+      return net.fetch(pathToFileURL(checked.abs).href);
     } catch (error) {
       return new Response(`media error: ${error.message}`, { status: 400 });
     }
   });
-
-  initServices();
 
   await logger.initialize();
   await applyProxyPolicy();

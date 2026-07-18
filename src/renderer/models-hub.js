@@ -116,7 +116,18 @@ const ModelsHub = (() => {
         }
       }
       syncCustomModelVisibility();
-      if (els.apiKey) els.apiKey.value = settings.agentApiKey || "";
+      if (els.apiKey) {
+        els.apiKey.value = "";
+        if (settings.secureStorageAvailable === false) {
+          els.apiKey.placeholder = "安全存储不可用，无法保存密钥";
+          els.apiKey.disabled = true;
+        } else {
+          els.apiKey.disabled = false;
+          els.apiKey.placeholder = settings.agentApiKeyConfigured
+            ? "已配置（留空则保持不变）"
+            : "API Key";
+        }
+      }
       if (els.apiBase) els.apiBase.value = settings.agentApiBaseUrl || els.apiBase.value;
     } catch {
       onPresetChange();
@@ -155,28 +166,35 @@ const ModelsHub = (() => {
     els.modelCustomWrap?.classList.toggle("hidden", !custom);
   }
 
-  function collectForm() {
+  async function collectForm() {
     const preset = els.preset?.value || "custom";
     let model = els.modelSelect?.value || "";
     if (model === "__custom__") {
       model = els.modelCustom?.value?.trim() || "";
     }
-    return {
+    const payload = {
       agentBrainChannel: "api",
       agentApiPreset: preset,
       agentApiBaseUrl: els.apiBase?.value?.trim() || "",
-      agentApiKey: els.apiKey?.value?.trim() || "",
       agentApiModel: model,
     };
+    const key = els.apiKey?.value?.trim() || "";
+    if (key) payload.agentApiKey = key;
+    return payload;
   }
 
   async function runOnline(testOnly) {
-    const payload = collectForm();
+    const payload = await collectForm();
     if (!payload.agentApiModel) {
       setStatus("请选择或填写模型名称");
       return;
     }
-    if (!payload.agentApiKey) {
+    const settings = await window.modelManager.getSettings();
+    if (settings.secureStorageAvailable === false && payload.agentApiKey) {
+      setStatus("安全存储不可用，无法保存密钥（不会以明文写入）");
+      return;
+    }
+    if (!payload.agentApiKey && !settings.agentApiKeyConfigured) {
       setStatus("请填写 API 密钥");
       return;
     }

@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.4.x   | ✅        |
+| 1.5.x   | ✅        |
+| 1.4.x   | Best effort |
 | < 1.4   | Best effort |
 
 ## Reporting a vulnerability
@@ -24,6 +25,9 @@ We aim to respond within 7 days.
 
 ## Security notes for users
 
-- Mogu AI runs locally; model files and chat history stay on your machine.
-- The **AI butler** can execute system tasks when PAI is enabled — use L1/L2/L3 permission levels carefully.
+- MOGU AI runs locally; model files and chat history stay on your machine.
+- The AI agent can execute system tasks when PAI is enabled — use L1/L2/L3 permission levels carefully.
+- API keys are stored via Electron `safeStorage` only (fail-closed). If encryption is unavailable, the app refuses to save keys and never writes plaintext.
+- Studio cancel binds to the current `runId` / `promptId`. Pending jobs use queue `delete`; running jobs use targeted `/interrupt` only when ComfyUI ≥ 0.3.56. Otherwise global clear requires explicit confirmation — never guessed from another job.
+- `mogu-media` only serves files under allowlisted roots (PAI / ComfyUI / model storage / AppData) with media extensions.
 - Do not share `config/github.token` or paste tokens into issues/PRs.

@@ -80,7 +80,7 @@ contextBridge.exposeInMainWorld("modelManager", {
   removeStudioCustomTool: (toolId) => ipcRenderer.invoke("studio:remove-custom-tool", toolId),
   importStudioWorkflow: (payload) => ipcRenderer.invoke("studio:import-workflow", payload),
   runStudio: (payload) => ipcRenderer.invoke("pai:studio-run", payload),
-  cancelStudio: () => ipcRenderer.invoke("studio:cancel"),
+  cancelStudio: (payload) => ipcRenderer.invoke("studio:cancel", payload || {}),
   getStudioMediaUrl: (filePath) => ipcRenderer.invoke("studio:media-url", filePath),
   listComposeClips: () => ipcRenderer.invoke("compose:list-clips"),
   pickComposeMedia: () => ipcRenderer.invoke("compose:pick-media"),

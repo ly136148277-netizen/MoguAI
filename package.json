@@ -1,6 +1,6 @@
 {
   "name": "ai-model-manager",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "MOGU AI — 本地 Agent 与 ComfyUI 创作台",
   "homepage": "https://github.com/ly136148277-netizen/MoguAI#readme",
   "repository": {
@@ -61,7 +61,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://example.com/mogu-ai/releases/"
+        "url": "https://github.com/ly136148277-netizen/mogu-ai-releases/releases/"
       }
     ],
     "win": {

@@ -2,6 +2,36 @@ const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
 
+/**
+ * ComfyUI merged targeted `/interrupt` with `prompt_id` in PR #9607 (≈ 0.3.56).
+ * Below this version (or unknown version) we must not claim precise running-cancel.
+ */
+const MIN_TARGETED_INTERRUPT_VERSION = "0.3.56";
+
+function parseVersionParts(version) {
+  const text = String(version || "").trim().replace(/^v/i, "");
+  if (!text) return null;
+  const match = text.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function compareSemver(a, b) {
+  const pa = parseVersionParts(a);
+  const pb = parseVersionParts(b);
+  if (!pa || !pb) return null;
+  for (let i = 0; i < 3; i += 1) {
+    if (pa[i] > pb[i]) return 1;
+    if (pa[i] < pb[i]) return -1;
+  }
+  return 0;
+}
+
+function supportsTargetedInterrupt(version) {
+  const cmp = compareSemver(version, MIN_TARGETED_INTERRUPT_VERSION);
+  return cmp !== null && cmp >= 0;
+}
+
 function readConfiguredComfyUi(paiRoot) {
   const yamlPath = path.join(paiRoot, "config", "pai.yaml");
   if (!fs.pathExistsSync(yamlPath)) {
@@ -279,34 +309,216 @@ async function getProgressSnapshot(paiRoot, options = {}) {
   };
 }
 
+async function deleteQueuedPrompt(api, promptId) {
+  await axios.post(`${api}/queue`, { delete: [String(promptId)] }, { timeout: 8000 });
+}
+
+/** Targeted interrupt only — never falls back to bare global `/interrupt`. */
+async function interruptRunningPromptTargeted(api, promptId) {
+  if (!promptId) {
+    throw new Error("定向中断需要 prompt_id");
+  }
+  await axios.post(
+    `${api}/interrupt`,
+    { prompt_id: String(promptId) },
+    { timeout: 8000 }
+  );
+}
+
+async function interruptGlobal(api) {
+  await axios.post(`${api}/interrupt`, {}, { timeout: 8000 });
+}
+
+async function fetchComfyUiVersion(apiUrl) {
+  const base = String(apiUrl || "").replace(/\/$/, "");
+  if (!base) return null;
+  try {
+    const response = await axios.get(`${base}/system_stats`, { timeout: 4000 });
+    return response.data?.system?.comfyui_version || response.data?.comfyui_version || null;
+  } catch {
+    return null;
+  }
+}
+
+async function detectInterruptCapabilities(apiUrl) {
+  const version = await fetchComfyUiVersion(apiUrl);
+  const targeted = supportsTargetedInterrupt(version);
+  return {
+    version: version || null,
+    supportsTargetedInterrupt: targeted,
+    minTargetedInterruptVersion: MIN_TARGETED_INTERRUPT_VERSION,
+  };
+}
+
 /**
- * Interrupt current ComfyUI execution and clear the queue.
+ * Cancel a MOGU-owned ComfyUI job when an explicit promptId is provided.
+ * Without promptId, refuse global clear unless forceGlobal=true (after UI confirm).
+ * Running cancel without targeted-interrupt support also requires forceGlobal.
  */
-async function interruptComfyUi(paiRoot) {
+async function cancelComfyUiJob(paiRoot, options = {}) {
+  const promptId = options.promptId ? String(options.promptId) : null;
+  const forceGlobal = options.forceGlobal === true;
   const configured = readConfiguredComfyUi(paiRoot);
   const api = (configured?.api || "").replace(/\/$/, "");
   if (!api) {
     return { ok: false, error: "ComfyUI API 未配置" };
   }
-  const results = { interrupt: false, clearQueue: false };
+
+  const caps = await detectInterruptCapabilities(api);
+
+  let queueData;
   try {
-    await axios.post(`${api}/interrupt`, {}, { timeout: 8000 });
-    results.interrupt = true;
+    queueData = await fetchQueue(api);
   } catch (error) {
-    return { ok: false, error: `中断失败：${error.message}`, api, ...results };
+    return { ok: false, error: `无法读取 ComfyUI 队列：${error.message}`, api, ...caps };
+  }
+
+  const running = (queueData.queue_running || []).map(normalizeQueueEntry);
+  const pending = (queueData.queue_pending || []).map(normalizeQueueEntry);
+  const runningId = running[0]?.promptId || null;
+
+  if (promptId) {
+    const inPending = pending.some((item) => item.promptId === promptId);
+    const inRunning = running.some((item) => item.promptId === promptId);
+    const actions = { deleted: false, interrupted: false, clearQueue: false };
+
+    if (!inPending && !inRunning) {
+      return {
+        ok: true,
+        precise: true,
+        alreadyGone: true,
+        promptId,
+        message: `未在队列中找到任务 ${promptId.slice(0, 8)}…（可能已结束）`,
+        api,
+        ...caps,
+        ...actions,
+      };
+    }
+
+    // Pending delete is always precise (queue delete API).
+    if (inPending && !inRunning) {
+      try {
+        await deleteQueuedPrompt(api, promptId);
+        actions.deleted = true;
+      } catch (error) {
+        return {
+          ok: false,
+          precise: true,
+          promptId,
+          error: `精确移除排队任务失败：${error.message}`,
+          api,
+          ...caps,
+          ...actions,
+        };
+      }
+      return {
+        ok: true,
+        precise: true,
+        promptId,
+        message: `已从队列移除 MOGU 任务 ${promptId.slice(0, 8)}…`,
+        api,
+        ...caps,
+        ...actions,
+      };
+    }
+
+    // Running: only precise if ComfyUI supports prompt_id interrupt.
+    if (inRunning && !caps.supportsTargetedInterrupt) {
+      if (!forceGlobal) {
+        return {
+          ok: false,
+          needsConfirmation: true,
+          reason: "no_targeted_interrupt",
+          promptId,
+          runningCount: running.length,
+          pendingCount: pending.length,
+          runningPromptId: runningId,
+          message:
+            `当前 ComfyUI${caps.version ? ` ${caps.version}` : ""} 不支持按 prompt_id 定向中断` +
+            `（需要 ≥ ${MIN_TARGETED_INTERRUPT_VERSION}）。` +
+            "若继续，将全局中断当前任务并清空队列，可能影响其他任务。",
+          api,
+          ...caps,
+          ...actions,
+        };
+      }
+      // Confirmed global path below after pending cleanup if needed.
+    } else if (inRunning && caps.supportsTargetedInterrupt) {
+      try {
+        if (inPending) {
+          await deleteQueuedPrompt(api, promptId);
+          actions.deleted = true;
+        }
+        await interruptRunningPromptTargeted(api, promptId);
+        actions.interrupted = true;
+      } catch (error) {
+        return {
+          ok: false,
+          precise: true,
+          promptId,
+          error: `定向中断失败（未回退为全局中断）：${error.message}`,
+          api,
+          ...caps,
+          ...actions,
+        };
+      }
+      return {
+        ok: true,
+        precise: true,
+        promptId,
+        message: `已精确中断 MOGU 任务 ${promptId.slice(0, 8)}…`,
+        api,
+        ...caps,
+        ...actions,
+      };
+    }
+  }
+
+  if (!forceGlobal) {
+    return {
+      ok: false,
+      needsConfirmation: true,
+      reason: promptId ? "no_targeted_interrupt" : "missing_prompt_id",
+      promptId,
+      runningCount: running.length,
+      pendingCount: pending.length,
+      runningPromptId: runningId,
+      message: promptId
+        ? `无法对运行中的任务做定向中断。若继续，将全局中断并清空队列，可能影响其他任务。`
+        : "未绑定当前任务的 promptId。若继续，将中断 ComfyUI 当前任务并清空整队列，可能影响其他人的任务。",
+      api,
+      ...caps,
+    };
+  }
+
+  const results = { interrupted: false, clearQueue: false, precise: false, forceGlobal: true };
+  try {
+    // After explicit user confirmation only — bare global interrupt.
+    await interruptGlobal(api);
+    results.interrupted = true;
+  } catch (error) {
+    return { ok: false, error: `中断失败：${error.message}`, api, ...caps, ...results };
   }
   try {
     await axios.post(`${api}/queue`, { clear: true }, { timeout: 8000 });
     results.clearQueue = true;
   } catch {
-    // queue clear best-effort
+    // best-effort
   }
   return {
     ok: true,
-    message: "已请求取消：正在中断 ComfyUI 当前任务并清空队列",
+    message: "已按确认执行全局取消：中断当前任务并清空队列",
     api,
+    ...caps,
     ...results,
   };
+}
+
+/**
+ * @deprecated Prefer cancelComfyUiJob with explicit promptId. Kept for compatibility.
+ */
+async function interruptComfyUi(paiRoot) {
+  return cancelComfyUiJob(paiRoot, { forceGlobal: true });
 }
 
 /**
@@ -351,6 +563,10 @@ async function openComfyUiInBrowser(paiRoot) {
 }
 
 module.exports = {
+  MIN_TARGETED_INTERRUPT_VERSION,
+  parseVersionParts,
+  compareSemver,
+  supportsTargetedInterrupt,
   readConfiguredComfyUi,
   normalizeQueueEntry,
   collectPromptIds,
@@ -362,6 +578,8 @@ module.exports = {
   getComfyUiStatus,
   getProgressSnapshot,
   formatElapsed,
+  detectInterruptCapabilities,
+  cancelComfyUiJob,
   interruptComfyUi,
   openComfyUiInBrowser,
 };

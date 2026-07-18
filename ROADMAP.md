@@ -1,6 +1,10 @@
 # ROADMAP.md
 
-> 基于当前源码与项目历史整理，非凭空规划。
+> 基于当前源码与项目历史整理，非凭空规划。  
+> **到 v2.0 的现行产品方案（唯一主线）：** [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)  
+> **OpenClaw Bridge 契约：** [`docs/OPENCLAW_BRIDGE.md`](./docs/OPENCLAW_BRIDGE.md)  
+> 定位：通用个人 AI 助手桌面控制中心 · OpenClaw 为 Runtime · MOGU 为体验与 Skills 层。  
+> 文末「历史归档」旧 V2.0 章节已作废，勿作规划依据。
 
 ---
 
@@ -12,7 +16,8 @@
 | V1.1 | ✅ 已完成（v1.1.0） | 核心功能完整：仓库/下载/Ollama/聊天/设置/打包 |
 | V1.2 | ✅ 已完成（发版号 v1.2.1） | 体验优化 + 图标 + sha256 校验 |
 | V1.3 | ✅ 已完成（v1.3.0） | MOGU AI 品牌、聊天导出、Ollama 引导、保存路径提示 |
-| V2.0 | 🔄 进行中 | Ollama 自动检测/启动已实现；管家 Phase 2 由并行 Agent 交付 |
+| V1.4–V1.5.3 | ✅ 已完成 | CDN、自动更新、创作台、视频合成、环境中心、发版 |
+| V1.5.4 → V2.0 | 📋 规划中 | 见 [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)（安全债 → Bridge → Skills → 助手控制中心） |
 
 ---
 
@@ -154,27 +159,24 @@
 
 ---
 
-## V2.0 — 规划中（源码中部分已实现）
+## 历史归档 — 旧「V2.0」章节（已作废，勿作规划依据）
 
-### V2.0-001 自动检测与启动 Ollama 🔄
+> **唯一现行主线：** [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)  
+> **Bridge 契约：** [`docs/OPENCLAW_BRIDGE.md`](./docs/OPENCLAW_BRIDGE.md)  
+> 下文保留仅为历史对照。旧定义「V2.0 = Ollama 自动启动 + 横向功能清单」**已废止**；Ollama 启停属于已交付的 1.x 能力，不再占用 v2.0 语义。
+
+### （归档）曾标注为 V2.0-001 — 自动检测与启动 Ollama
+
 - [x] 三级状态：未安装 / 已安装未运行 / 运行中
 - [x] 主进程 `ollama serve` 后台启动 + API 轮询
 - [x] 顶部状态栏「启动 Ollama」「下载安装」按钮
 - [x] 设置项 `autoStartOllama` 启动时自动拉起
 - [x] IPC：`ollama:start`、`ollama:open-install`
 
-### V2.0 其余规划 📋
+### （归档）旧 V2.0 其余条目（未纳入现行主线）
 
-以下为目标方向，**当前代码库中尚未实现**，列为待开发：
-
-- [ ] 模型详情页 / 模型评分与评论
-- [x] 聊天导出（Markdown）
-- [ ] 更多预置模型与在线模型库 CDN
-- [ ] ModelScope / GitHub 镜像完整支持
-- [ ] 多模型并行对话
-- [ ] macOS / Linux 打包
-- [ ] 代码签名与自动更新
-- [ ] 插件 / 扩展机制
+- 模型详情页 / 评分评论、ModelScope 大而全、多模型并行、macOS/Linux、插件商店等 —— 现行 v2.0 **明确不做或后置**；见 `ROADMAP_TO_V2.md` §8.3。
+- 聊天导出 Markdown、CDN、自动更新等 —— 已在 1.x 交付或另按主线排期，**不以本归档列表为准**。
 
 ---
 

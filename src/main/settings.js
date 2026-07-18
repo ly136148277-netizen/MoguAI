@@ -2,6 +2,7 @@ const fs = require("fs-extra");
 const path = require("path");
 
 const DEFAULT_SETTINGS = {
+  schemaVersion: 2,
   downloadThreads: 4,
   maxConcurrentDownloads: 2,
   mirror: "official",
@@ -60,8 +61,18 @@ class SettingsStore {
       this._cache = { ...DEFAULT_SETTINGS, ...nextSettings };
     }
 
+    // Never persist API keys in settings.json (handled by SecretStore).
+    if (this._cache && Object.prototype.hasOwnProperty.call(this._cache, "agentApiKey")) {
+      this._cache.agentApiKey = "";
+    }
+    if (this._cache) {
+      this._cache.schemaVersion = this._cache.schemaVersion || DEFAULT_SETTINGS.schemaVersion;
+    }
+
     await fs.ensureDir(path.dirname(this.settingsPath));
-    await fs.writeJson(this.settingsPath, this._cache, { spaces: 2 });
+    const tmp = `${this.settingsPath}.${process.pid}.tmp`;
+    await fs.writeJson(tmp, this._cache, { spaces: 2 });
+    await fs.move(tmp, this.settingsPath, { overwrite: true });
     return this._cache;
   }
 

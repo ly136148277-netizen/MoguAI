@@ -5,6 +5,8 @@ const StudioPanel = (() => {
   let pickSlot = null;
   let progressUnsub = null;
   let activeRunId = null;
+  /** @type {Map<string, string>} runId -> promptId from progress events */
+  const promptByRunId = new Map();
   let stageMonitorTimer = null;
   let activeMonitorStage = null;
   let cancelRequested = false;
@@ -92,7 +94,11 @@ const StudioPanel = (() => {
 
     if (window.modelManager?.onPaiRunProgress) {
       progressUnsub = window.modelManager.onPaiRunProgress((payload) => {
-        if (!payload || (activeRunId && payload.runId !== activeRunId)) return;
+        if (!payload?.runId) return;
+        if (payload.promptId) {
+          promptByRunId.set(payload.runId, String(payload.promptId));
+        }
+        if (activeRunId && payload.runId !== activeRunId) return;
         showProgress(payload);
       });
     }
@@ -559,6 +565,8 @@ const StudioPanel = (() => {
 
   async function cancelStudio() {
     if (!els.cancelBtn || els.cancelBtn.dataset.busy === "1") return;
+    const targetRunId = activeRunId;
+    const targetPromptId = targetRunId ? promptByRunId.get(targetRunId) || null : null;
     cancelRequested = true;
     runGeneration += 1; // 作废进行中的出片等待，立刻允许再点执行
     stopStageMonitor();
@@ -569,14 +577,36 @@ const StudioPanel = (() => {
     els.cancelBtn.dataset.busy = "1";
     els.cancelBtn.disabled = true;
     showRunPanel(true);
-    appendLog("已取消。读条已停，「执行」可再次点击；正在中断 ComfyUI…");
+    appendLog(
+      targetPromptId
+        ? `已取消。正在精确取消当前任务 ${String(targetPromptId).slice(0, 8)}…`
+        : "已取消。当前任务尚未拿到 promptId，将按安全策略处理…"
+    );
     window.AppCore?.setStatus?.("已取消");
+    const cancelPayload = {
+      runId: targetRunId || undefined,
+      promptId: targetPromptId || undefined,
+    };
     try {
-      const result = await window.modelManager.cancelStudio?.();
+      let result = await window.modelManager.cancelStudio?.(cancelPayload);
+      if (result?.needsConfirmation) {
+        const approved = window.confirm(
+          `${result.message || "无法精确定位当前任务。"}\n\n确定继续全局取消？`
+        );
+        if (!approved) {
+          appendLog("已放弃全局取消（未清空 ComfyUI 队列，避免误伤其他任务）");
+          return;
+        }
+        result = await window.modelManager.cancelStudio?.({
+          ...cancelPayload,
+          forceGlobal: true,
+        });
+      }
       if (result?.ok) {
-        appendLog(result.message || "已中断 ComfyUI 当前任务并清空队列");
+        appendLog(result.message || (result.precise ? "已精确取消当前任务" : "已取消"));
+        if (targetRunId) promptByRunId.delete(targetRunId);
       } else {
-        appendLog(`ComfyUI 中断未完全成功：${result?.error || "未知错误"}（可到后台点 Interrupt）`);
+        appendLog(`ComfyUI 取消未完全成功：${result?.error || "未知错误"}（可到后台点 Interrupt）`);
       }
     } catch (error) {
       appendLog(`取消失败：${error.message}`);

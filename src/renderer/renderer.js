@@ -338,7 +338,16 @@ async function loadSettingsForm() {
     settingAgentApiBaseEl.value = settings.agentApiBaseUrl || "";
   }
   if (settingAgentApiKeyEl) {
-    settingAgentApiKeyEl.value = settings.agentApiKey || "";
+    settingAgentApiKeyEl.value = "";
+    if (settings.secureStorageAvailable === false) {
+      settingAgentApiKeyEl.placeholder = "安全存储不可用，无法保存密钥";
+      settingAgentApiKeyEl.disabled = true;
+    } else {
+      settingAgentApiKeyEl.disabled = false;
+      settingAgentApiKeyEl.placeholder = settings.agentApiKeyConfigured
+        ? "已配置（留空则保持不变）"
+        : "API Key";
+    }
   }
   if (settingAgentApiModelEl) {
     settingAgentApiModelEl.value = settings.agentApiModel || "";
@@ -810,7 +819,7 @@ ollamaInstallBtn.addEventListener("click", async () => {
 
 settingsFormEl.addEventListener("submit", async (event) => {
   event.preventDefault();
-  await window.modelManager.updateSettings({
+  const settingsPayload = {
     downloadThreads: Number(settingThreadsEl.value),
     maxConcurrentDownloads: Number(settingConcurrentEl.value),
     mirror: settingMirrorEl.value,
@@ -829,9 +838,13 @@ settingsFormEl.addEventListener("submit", async (event) => {
     agentLocalModel: settingAgentLocalModelEl?.value || "",
     agentApiPreset: settingAgentApiPresetEl?.value || "custom",
     agentApiBaseUrl: settingAgentApiBaseEl?.value?.trim() || "",
-    agentApiKey: settingAgentApiKeyEl?.value?.trim() || "",
     agentApiModel: settingAgentApiModelEl?.value?.trim() || "",
-  });
+  };
+  const apiKeyInput = settingAgentApiKeyEl?.value?.trim() || "";
+  if (apiKeyInput) {
+    settingsPayload.agentApiKey = apiKeyInput;
+  }
+  await window.modelManager.updateSettings(settingsPayload);
   await loadSettingsForm();
   setStatus("设置已保存");
 });
@@ -850,14 +863,16 @@ settingAgentTestBtn?.addEventListener("click", async () => {
   settingAgentTestBtn.disabled = true;
   if (settingAgentTestStatusEl) settingAgentTestStatusEl.textContent = "测试中…";
   try {
-    await window.modelManager.updateSettings({
+    const brainPayload = {
       agentBrainChannel: settingAgentChannelEl?.value || "builtin",
       agentLocalModel: settingAgentLocalModelEl?.value || "",
       agentApiPreset: settingAgentApiPresetEl?.value || "custom",
       agentApiBaseUrl: settingAgentApiBaseEl?.value?.trim() || "",
-      agentApiKey: settingAgentApiKeyEl?.value?.trim() || "",
       agentApiModel: settingAgentApiModelEl?.value?.trim() || "",
-    });
+    };
+    const brainKey = settingAgentApiKeyEl?.value?.trim() || "";
+    if (brainKey) brainPayload.agentApiKey = brainKey;
+    await window.modelManager.updateSettings(brainPayload);
     const result = await window.modelManager.testAgentBrain();
     if (settingAgentTestStatusEl) {
       settingAgentTestStatusEl.textContent = result.message || "OK";

@@ -5,6 +5,10 @@ const {
   collectPromptIds,
   detectNewPromptId,
   summarizeProgress,
+  cancelComfyUiJob,
+  supportsTargetedInterrupt,
+  compareSemver,
+  MIN_TARGETED_INTERRUPT_VERSION,
 } = require("../src/main/comfyui-bridge");
 
 test("normalizeQueueEntry parses array queue item", () => {
@@ -54,3 +58,25 @@ test("collectPromptIds gathers running and pending", () => {
   });
   assert.deepEqual([...ids].sort(), ["a", "b"]);
 });
+
+test("cancelComfyUiJob fails clearly when ComfyUI API is not configured", async () => {
+  const result = await cancelComfyUiJob(pathJoinNonexistent());
+  assert.equal(result.ok, false);
+  assert.match(result.error, /未配置|ComfyUI/);
+});
+
+test("supportsTargetedInterrupt gates on ComfyUI 0.3.56+", () => {
+  assert.equal(MIN_TARGETED_INTERRUPT_VERSION, "0.3.56");
+  assert.equal(supportsTargetedInterrupt("0.3.55"), false);
+  assert.equal(supportsTargetedInterrupt("0.3.56"), true);
+  assert.equal(supportsTargetedInterrupt("0.28.0"), true);
+  assert.equal(supportsTargetedInterrupt(""), false);
+  assert.equal(supportsTargetedInterrupt(null), false);
+  assert.equal(compareSemver("0.3.56", "0.3.56"), 0);
+});
+
+function pathJoinNonexistent() {
+  const path = require("path");
+  const os = require("os");
+  return path.join(os.tmpdir(), "mogu-no-pai-root-" + Date.now());
+}
