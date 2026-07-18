@@ -10,10 +10,12 @@ const AppRouter = (() => {
     home: ["home"],
     models: ["models", "downloads", "my-models"],
     agent: ["chat", "butler", "agent-intro"],
+    tasks: ["tasks"],
     create: ["studio", "comfyui"],
     compose: ["compose"],
     setup: ["setup"],
-    settings: ["settings"],
+    data: ["data"],
+    settings: ["settings", "openclaw"],
     help: ["help"],
   };
 

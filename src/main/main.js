@@ -57,6 +57,13 @@ const {
 const { gateCommand } = require("./permission-gate");
 const { TaskStore, SCHEMA_VERSION: TASK_SCHEMA_VERSION } = require("./task-store");
 const { toPublicTask, toPublicTaskPage } = require("./task-public");
+const {
+  scanDataCenter,
+  exportDiagnosticPack,
+  planCleanup,
+  executeCleanup,
+} = require("./data-center");
+const openclawLifecycle = require("./openclaw/lifecycle");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
 const {
   getSetupStatus,
@@ -1191,6 +1198,86 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("openclaw:disconnect", async () => openclawBridge.disconnect());
+
+  ipcMain.handle("openclaw:lifecycle", async () => {
+    const settings = await settingsStore.load();
+    const url = settings.openclawGatewayUrl || DEFAULT_GATEWAY_URL;
+    const probe = await openclawBridge.probe(url);
+    const bridgeStatus = openclawBridge.getPublicStatus();
+    const health = await openclawLifecycle.healthCheck(url);
+    const guide = openclawLifecycle.getInstallGuide();
+    const lifecycle = openclawLifecycle.classifyLifecycle({
+      probe,
+      bridgeStatus,
+      enabled: settings.openclawEnabled === true || settings.agentRuntimeMode === "openclaw",
+    });
+    return { ok: true, ...lifecycle, probe, health, guide };
+  });
+
+  ipcMain.handle("openclaw:health", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    const url = payload?.url || settings.openclawGatewayUrl || DEFAULT_GATEWAY_URL;
+    return openclawLifecycle.healthCheck(url);
+  });
+
+  ipcMain.handle("openclaw:start", async () => {
+    const result = await openclawLifecycle.startGateway({ logger });
+    return result;
+  });
+
+  ipcMain.handle("openclaw:stop", async () => openclawLifecycle.stopGateway());
+
+  ipcMain.handle("openclaw:install-guide", async () => openclawLifecycle.getInstallGuide());
+
+  ipcMain.handle("data:scan", async () => {
+    const settings = await getPublicSettings();
+    return scanDataCenter({
+      userData: app.getPath("userData"),
+      settings,
+      storageDir: storage?.storageDir || null,
+      logger,
+    });
+  });
+
+  ipcMain.handle("data:export-diagnostic", async () => {
+    const settings = await getPublicSettings();
+    const dest = path.join(app.getPath("documents"), "MOGU-diagnostics");
+    await fs.ensureDir(dest);
+    const result = await exportDiagnosticPack({
+      userData: app.getPath("userData"),
+      settingsPublic: settings,
+      storageDir: storage?.storageDir || null,
+      destDir: path.join(dest, `pack-${Date.now()}`),
+    });
+    if (result?.ok && result.path) {
+      try {
+        await shell.openPath(result.path);
+      } catch {
+        // ignore
+      }
+    }
+    return result;
+  });
+
+  ipcMain.handle("data:cleanup-plan", async () =>
+    planCleanup({ userData: app.getPath("userData") })
+  );
+
+  ipcMain.handle("data:cleanup-execute", async (_event, payload = {}) => {
+    if (payload?.confirmToken !== "CONFIRM_DELETE") {
+      return {
+        ok: false,
+        needsConfirmation: true,
+        reason: "needs_confirmation",
+        message: "真正删除必须二次确认（confirmToken）。",
+      };
+    }
+    const plan = await planCleanup({ userData: app.getPath("userData") });
+    return executeCleanup({
+      actions: plan.actions,
+      confirmToken: "CONFIRM_DELETE",
+    });
+  });
 
   ipcMain.handle("openclaw:decide-fallback", async (_event, payload = {}) => {
     const settings = await settingsStore.load();

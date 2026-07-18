@@ -57,6 +57,12 @@ const settingAgentTestBtn = document.getElementById("setting-agent-test-btn");
 const settingAgentTestStatusEl = document.getElementById("setting-agent-test-status");
 const settingThemeEl = document.getElementById("setting-theme");
 const settingLocaleEl = document.getElementById("setting-locale");
+const settingOpenclawEnabledEl = document.getElementById("setting-openclaw-enabled");
+const settingOpenclawUrlEl = document.getElementById("setting-openclaw-url");
+const settingOpenclawFallbackEl = document.getElementById("setting-openclaw-fallback");
+const settingAgentRuntimeEl = document.getElementById("setting-agent-runtime");
+const settingOpenclawTokenEl = document.getElementById("setting-openclaw-token");
+const settingOpenclawTokenHintEl = document.getElementById("setting-openclaw-token-hint");
 
 const AGENT_API_PRESETS = {
   deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
@@ -328,6 +334,35 @@ async function loadSettingsForm() {
   }
   settingThemeEl.value = settings.theme || "dark";
   settingLocaleEl.value = settings.locale || "zh";
+  if (settingOpenclawEnabledEl) {
+    settingOpenclawEnabledEl.checked = Boolean(settings.openclawEnabled);
+  }
+  if (settingOpenclawUrlEl) {
+    settingOpenclawUrlEl.value = settings.openclawGatewayUrl || "ws://127.0.0.1:18789";
+  }
+  if (settingOpenclawFallbackEl) {
+    settingOpenclawFallbackEl.checked = settings.openclawFallbackToPai !== false;
+  }
+  if (settingAgentRuntimeEl) {
+    settingAgentRuntimeEl.value = settings.agentRuntimeMode || "pai";
+  }
+  if (settingOpenclawTokenEl) {
+    settingOpenclawTokenEl.value = "";
+    if (settings.secureStorageAvailable === false) {
+      settingOpenclawTokenEl.placeholder = "安全存储不可用，无法保存 token";
+      settingOpenclawTokenEl.disabled = true;
+    } else {
+      settingOpenclawTokenEl.disabled = false;
+      settingOpenclawTokenEl.placeholder = settings.openclawGatewayTokenConfigured
+        ? "已配置（留空则保持不变）"
+        : "Gateway token";
+    }
+  }
+  if (settingOpenclawTokenHintEl) {
+    settingOpenclawTokenHintEl.textContent = settings.openclawGatewayTokenConfigured
+      ? "Token 已配置（渲染层不可见内容）"
+      : "尚未配置 Gateway token";
+  }
   if (settingAgentChannelEl) {
     settingAgentChannelEl.value = settings.agentBrainChannel || "builtin";
   }
@@ -834,6 +869,10 @@ settingsFormEl.addEventListener("submit", async (event) => {
     comfyUiPollIntervalMs: Number(settingComfyUiPollEl?.value || 2500),
     theme: settingThemeEl.value,
     locale: settingLocaleEl.value,
+    openclawEnabled: Boolean(settingOpenclawEnabledEl?.checked),
+    openclawGatewayUrl: settingOpenclawUrlEl?.value?.trim() || "ws://127.0.0.1:18789",
+    openclawFallbackToPai: settingOpenclawFallbackEl?.checked !== false,
+    agentRuntimeMode: settingAgentRuntimeEl?.value || "pai",
     agentBrainChannel: settingAgentChannelEl?.value || "builtin",
     agentLocalModel: settingAgentLocalModelEl?.value || "",
     agentApiPreset: settingAgentApiPresetEl?.value || "custom",
@@ -843,6 +882,10 @@ settingsFormEl.addEventListener("submit", async (event) => {
   const apiKeyInput = settingAgentApiKeyEl?.value?.trim() || "";
   if (apiKeyInput) {
     settingsPayload.agentApiKey = apiKeyInput;
+  }
+  const openclawTokenInput = settingOpenclawTokenEl?.value?.trim() || "";
+  if (openclawTokenInput) {
+    settingsPayload.openclawGatewayToken = openclawTokenInput;
   }
   await window.modelManager.updateSettings(settingsPayload);
   await loadSettingsForm();
@@ -1215,6 +1258,9 @@ window.AppCore = {
   window.SetupPanel?.init();
   window.StudioPanel?.init();
   window.ComposePanel?.init();
+  window.TasksPanel?.init();
+  window.DataPanel?.init();
+  window.OpenclawPanel?.init();
   window.PageController.init();
 
   await loadMeta();

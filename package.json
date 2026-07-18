@@ -1,7 +1,7 @@
 {
   "name": "ai-model-manager",
-  "version": "1.6.0-alpha.2",
-  "description": "MOGU AI — 本地 Agent 控制面（OpenClaw Bridge alpha.2）",
+  "version": "1.6.0-alpha.3",
+  "description": "MOGU AI — 本地 Agent 控制面（OpenClaw Bridge alpha.3）",
   "homepage": "https://github.com/ly136148277-netizen/MoguAI#readme",
   "repository": {
     "type": "git",

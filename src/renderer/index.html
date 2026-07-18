@@ -30,9 +30,12 @@
         <button type="button" class="nav-item is-active" data-nav="home" data-nav-group="home">首页</button>
         <button type="button" class="nav-item" data-nav="models" data-nav-group="models">Agent模型</button>
         <button type="button" class="nav-item" data-nav="chat" data-nav-group="agent">Agent</button>
+        <button type="button" class="nav-item" data-nav="tasks" data-nav-group="tasks">任务</button>
         <button type="button" class="nav-item" data-nav="studio" data-nav-group="create">ComfyUI创作</button>
         <button type="button" class="nav-item" data-nav="compose" data-nav-group="compose">视频合成</button>
         <button type="button" class="nav-item" data-nav="setup" data-nav-group="setup">环境</button>
+        <button type="button" class="nav-item" data-nav="data" data-nav-group="data">数据</button>
+        <button type="button" class="nav-item" data-nav="openclaw" data-nav-group="settings">OpenClaw</button>
 
         <div class="nav-section nav-section--spaced nav-section--tail">
           <button type="button" class="nav-item" data-nav="settings" data-nav-group="settings">设置</button>
@@ -894,6 +897,103 @@
         </div>
       </section>
 
+      <!-- 任务中心 -->
+      <section id="view-tasks" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">任务中心</span>
+          <button type="button" class="btn btn--ghost btn--tiny" id="tasks-refresh-btn">刷新</button>
+        </div>
+        <div class="tasks-layout panel">
+          <div class="toolbar">
+            <div class="toolbar__row">
+              <input id="tasks-filter-query" class="toolbar__search" type="search" placeholder="搜索名称 / ID / 日志" />
+              <select id="tasks-filter-source" class="toolbar__select">
+                <option value="">全部来源</option>
+                <option value="openclaw">OpenClaw</option>
+                <option value="pai">PAI</option>
+                <option value="studio">Studio</option>
+                <option value="comfy">ComfyUI</option>
+              </select>
+              <select id="tasks-filter-status" class="toolbar__select">
+                <option value="">全部状态</option>
+                <option value="queued">queued</option>
+                <option value="running">running</option>
+                <option value="succeeded">succeeded</option>
+                <option value="failed">failed</option>
+                <option value="cancelled">cancelled</option>
+                <option value="timed_out">timed_out</option>
+              </select>
+            </div>
+          </div>
+          <p id="tasks-error" class="error-state"></p>
+          <div class="tasks-split">
+            <div class="tasks-split__list">
+              <div id="tasks-list" class="queue-list"></div>
+              <p id="tasks-empty" class="queue-empty hidden">暂无任务。Agent / 创作台运行后会出现在这里。</p>
+            </div>
+            <div class="tasks-split__detail">
+              <div class="tasks-detail-actions">
+                <button type="button" class="btn btn--ghost btn--tiny" id="tasks-cancel-btn" disabled>精确取消</button>
+                <button type="button" class="btn btn--primary btn--tiny" id="tasks-retry-btn" disabled>失败重试</button>
+              </div>
+              <div id="tasks-detail" class="tasks-detail">
+                <p class="empty-state">选择左侧任务查看终态、日志与输出路径。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 数据中心（只读 + 诊断导出） -->
+      <section id="view-data" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">数据中心</span>
+          <button type="button" class="btn btn--ghost btn--tiny" id="data-refresh-btn">重新扫描</button>
+        </div>
+        <div class="data-layout panel">
+          <p id="data-summary" class="settings-section-hint"></p>
+          <p id="data-notes" class="settings-section-hint"></p>
+          <p id="data-error" class="error-state"></p>
+          <div id="data-roots" class="data-roots"></div>
+          <div class="settings-inline-actions">
+            <button type="button" class="btn btn--primary" id="data-export-btn">导出诊断包</button>
+            <button type="button" class="btn btn--ghost" id="data-cleanup-plan-btn">清理 dry-run</button>
+            <button type="button" class="btn btn--danger" id="data-cleanup-run-btn" disabled>确认清理</button>
+          </div>
+          <pre id="data-cleanup-plan" class="tasks-detail__log"></pre>
+        </div>
+      </section>
+
+      <!-- OpenClaw 生命周期 -->
+      <section id="view-openclaw" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">OpenClaw Gateway</span>
+          <button type="button" class="btn btn--ghost btn--tiny" id="oc-life-refresh-btn">刷新</button>
+        </div>
+        <div class="openclaw-life panel">
+          <div class="openclaw-life__status">
+            <span class="badge" id="oc-life-state">—</span>
+            <span id="oc-life-message">—</span>
+          </div>
+          <p id="oc-life-version" class="settings-section-hint"></p>
+          <p class="settings-section-hint">兼容钉扎：<span id="oc-life-pinned">protocol 4</span>（不内嵌、不 fork Gateway 源码）</p>
+          <div class="settings-inline-actions">
+            <button type="button" class="btn btn--primary btn--tiny" id="oc-life-probe-btn">健康探测</button>
+            <button type="button" class="btn btn--primary btn--tiny" id="oc-life-connect-btn">连接</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="oc-life-disconnect-btn">断开</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="oc-life-start-btn">启动（外部 CLI）</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="oc-life-stop-btn">停止托管进程</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="oc-life-docs-btn">官方安装文档</button>
+          </div>
+          <h3 class="settings-section-title">安装 / 升级引导</h3>
+          <ol id="oc-life-guide" class="openclaw-life__guide"></ol>
+          <p class="settings-section-hint">地址、启用、降级与 token 请在「设置 → OpenClaw」中配置。</p>
+        </div>
+      </section>
+
       <!-- 软件设置 -->
       <section id="view-settings" class="view">
         <div class="view-head">
@@ -1015,6 +1115,31 @@
             <button id="setting-pai-doctor-btn" class="btn btn--primary" type="button">检测 PAI</button>
             <span id="setting-pai-status" class="settings-inline-status"></span>
           </div>
+          <h3 class="settings-section-title">OpenClaw Bridge</h3>
+          <p class="settings-section-hint">
+            主推 Agent Runtime。Gateway 需本机另行安装；MOGU 只连接与管理，不内嵌 Runtime。
+          </p>
+          <label class="checkbox-row">
+            <input id="setting-openclaw-enabled" name="openclawEnabled" type="checkbox" />
+            启用 OpenClaw
+          </label>
+          <label>Gateway 地址
+            <input id="setting-openclaw-url" name="openclawGatewayUrl" type="text" placeholder="ws://127.0.0.1:18789" />
+          </label>
+          <label class="checkbox-row">
+            <input id="setting-openclaw-fallback" name="openclawFallbackToPai" type="checkbox" />
+            Gateway 未接受请求前可降级 PAI（已接受后禁止重发）
+          </label>
+          <label>Agent 默认运行时
+            <select id="setting-agent-runtime" name="agentRuntimeMode">
+              <option value="openclaw">OpenClaw（主推）</option>
+              <option value="pai">PAI（兼容）</option>
+            </select>
+          </label>
+          <label>Gateway Token（仅主进程安全存储）
+            <input id="setting-openclaw-token" name="openclawGatewayToken" type="password" autocomplete="off" placeholder="留空则保持不变" />
+          </label>
+          <p id="setting-openclaw-token-hint" class="settings-section-hint"></p>
           <label>界面主题
             <select id="setting-theme" name="theme">
               <option value="dark">深色</option>
@@ -1131,6 +1256,9 @@
   <script src="setup-panel.js"></script>
   <script src="studio-panel.js"></script>
   <script src="compose-panel.js"></script>
+  <script src="tasks-panel.js"></script>
+  <script src="data-panel.js"></script>
+  <script src="openclaw-panel.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
