@@ -26,6 +26,10 @@ config/mogu_daily_news.json
 config/mogu_deals_news.json
 config/mogu_incidents.json
 config/github.token
+*.token
+.env
+.env.*
+secrets.json
 
 # Map publish temp dirs
 .publish-mogu-map/

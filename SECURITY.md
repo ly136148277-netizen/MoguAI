@@ -31,3 +31,10 @@ We aim to respond within 7 days.
 - Studio cancel binds to the current `runId` / `promptId`. Pending jobs use queue `delete`; running jobs use targeted `/interrupt` only when ComfyUI ≥ 0.3.56. Otherwise global clear requires explicit confirmation — never guessed from another job.
 - `mogu-media` only serves files under allowlisted roots (PAI / ComfyUI / model storage / AppData) with media extensions.
 - Do not share `config/github.token` or paste tokens into issues/PRs.
+
+## Packaging / release boundary
+
+- electron-builder uses an **explicit runtime file allowlist** (not `.gitignore`).
+- `config/github.token`, `*.token`, `.env`, `secrets.json`, news configs, and `scripts/` must never ship in `app.asar`.
+- `build/afterPack.js` runs an ASAR denylist check; any hit fails the build.
+- **v1.5.4 installers were yanked** after a local secret was packaged; use **v1.5.5+** only.

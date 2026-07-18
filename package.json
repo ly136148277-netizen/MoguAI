@@ -1,6 +1,6 @@
 {
   "name": "ai-model-manager",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "MOGU AI — 本地 Agent 与 ComfyUI 创作台",
   "homepage": "https://github.com/ly136148277-netizen/MoguAI#readme",
   "repository": {
@@ -19,7 +19,8 @@
     "screenshots": "electron scripts/capture-readme-screenshots.js",
     "acceptance": "node scripts/acceptance_v1.4.0.js",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "check:asar": "node -e \"require('./build/asar-denylist').assertResourcesClean('dist/win-unpacked')\""
   },
   "keywords": [
     "electron",
@@ -51,12 +52,23 @@
     },
     "files": [
       "src/**/*",
-      "config/**/*",
       "catalog/**/*",
       "assets/icon.png",
       "assets/icon.ico",
       "models.json",
-      "package.json"
+      "package.json",
+      "config/prompts.json",
+      "config/repository.json",
+      "config/update.json",
+      "!config/**/*.token",
+      "!config/**/*.env",
+      "!config/mogu_*.json",
+      "!config/xuzhou_*.json",
+      "!**/secrets.json",
+      "!**/.env",
+      "!**/.env.*",
+      "!scripts/**/*",
+      "!**/*.token"
     ],
     "publish": [
       {
