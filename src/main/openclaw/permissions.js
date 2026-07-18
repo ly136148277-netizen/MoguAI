@@ -21,6 +21,7 @@ class PermissionProxy {
     this.hasConfirmUi = typeof opts.hasConfirmUi === "function" ? opts.hasConfirmUi : () => Boolean(opts.askUser);
     this.askUser = typeof opts.askUser === "function" ? opts.askUser : null;
     this.audit = opts.audit || null;
+    this.grants = opts.grants || null;
     this.logger = opts.logger || null;
     this.timeoutMs = Number.isFinite(Number(opts.timeoutMs))
       ? Math.max(50, Number(opts.timeoutMs))
@@ -63,9 +64,21 @@ class PermissionProxy {
       return this._finish(base, false, "desktop_offline", "桌面端不在线，高风险操作已拒绝（不可绕过确认）。");
     }
 
-    // L1 read-only: auto-allow + audit. L2/L3 always need MOGU UI confirm.
+    // L1 read-only: auto-allow + audit. L2/L3 always need MOGU UI confirm
+    // unless a persistent grant covers this tool+risk (revocable in Permission Center).
     if (riskLevel <= 1) {
       return this._finish(base, true, "l1_auto", "L1 只读已放行");
+    }
+
+    // L2 only: remembered grants skip re-confirm. L3 always asks again.
+    if (riskLevel <= 2 && this.grants && typeof this.grants.hasGrant === "function") {
+      try {
+        if (await this.grants.hasGrant(tool, riskLevel)) {
+          return this._finish(base, true, "grant_remembered", "已使用先前授权（可在权限中心撤销）");
+        }
+      } catch (error) {
+        this.logger?.warn?.("permission grant lookup failed", { message: error.message });
+      }
     }
 
     if (!this.askUser || !this.hasConfirmUi()) {
@@ -107,6 +120,15 @@ class PermissionProxy {
         "gateway_approval_required",
         "MOGU 已批准，但仍需 Gateway approval；双重校验未通过。"
       );
+    }
+
+    if (this.grants && typeof this.grants.grant === "function" && riskLevel <= 2) {
+      // Persist L2 grants only; L3 always re-confirm next time.
+      try {
+        await this.grants.grant({ tool, riskLevel, action: base.action, remember: true });
+      } catch (error) {
+        this.logger?.warn?.("permission grant save failed", { message: error.message });
+      }
     }
 
     return this._finish(base, true, "approved", "已批准");

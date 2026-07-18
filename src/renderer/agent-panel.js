@@ -9,7 +9,7 @@ const AgentPanel = (() => {
   let shutdownTimer = null;
   /** @type {{role:string, content:string}[]} */
   let history = [];
-  let runtimeMode = "pai";
+  let runtimeMode = "openclaw";
   let activeMoguTaskId = null;
   let streamBuffer = "";
   let unsubOpenclawTask = null;
@@ -102,6 +102,13 @@ const AgentPanel = (() => {
     els.taskStream = document.getElementById("agent-task-stream");
     els.taskError = document.getElementById("agent-task-error");
     els.taskCancelBtn = document.getElementById("agent-task-cancel-btn");
+    els.ocBanner = document.getElementById("agent-oc-banner");
+    els.ocBannerText = document.getElementById("agent-oc-banner-text");
+    els.ocBannerConnect = document.getElementById("agent-oc-banner-connect");
+    els.ocBannerPai = document.getElementById("agent-oc-banner-pai");
+    els.sessionsList = document.getElementById("agent-sessions-list");
+    els.sessionsHint = document.getElementById("agent-sessions-hint");
+    els.sessionsRefresh = document.getElementById("agent-sessions-refresh");
 
     els.gotoStudio?.addEventListener("click", () => window.AppRouter.navigate("studio"));
     document.getElementById("agent-goto-models-btn")?.addEventListener("click", () => {
@@ -118,6 +125,9 @@ const AgentPanel = (() => {
     els.openclawConnectBtn?.addEventListener("click", connectOpenclaw);
     els.openclawInstallBtn?.addEventListener("click", openOpenclawInstallGuide);
     els.taskCancelBtn?.addEventListener("click", cancelActiveOpenclawTask);
+    els.ocBannerConnect?.addEventListener("click", connectOpenclaw);
+    els.ocBannerPai?.addEventListener("click", switchToPaiCompat);
+    els.sessionsRefresh?.addEventListener("click", () => refreshSessions());
 
     if (window.modelManager?.onOpenclawTask) {
       unsubOpenclawTask = window.modelManager.onOpenclawTask(onOpenclawTaskEvent);
@@ -163,9 +173,82 @@ const AgentPanel = (() => {
     showAgentMode();
     window.ButlerUI?.bindMessages?.(els.messages);
     await refreshStatus();
+    await refreshSessions();
     await refreshShutdownStatus();
     ensureWelcome();
     els.input?.focus();
+  }
+
+  async function switchToPaiCompat() {
+    runtimeMode = "pai";
+    if (els.runtimeMode) els.runtimeMode.value = "pai";
+    try {
+      await window.modelManager.updateSettings({
+        agentRuntimeMode: "pai",
+        openclawEnabled: false,
+      });
+    } catch {
+      /* ignore */
+    }
+    updateOcBanner({ connected: false });
+    await refreshStatus();
+    appendLocal("assistant", "已切换为 PAI（兼容）模式。需要 OpenClaw 时可随时在运行时下拉改回。");
+  }
+
+  function updateOcBanner(oc) {
+    if (!els.ocBanner) return;
+    const show =
+      runtimeMode === "openclaw" && !(oc && (oc.connected === true || oc.state === "ready"));
+    els.ocBanner.classList.toggle("hidden", !show);
+    if (els.ocBannerText && show) {
+      const state = oc?.state || oc?.lifecycle || "未连接";
+      els.ocBannerText.textContent = `尚未连接 OpenClaw Gateway（${state}）。连接后办事走 OpenClaw；也可改用 PAI 兼容。`;
+    }
+  }
+
+  async function refreshSessions() {
+    if (!els.sessionsList) return;
+    if (runtimeMode !== "openclaw") {
+      els.sessionsList.innerHTML = "";
+      if (els.sessionsHint) {
+        els.sessionsHint.textContent = "当前为 PAI 兼容模式；会话列表仅在 OpenClaw 下可用。";
+      }
+      return;
+    }
+    try {
+      const result = await window.modelManager.listOpenclawSessions?.({ params: { limit: 40 } });
+      const sessions = result?.sessions || [];
+      if (!result?.ok) {
+        els.sessionsList.innerHTML = "";
+        if (els.sessionsHint) {
+          els.sessionsHint.textContent =
+            result?.message || "会话列表暂不可用（Gateway 未连接或方法不可用）。";
+        }
+        return;
+      }
+      if (!sessions.length) {
+        els.sessionsList.innerHTML = `<li class="agent-sessions__empty">暂无会话</li>`;
+        if (els.sessionsHint) els.sessionsHint.textContent = `方法：${result.method || "sessions.list"}`;
+        return;
+      }
+      els.sessionsList.innerHTML = sessions
+        .map((s) => {
+          const key = s.sessionKey || s.key || s.id || s.sessionId || "—";
+          const status = s.status || s.state || s.phase || "";
+          const title = s.title || s.label || key;
+          return `<li class="agent-sessions__item" title="${escapeHtml(String(key))}">
+            <strong>${escapeHtml(String(title))}</strong>
+            <span>${escapeHtml(String(status || key))}</span>
+          </li>`;
+        })
+        .join("");
+      if (els.sessionsHint) {
+        els.sessionsHint.textContent = `${sessions.length} 个会话 · ${result.method || "sessions.list"}`;
+      }
+    } catch (error) {
+      els.sessionsList.innerHTML = "";
+      if (els.sessionsHint) els.sessionsHint.textContent = error.message || "列会话失败";
+    }
   }
 
   function showAgentMode() {
@@ -296,6 +379,8 @@ const AgentPanel = (() => {
             openclawEnabled: true,
           });
         }
+        updateOcBanner(status);
+        await refreshSessions();
         appendLocal("assistant", "已连接 OpenClaw。正在打开「添加模型」…");
         await refreshStatus();
         window.AppRouter?.navigate?.("models", { modelsMode: "gate" });
@@ -321,6 +406,9 @@ const AgentPanel = (() => {
   }
 
   function paintOpenclawState(status) {
+    if (status && status.state !== "probing") {
+      updateOcBanner(status);
+    }
     if (!els.openclawState) return;
     const state = status?.state || "disconnected";
     // Ignore transient probe flicker if it ever leaks through.
@@ -704,6 +792,7 @@ const AgentPanel = (() => {
 
       const oc = settings.openclaw || (await window.modelManager.getOpenclawStatus?.());
       paintOpenclawState(oc);
+      updateOcBanner(oc);
 
       const brain =
         settings.agentBrainChannel === "api"

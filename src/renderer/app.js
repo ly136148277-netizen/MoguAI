@@ -1,5 +1,5 @@
 const AppRouter = (() => {
-  let currentPage = "home";
+  let currentPage = "chat";
   let currentOptions = {};
   const handlers = {};
   /** @type {{ page: string, options: object }[]} */
@@ -13,7 +13,7 @@ const AppRouter = (() => {
     tasks: ["tasks"],
     create: ["studio", "comfyui", "compose"],
     env: ["setup", "data"],
-    settings: ["settings", "openclaw", "skills"],
+    settings: ["settings", "openclaw", "skills", "permissions", "channels"],
     help: ["help"],
   };
 
@@ -113,8 +113,8 @@ const AppRouter = (() => {
       return true;
     }
 
-    if (currentPage !== "home") {
-      navigate("home", { back: true });
+    if (currentPage !== "chat") {
+      navigate("chat", { back: true });
       return true;
     }
     return false;
@@ -133,7 +133,7 @@ const AppRouter = (() => {
       const mode = window.ModelsHub?.getMode?.();
       if (mode === "local" || mode === "online") return true;
     }
-    return history.length > 0 || currentPage !== "home";
+    return history.length > 0 || currentPage !== "chat";
   }
 
   return { init, navigate, goBack, onPage, getCurrentPage, groupForPage, canGoBack };

@@ -8,9 +8,12 @@ const SkillsPanel = (() => {
     els.status = document.getElementById("skills-status");
     els.refresh = document.getElementById("skills-refresh-btn");
     els.sync = document.getElementById("skills-sync-docs-btn");
+    els.whitelistBtn = document.getElementById("skills-whitelist-btn");
+    els.whitelist = document.getElementById("skills-whitelist");
 
     els.refresh?.addEventListener("click", () => refresh());
     els.sync?.addEventListener("click", () => syncDocs());
+    els.whitelistBtn?.addEventListener("click", () => loadWhitelist());
     window.AppRouter.onPage("skills", () => refresh());
   }
 
@@ -19,11 +22,51 @@ const SkillsPanel = (() => {
       const data = await window.modelManager.listSkills();
       paintEnv(data.env || {});
       paintList(data.skills || []);
+      await loadWhitelist();
       if (els.status) {
         els.status.textContent = `Skills 根目录：${data.skillsRoot || "—"}`;
       }
     } catch (error) {
       if (els.status) els.status.textContent = error.message;
+    }
+  }
+
+  async function loadWhitelist() {
+    if (!els.whitelist) return;
+    try {
+      const data = await window.modelManager.listSkillsWhitelist?.();
+      const skills = data?.skills || [];
+      if (!skills.length) {
+        els.whitelist.innerHTML = `<p class="empty-state">白名单为空</p>`;
+        return;
+      }
+      els.whitelist.innerHTML = `<h3 class="settings-section-title">官方白名单</h3>${skills
+        .map(
+          (s) => `<article class="skills-card">
+            <div class="skills-card__head">
+              <strong>${escapeHtml(s.title || s.id)}</strong>
+              <span class="badge">${escapeHtml(s.version || "")}</span>
+              <button type="button" class="btn btn--primary btn--tiny" data-install="${escapeHtml(s.id)}">安装/启用</button>
+            </div>
+            <p class="settings-section-hint">${escapeHtml(s.description || "")}</p>
+          </article>`
+        )
+        .join("")}`;
+      els.whitelist.querySelectorAll("[data-install]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const result = await window.modelManager.installSkillWhitelist({
+            skillId: btn.getAttribute("data-install"),
+          });
+          if (els.status) {
+            els.status.textContent = result?.ok
+              ? `已安装/启用 ${result.skillId}`
+              : result?.message || result?.error || "安装失败";
+          }
+          await refresh();
+        });
+      });
+    } catch (error) {
+      els.whitelist.innerHTML = `<p class="error-state">${escapeHtml(error.message)}</p>`;
     }
   }
 

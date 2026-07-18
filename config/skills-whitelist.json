@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "source": "official",
+  "skills": [
+    {
+      "id": "mogu.comfy",
+      "title": "ComfyUI 工作流",
+      "version": "1.7.0",
+      "bundled": true,
+      "description": "列工作流、出片、精确取消"
+    },
+    {
+      "id": "mogu.studio",
+      "title": "创作台出片",
+      "version": "1.7.0",
+      "bundled": true,
+      "description": "参数化出片与预检"
+    },
+    {
+      "id": "mogu.ollama",
+      "title": "Ollama 模型",
+      "version": "1.7.0",
+      "bundled": true,
+      "description": "模型列表与导入"
+    },
+    {
+      "id": "mogu.pc",
+      "title": "本机助手",
+      "version": "1.7.0",
+      "bundled": true,
+      "description": "打开应用、搜索、备份"
+    },
+    {
+      "id": "mogu.media",
+      "title": "视频合成",
+      "version": "1.7.0",
+      "bundled": true,
+      "description": "FFmpeg 拼接"
+    }
+  ]
+}

@@ -60,9 +60,12 @@ const { toPublicTask, toPublicTaskPage } = require("./task-public");
 const {
   scanDataCenter,
   exportDiagnosticPack,
+  exportBackupPack,
+  importBackupPack,
   planCleanup,
   executeCleanup,
 } = require("./data-center");
+const { PermissionGrants } = require("./permission-grants");
 const openclawLifecycle = require("./openclaw/lifecycle");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
 const {
@@ -97,6 +100,7 @@ let openclawBridge = null;
 let agentRunService = null;
 let permissionProxy = null;
 let permissionAudit = null;
+let permissionGrants = null;
 let skillRuntime = null;
 let desktopOnline = true;
 let confirmUiReady = false;
@@ -358,9 +362,11 @@ function initServices() {
   });
   logger = new Logger(path.join(userData, "logs"));
   permissionAudit = new PermissionAudit(path.join(userData, "logs", "permission-audit.jsonl"));
+  permissionGrants = new PermissionGrants(path.join(userData, "permission-grants.json"));
   permissionProxy = new PermissionProxy({
     logger,
     audit: permissionAudit,
+    grants: permissionGrants,
     timeoutMs: 60_000,
     isDesktopOnline: () =>
       desktopOnline && BrowserWindow.getAllWindows().some((win) => !win.isDestroyed()),
@@ -1087,6 +1093,17 @@ function registerIpcHandlers() {
     return { ok: true, entries };
   });
 
+  ipcMain.handle("permission:grants-list", async () => {
+    const grants = permissionGrants ? await permissionGrants.list() : [];
+    return { ok: true, grants: grants.filter((g) => !g.revoked) };
+  });
+
+  ipcMain.handle("permission:grants-revoke", async (_event, payload = {}) => {
+    if (!permissionGrants) return { ok: false, error: "grants_unavailable" };
+    if (payload?.tool) return permissionGrants.revokeTool(payload.tool);
+    return permissionGrants.revoke(payload?.grantId || payload?.id);
+  });
+
   ipcMain.handle("pai:run", async (_event, payload) => {
     const settings = await settingsStore.load();
     if (!(await paiBridge.ping(settings))) {
@@ -1315,6 +1332,10 @@ function registerIpcHandlers() {
     })
   );
   ipcMain.handle("skills:sync-openclaw-docs", async () => skillRuntime.syncOpenclawDocs());
+  ipcMain.handle("skills:whitelist", async () => skillRuntime.listWhitelist());
+  ipcMain.handle("skills:install-whitelist", async (_event, payload = {}) =>
+    skillRuntime.installFromWhitelist(payload.skillId || payload.id)
+  );
 
   ipcMain.handle("openclaw:open-install-docs", async () => {
     const guide = openclawLifecycle.getInstallGuide();
@@ -1330,6 +1351,39 @@ function registerIpcHandlers() {
       settings,
       storageDir: storage?.storageDir || null,
       logger,
+    });
+  });
+
+  ipcMain.handle("data:export-backup", async () => {
+    const settings = await getPublicSettings();
+    const dest = path.join(app.getPath("documents"), "MOGU-backups");
+    await fs.ensureDir(dest);
+    const result = await exportBackupPack({
+      userData: app.getPath("userData"),
+      settingsPublic: settings,
+      destDir: path.join(dest, `backup-${Date.now()}`),
+    });
+    if (result?.ok && result.path) {
+      try {
+        await shell.openPath(result.path);
+      } catch {
+        /* ignore */
+      }
+    }
+    return result;
+  });
+
+  ipcMain.handle("data:import-backup", async () => {
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: "选择 MOGU 备份目录（含 manifest.json）",
+      properties: ["openDirectory"],
+    });
+    if (picked.canceled || !picked.filePaths?.[0]) {
+      return { ok: false, cancelled: true };
+    }
+    return importBackupPack({
+      backupDir: picked.filePaths[0],
+      userData: app.getPath("userData"),
     });
   });
 
@@ -1386,6 +1440,38 @@ function registerIpcHandlers() {
 
   ipcMain.handle("openclaw:session-create", async (_event, payload = {}) => {
     return agentRunService.sessionCreate(payload || {});
+  });
+
+  ipcMain.handle("openclaw:sessions-list", async (_event, payload = {}) => {
+    try {
+      if (!openclawBridge || openclawBridge.state !== "ready") {
+        return {
+          ok: false,
+          code: "not_connected",
+          message: "OpenClaw 未连接，无法列出会话。",
+          sessions: [],
+        };
+      }
+      const { requireMethod } = require("./openclaw/methods-adapter");
+      const adapter = openclawBridge.getMethodsAdapter();
+      const method = requireMethod(adapter, "sessionList");
+      const result = await openclawBridge.request(method, payload?.params || { limit: 50 });
+      const sessions = Array.isArray(result?.sessions)
+        ? result.sessions
+        : Array.isArray(result?.items)
+          ? result.items
+          : Array.isArray(result)
+            ? result
+            : [];
+      return { ok: true, method, sessions };
+    } catch (error) {
+      return {
+        ok: false,
+        code: error.code || "session_list_failed",
+        message: error.message,
+        sessions: [],
+      };
+    }
   });
 
   ipcMain.handle("openclaw:send", async (_event, payload = {}) => {

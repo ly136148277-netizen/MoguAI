@@ -8,12 +8,16 @@ const DataPanel = (() => {
     els.error = document.getElementById("data-error");
     els.refresh = document.getElementById("data-refresh-btn");
     els.exportBtn = document.getElementById("data-export-btn");
+    els.backupBtn = document.getElementById("data-backup-btn");
+    els.restoreBtn = document.getElementById("data-restore-btn");
     els.cleanupPlanBtn = document.getElementById("data-cleanup-plan-btn");
     els.cleanupRunBtn = document.getElementById("data-cleanup-run-btn");
     els.cleanupBox = document.getElementById("data-cleanup-plan");
 
     els.refresh?.addEventListener("click", () => refresh());
     els.exportBtn?.addEventListener("click", () => exportPack());
+    els.backupBtn?.addEventListener("click", () => backupPack());
+    els.restoreBtn?.addEventListener("click", () => restorePack());
     els.cleanupPlanBtn?.addEventListener("click", () => planCleanup());
     els.cleanupRunBtn?.addEventListener("click", () => runCleanup());
 
@@ -77,6 +81,40 @@ const DataPanel = (() => {
       window.AppCore?.setStatus?.(`导出失败：${error.message}`);
     } finally {
       if (els.exportBtn) els.exportBtn.disabled = false;
+    }
+  }
+
+  async function backupPack() {
+    try {
+      els.backupBtn && (els.backupBtn.disabled = true);
+      const result = await window.modelManager.exportBackupPack();
+      window.AppCore?.setStatus?.(
+        result?.ok ? `备份已导出（无密钥）：${result.path}` : result?.message || "备份失败"
+      );
+    } catch (error) {
+      window.AppCore?.setStatus?.(`备份失败：${error.message}`);
+    } finally {
+      if (els.backupBtn) els.backupBtn.disabled = false;
+    }
+  }
+
+  async function restorePack() {
+    if (!window.confirm("从备份恢复将覆盖任务/会话/授权等本地数据（不会导入 token）。继续？")) {
+      return;
+    }
+    try {
+      els.restoreBtn && (els.restoreBtn.disabled = true);
+      const result = await window.modelManager.importBackupPack();
+      if (result?.cancelled) {
+        window.AppCore?.setStatus?.("已取消恢复");
+        return;
+      }
+      window.AppCore?.setStatus?.(result?.ok ? result.message || "恢复完成" : result?.message || "恢复失败");
+      await refresh();
+    } catch (error) {
+      window.AppCore?.setStatus?.(`恢复失败：${error.message}`);
+    } finally {
+      if (els.restoreBtn) els.restoreBtn.disabled = false;
     }
   }
 

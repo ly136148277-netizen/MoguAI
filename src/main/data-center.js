@@ -306,11 +306,118 @@ async function executeCleanup({ actions = [], confirmToken = "" } = {}) {
   return { ok: true, deleted, message: `已清理 ${deleted.length} 个目录内容。` };
 }
 
+/**
+ * Full app backup (no secrets/tokens). Restorable via importBackupPack.
+ */
+async function exportBackupPack({
+  userData,
+  settingsPublic = {},
+  destDir = null,
+} = {}) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const outRoot = destDir || path.join(os.tmpdir(), `mogu-backup-${stamp}`);
+  await fs.ensureDir(outRoot);
+  const manifest = {
+    kind: "mogu-backup",
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+    excludes: ["secrets.json", "tokens", "api keys", "model weights"],
+    files: [],
+  };
+
+  async function copySafe(from, toName) {
+    if (!from || !(await fs.pathExists(from))) return;
+    if (SECRET_NAME.test(path.basename(from))) return;
+    const dest = path.join(outRoot, toName);
+    await fs.ensureDir(path.dirname(dest));
+    await fs.copy(from, dest, {
+      filter: (src) => !SECRET_NAME.test(path.basename(src)),
+    });
+    manifest.files.push(toName);
+  }
+
+  const publicSettings = { ...settingsPublic };
+  delete publicSettings.agentApiKey;
+  delete publicSettings.openclawGatewayToken;
+  await fs.writeJson(path.join(outRoot, "settings.public.json"), publicSettings, { spaces: 2 });
+  manifest.files.push("settings.public.json");
+
+  if (userData) {
+    await copySafe(path.join(userData, "tasks.json"), "tasks.json");
+    await copySafe(path.join(userData, "permission-grants.json"), "permission-grants.json");
+    await copySafe(path.join(userData, "studio-pipeline.json"), "studio-pipeline.json");
+    await copySafe(path.join(userData, "chat-sessions"), "chat-sessions");
+    // Never copy secrets.json
+  }
+
+  await fs.writeJson(path.join(outRoot, "manifest.json"), manifest, { spaces: 2 });
+  return { ok: true, path: outRoot, manifest };
+}
+
+async function importBackupPack({ backupDir, userData } = {}) {
+  if (!backupDir || !(await fs.pathExists(backupDir))) {
+    return { ok: false, error: "backup_missing", message: "备份目录不存在" };
+  }
+  if (!userData) {
+    return { ok: false, error: "userdata_missing", message: "缺少 userData" };
+  }
+  const manifestPath = path.join(backupDir, "manifest.json");
+  if (!(await fs.pathExists(manifestPath))) {
+    return { ok: false, error: "manifest_missing", message: "不是有效的 MOGU 备份（缺 manifest）" };
+  }
+  const manifest = await fs.readJson(manifestPath);
+  if (manifest.kind !== "mogu-backup") {
+    return { ok: false, error: "kind_mismatch", message: "manifest.kind 不是 mogu-backup" };
+  }
+
+  const restored = [];
+  const map = [
+    ["tasks.json", "tasks.json"],
+    ["permission-grants.json", "permission-grants.json"],
+    ["studio-pipeline.json", "studio-pipeline.json"],
+    ["chat-sessions", "chat-sessions"],
+  ];
+  for (const [fromName, toName] of map) {
+    const from = path.join(backupDir, fromName);
+    if (!(await fs.pathExists(from))) continue;
+    if (SECRET_NAME.test(fromName)) continue;
+    const dest = path.join(userData, toName);
+    await fs.ensureDir(path.dirname(dest));
+    await fs.copy(from, dest, { overwrite: true });
+    restored.push(toName);
+  }
+
+  // Merge non-secret settings fields if present
+  const pubPath = path.join(backupDir, "settings.public.json");
+  let settingsMerged = false;
+  if (await fs.pathExists(pubPath)) {
+    const pub = await fs.readJson(pubPath);
+    delete pub.agentApiKey;
+    delete pub.openclawGatewayToken;
+    const settingsPath = path.join(userData, "settings.json");
+    const current = (await fs.pathExists(settingsPath)) ? await fs.readJson(settingsPath) : {};
+    const next = { ...current, ...pub, agentApiKey: "", openclawGatewayToken: undefined };
+    delete next.openclawGatewayToken;
+    await fs.writeJson(settingsPath, next, { spaces: 2 });
+    settingsMerged = true;
+    restored.push("settings.json(merged-public)");
+  }
+
+  return {
+    ok: true,
+    restored,
+    settingsMerged,
+    message: `已恢复 ${restored.length} 项（未导入 secrets/token）`,
+  };
+}
+
 module.exports = {
   measurePath,
   formatBytes,
   scanDataCenter,
   exportDiagnosticPack,
+  exportBackupPack,
+  importBackupPack,
   planCleanup,
   executeCleanup,
   SKIP_DIR_NAMES,

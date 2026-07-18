@@ -344,7 +344,7 @@ async function loadSettingsForm() {
     settingOpenclawFallbackEl.checked = settings.openclawFallbackToPai !== false;
   }
   if (settingAgentRuntimeEl) {
-    settingAgentRuntimeEl.value = settings.agentRuntimeMode || "pai";
+    settingAgentRuntimeEl.value = settings.agentRuntimeMode || "openclaw";
   }
   if (settingOpenclawTokenEl) {
     settingOpenclawTokenEl.value = "";
@@ -872,7 +872,7 @@ settingsFormEl.addEventListener("submit", async (event) => {
     openclawEnabled: Boolean(settingOpenclawEnabledEl?.checked),
     openclawGatewayUrl: settingOpenclawUrlEl?.value?.trim() || "ws://127.0.0.1:18789",
     openclawFallbackToPai: settingOpenclawFallbackEl?.checked !== false,
-    agentRuntimeMode: settingAgentRuntimeEl?.value || "pai",
+    agentRuntimeMode: settingAgentRuntimeEl?.value || "openclaw",
     agentBrainChannel: settingAgentChannelEl?.value || "builtin",
     agentLocalModel: settingAgentLocalModelEl?.value || "",
     agentApiPreset: settingAgentApiPresetEl?.value || "custom",
@@ -1262,6 +1262,8 @@ window.AppCore = {
   window.DataPanel?.init();
   window.OpenclawPanel?.init();
   window.SkillsPanel?.init();
+  window.PermissionsPanel?.init();
+  window.ChannelsPanel?.init();
   window.PageController.init();
 
   await loadMeta();

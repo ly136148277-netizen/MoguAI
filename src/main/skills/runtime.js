@@ -125,6 +125,49 @@ class SkillRuntime {
     return { ok: true, destRoot, copied };
   }
 
+  async listWhitelist() {
+    const file = resolveWhitelistPath();
+    if (!(await fs.pathExists(file))) {
+      return { ok: true, skills: [], path: file };
+    }
+    const data = await fs.readJson(file);
+    return { ok: true, skills: Array.isArray(data.skills) ? data.skills : [], path: file };
+  }
+
+  /**
+   * Install a whitelist skill into userData/skills-ext (bundled skills just re-enable).
+   */
+  async installFromWhitelist(skillId) {
+    const id = String(skillId || "").trim();
+    const listed = await this.listWhitelist();
+    const entry = (listed.skills || []).find((s) => s.id === id);
+    if (!entry) {
+      return { ok: false, error: "not_in_whitelist", message: `不在官方白名单：${id}` };
+    }
+
+    const bundledSrc = path.join(resolveSkillsRoot(), id, "SKILL.md");
+    const extRoot =
+      this.deps.userDataPath
+        ? path.join(this.deps.userDataPath, "skills-ext", id)
+        : path.join(os.tmpdir(), "mogu-skills-ext", id);
+    await fs.ensureDir(extRoot);
+    if (await fs.pathExists(bundledSrc)) {
+      await fs.copy(bundledSrc, path.join(extRoot, "SKILL.md"));
+    } else {
+      await fs.writeFile(
+        path.join(extRoot, "SKILL.md"),
+        `# ${id}\n\nInstalled from official whitelist (${entry.version || "unknown"}).\n`,
+        "utf8"
+      );
+    }
+
+    const settings = await this.deps.getSettings();
+    const next = mergeEnabled(settings.skillsEnabled);
+    next[id] = true;
+    await this.deps.updateSettings?.({ skillsEnabled: next });
+    return { ok: true, skillId: id, path: extRoot, enabled: true };
+  }
+
   async preflight(skillId, args = {}) {
     return this.invoke(skillId, "preflight", args, { skipPermission: true, skipTask: true });
   }
@@ -282,7 +325,20 @@ function scrubArgs(args) {
   return out;
 }
 
+function resolveWhitelistPath() {
+  const candidates = [
+    process.env.MOGU_SKILLS_WHITELIST,
+    path.join(__dirname, "..", "..", "..", "config", "skills-whitelist.json"),
+    path.join(process.cwd(), "config", "skills-whitelist.json"),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (fs.pathExistsSync(candidate)) return candidate;
+  }
+  return candidates[1] || candidates[0];
+}
+
 module.exports = {
   SkillRuntime,
   handlers,
+  resolveWhitelistPath,
 };

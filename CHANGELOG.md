@@ -5,6 +5,23 @@
 
 ---
 
+## [2.0.0] - 2026-07-19
+
+### Added
+- **对话为默认首页**：打开即对话；侧栏「概览」保留环境/最近
+- **OpenClaw 默认 Runtime**：新装默认 `agentRuntimeMode=openclaw`；未连接时顶栏引导连接或切 PAI 兼容
+- **权限中心**：审计列表 + 可撤销 L2 授权（`permission-grants.json`）；L3 始终再确认
+- **OpenClaw 会话列表**：对话侧栏展示 `sessions.list`（方法不可用时友好提示）
+- **备份/恢复**：数据页导出/导入备份包（不含 secrets/token）
+- **渠道引导页**：Telegram 等走 OpenClaw 官方配置，不自研协议
+- **Skills 白名单安装**：`config/skills-whitelist.json` + 技能页「从白名单安装」
+- 验收：`npm run acceptance:v2.0` / `npm run soak:v2.0`
+
+### Changed
+- 产品主路径切到「个人 AI 助手控制中心」；创作/模型仍为能力模块
+
+---
+
 ## [1.7.0] - 2026-07-19
 
 ### Added

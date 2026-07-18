@@ -27,8 +27,8 @@
         <span>对话 · 任务 · 创作 · 模型</span>
       </div>
       <nav class="sidebar__nav">
-        <button type="button" class="nav-item is-active" data-nav="home" data-nav-group="home">首页</button>
-        <button type="button" class="nav-item" data-nav="chat" data-nav-group="agent">对话</button>
+        <button type="button" class="nav-item is-active" data-nav="chat" data-nav-group="agent">对话</button>
+        <button type="button" class="nav-item" data-nav="home" data-nav-group="home">概览</button>
         <button type="button" class="nav-item" data-nav="tasks" data-nav-group="tasks">任务</button>
         <button type="button" class="nav-item" data-nav="studio" data-nav-group="create">创作</button>
         <button type="button" class="nav-item" data-nav="models" data-nav-group="models">模型</button>
@@ -40,7 +40,7 @@
         </div>
       </nav>
       <div class="sidebar__footer">
-        <p id="sidebar-version">v1.6.0</p>
+        <p id="sidebar-version">v2.0.0</p>
       </div>
     </aside>
 
@@ -50,10 +50,10 @@
         <input id="storage-path" type="hidden" />
       </div>
 
-      <!-- 首页 -->
-      <section id="view-home" class="view is-active">
+      <!-- 概览（原首页；v2.0 默认进入对话） -->
+      <section id="view-home" class="view">
         <div class="home-strip panel">
-          <p class="home-strip__tip">Agent 办事 / 创作出台 · 建议先配好环境</p>
+          <p class="home-strip__tip">环境与最近动态 · 主入口在「对话」</p>
           <div id="home-env-lights" class="home-env-lights">
             <span id="home-light-ollama" class="home-env-chip">Ollama …</span>
             <span id="home-light-pai" class="home-env-chip">PAI …</span>
@@ -229,13 +229,28 @@
         </section>
       </section>
 
-      <!-- Agent：统一对话窗（打字办事 / 问用法 / 引导） -->
-      <section id="view-chat" class="view">
+      <!-- Agent：统一对话窗（v2.0 默认首页） -->
+      <section id="view-chat" class="view is-active">
         <div class="view-head view-head--compact">
-          <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
-          <span class="view-category-label">Agent</span>
+          <button type="button" class="btn btn--ghost back-home-btn" title="概览">概览</button>
+          <span class="view-category-label">对话</span>
         </div>
         <div id="agent-workspace" class="agent-workspace panel">
+          <div id="agent-oc-banner" class="agent-oc-banner hidden" role="status">
+            <span id="agent-oc-banner-text">尚未连接 OpenClaw Gateway。</span>
+            <button type="button" class="btn btn--primary btn--tiny" id="agent-oc-banner-connect">连接</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="agent-oc-banner-pai">改用 PAI 兼容</button>
+          </div>
+          <div class="agent-split">
+            <aside class="agent-sessions panel" id="agent-sessions-panel">
+              <div class="agent-sessions__head">
+                <strong>会话</strong>
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-sessions-refresh">刷新</button>
+              </div>
+              <ul id="agent-sessions-list" class="agent-sessions__list"></ul>
+              <p id="agent-sessions-hint" class="settings-section-hint">连接 OpenClaw 后显示 Gateway 会话。</p>
+            </aside>
+            <div class="agent-main">
           <div class="agent-workspace__head">
             <div class="butler-status">
               <span id="agent-status-dot" class="butler-status__dot"></span>
@@ -290,7 +305,9 @@
             <input id="agent-input" type="text" placeholder="例如：打开 ComfyUI、列出工作流、搜索 桌面、备份 PAI、怎么用创作台…" autocomplete="off" />
             <button class="btn btn--primary" type="submit">发送</button>
           </form>
-        </div>
+            </div><!-- agent-main -->
+          </div><!-- agent-split -->
+        </div><!-- agent-workspace -->
 
         <!-- ChatUI 兼容节点（不在 Agent 主界面露出；我的模型「去聊天」仍可用） -->
         <div id="chat-picker" class="chat-picker panel hidden">
@@ -973,6 +990,8 @@
           <div id="data-roots" class="data-roots"></div>
           <div class="settings-inline-actions">
             <button type="button" class="btn btn--primary" id="data-export-btn">导出诊断包</button>
+            <button type="button" class="btn btn--primary" id="data-backup-btn">备份</button>
+            <button type="button" class="btn btn--ghost" id="data-restore-btn">从备份恢复</button>
             <button type="button" class="btn btn--ghost" id="data-cleanup-plan-btn">清理 dry-run</button>
             <button type="button" class="btn btn--danger" id="data-cleanup-run-btn" disabled>确认清理</button>
           </div>
@@ -991,6 +1010,8 @@
           <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
           <button type="button" class="hub-tab is-active" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
+          <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
+          <button type="button" class="hub-tab" data-hub-nav="channels">渠道</button>
         </div>
         <div class="openclaw-life panel">
           <div class="openclaw-life__status">
@@ -1024,16 +1045,74 @@
           <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
           <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab is-active" data-hub-nav="skills">技能</button>
+          <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
+          <button type="button" class="hub-tab" data-hub-nav="channels">渠道</button>
         </div>
         <div class="skills-layout panel">
           <p class="settings-section-hint">每个 Skill = SKILL.md + 主进程实现 + 权限代理 + 任务契约。执行始终在 MOGU，不内嵌 OpenClaw。</p>
           <div id="skills-env" class="home-env-lights"></div>
           <div class="settings-inline-actions">
             <button type="button" class="btn btn--ghost btn--tiny" id="skills-sync-docs-btn">同步说明到 OpenClaw</button>
+            <button type="button" class="btn btn--primary btn--tiny" id="skills-whitelist-btn">从白名单安装</button>
           </div>
+          <div id="skills-whitelist" class="skills-list"></div>
           <div id="skills-list" class="skills-list"></div>
           <pre id="skills-doc" class="tasks-detail__log"></pre>
           <p id="skills-status" class="settings-section-hint"></p>
+        </div>
+      </section>
+
+      <!-- 权限中心 -->
+      <section id="view-permissions" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">设置 · 权限</span>
+          <button type="button" class="btn btn--ghost btn--tiny" id="perm-refresh-btn">刷新</button>
+        </div>
+        <div class="hub-tabs" data-hub="settings">
+          <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
+          <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="permissions">权限</button>
+          <button type="button" class="hub-tab" data-hub-nav="channels">渠道</button>
+        </div>
+        <div class="panel">
+          <h3 class="settings-section-title">已记住的授权（可撤销）</h3>
+          <div id="perm-grants" class="skills-list"></div>
+          <h3 class="settings-section-title">最近审计</h3>
+          <pre id="perm-audit" class="tasks-detail__log"></pre>
+          <p id="perm-status" class="settings-section-hint"></p>
+        </div>
+      </section>
+
+      <!-- 渠道引导（不自研协议） -->
+      <section id="view-channels" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">设置 · 渠道</span>
+        </div>
+        <div class="hub-tabs" data-hub="settings">
+          <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
+          <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
+          <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="channels">渠道</button>
+        </div>
+        <div class="panel">
+          <h3 class="settings-section-title">通过 OpenClaw 配置渠道</h3>
+          <p class="settings-section-hint">
+            Telegram / WhatsApp 等外部渠道由 OpenClaw Gateway 负责。MOGU 不自研第二套协议，只提供引导与连接状态。
+          </p>
+          <ol class="openclaw-life__guide">
+            <li>在本机安装并连接 OpenClaw Gateway（设置 → OpenClaw）。</li>
+            <li>按官方文档配置渠道（token / bot），配置保存在 OpenClaw 侧。</li>
+            <li>回到 MOGU「对话」办事；任务与权限仍由 MOGU 任务中心 / 权限中心管理。</li>
+          </ol>
+          <div class="settings-inline-actions">
+            <button type="button" class="btn btn--primary btn--tiny" id="channels-goto-openclaw">打开 OpenClaw 页</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="channels-open-docs">官方渠道文档</button>
+          </div>
+          <p id="channels-status" class="settings-section-hint"></p>
         </div>
       </section>
 
@@ -1052,6 +1131,8 @@
           <button type="button" class="hub-tab is-active" data-hub-nav="settings">通用设置</button>
           <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
+          <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
+          <button type="button" class="hub-tab" data-hub-nav="channels">渠道</button>
         </div>
         <form id="settings-form" class="settings-form panel">
           <label>下载线程数
@@ -1309,6 +1390,8 @@
   <script src="data-panel.js"></script>
   <script src="openclaw-panel.js"></script>
   <script src="skills-panel.js"></script>
+  <script src="permissions-panel.js"></script>
+  <script src="channels-panel.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

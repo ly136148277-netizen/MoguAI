@@ -7,6 +7,7 @@ const METHOD_CANDIDATES = Object.freeze({
   sessionCreate: ["sessions.create"],
   sessionSend: ["sessions.send", "chat.send"],
   sessionAbort: ["sessions.abort", "chat.abort"],
+  sessionList: ["sessions.list", "chat.sessions.list"],
   taskCancel: ["tasks.cancel"],
   taskGet: ["tasks.get"],
   taskList: ["tasks.list"],

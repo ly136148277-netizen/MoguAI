@@ -32,9 +32,9 @@ const DEFAULT_SETTINGS = {
   agentApiBaseUrl: "https://api.deepseek.com/v1",
   agentApiKey: "",
   agentApiModel: "deepseek-chat",
-  /** Agent runtime: pai | openclaw */
-  agentRuntimeMode: "pai",
-  openclawEnabled: false,
+  /** Agent runtime: pai | openclaw — v2.0 default OpenClaw */
+  agentRuntimeMode: "openclaw",
+  openclawEnabled: true,
   openclawGatewayUrl: "ws://127.0.0.1:18789",
   openclawFallbackToPai: true,
   /** Skill enable map: { "mogu.comfy": true, ... } */
