@@ -2,6 +2,7 @@ const { spawn } = require("child_process");
 const fs = require("fs-extra");
 const path = require("path");
 const http = require("http");
+const os = require("os");
 
 /** Pinned compatible Gateway protocol / docs version for MOGU Bridge. */
 const PINNED_COMPAT = Object.freeze({
@@ -98,24 +99,106 @@ async function healthCheck(gatewayUrl) {
   };
 }
 
+function resolveOpenclawCliEntry() {
+  const candidates = [
+    process.env.OPENCLAW_CLI_ENTRY,
+    path.join(
+      process.env.APPDATA || "",
+      "npm",
+      "node_modules",
+      "openclaw",
+      "openclaw.mjs"
+    ),
+    path.join(
+      process.env.APPDATA || "",
+      "npm",
+      "node_modules",
+      "openclaw",
+      "dist",
+      "index.js"
+    ),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (candidate && fs.pathExistsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function resolveNodeBinary() {
+  const candidates = [
+    process.env.OPENCLAW_NODE_BIN,
+    process.env.npm_node_execpath,
+    path.join(process.env.ProgramFiles || "C:\\Program Files", "nodejs", "node.exe"),
+    path.join(process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)", "nodejs", "node.exe"),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (candidate && fs.pathExistsSync(candidate)) return candidate;
+  }
+  // Last resort: rely on PATH (must not use process.execPath — in Electron that is MOGU.exe).
+  return process.platform === "win32" ? "node.exe" : "node";
+}
+
+/**
+ * Read Gateway token from local OpenClaw config (main process only).
+ * Never expose this value to the renderer.
+ */
+async function readLocalGatewayToken() {
+  const configPath = path.join(os.homedir(), ".openclaw", "openclaw.json");
+  if (!(await fs.pathExists(configPath))) return null;
+  try {
+    const cfg = await fs.readJson(configPath);
+    const token = cfg?.gateway?.auth?.token;
+    return token ? String(token).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Start Gateway via external CLI only — never embeds OpenClaw runtime.
  */
-async function startGateway({ command = null, cwd = null, logger = null } = {}) {
+async function startGateway({ command = null, cwd = null, logger = null, port = 18789 } = {}) {
   if (managedChild && !managedChild.killed) {
     return { ok: true, alreadyRunning: true, pid: managedChild.pid };
   }
 
-  const cmd = command || process.env.OPENCLAW_GATEWAY_CMD || "openclaw";
-  const args = command ? [] : ["gateway", "run"];
+  const health = await healthCheck(`ws://127.0.0.1:${port}`);
+  if (health.ok) {
+    return { ok: true, alreadyRunning: true, external: true, message: "Gateway 已在监听。" };
+  }
+
   try {
-    managedChild = spawn(cmd, args, {
-      cwd: cwd || undefined,
-      shell: true,
-      windowsHide: true,
-      stdio: "ignore",
-      detached: false,
-    });
+    if (command) {
+      managedChild = spawn(command, {
+        cwd: cwd || undefined,
+        shell: true,
+        windowsHide: true,
+        stdio: "ignore",
+        detached: false,
+      });
+    } else {
+      const entry = resolveOpenclawCliEntry();
+      if (!entry) {
+        return {
+          ok: false,
+          message: "未找到本机 openclaw CLI。请先安装 OpenClaw，或手动执行：openclaw gateway run",
+          installDocsUrl: PINNED_COMPAT.installDocsUrl,
+        };
+      }
+      const nodeBin = resolveNodeBinary();
+      managedChild = spawn(
+        nodeBin,
+        [entry, "gateway", "run", "--port", String(port), "--bind", "loopback"],
+        {
+          cwd: cwd || undefined,
+          windowsHide: true,
+          stdio: "ignore",
+          detached: false,
+          shell: false,
+          env: { ...process.env, OPENCLAW_GATEWAY_PORT: String(port) },
+        }
+      );
+    }
     managedChild.on("exit", () => {
       managedChild = null;
     });
@@ -123,7 +206,30 @@ async function startGateway({ command = null, cwd = null, logger = null } = {}) 
       logger?.warn?.("openclaw start failed", { message: error.message });
       managedChild = null;
     });
-    return { ok: true, pid: managedChild.pid, command: cmd, external: true };
+
+    // Wait until Gateway is actually reachable (cold start can take several seconds).
+    // Only then may openclaw:connect proceed to WS handshake.
+    for (let i = 0; i < 30; i += 1) {
+      await new Promise((r) => setTimeout(r, 500));
+      const again = await healthCheck(`ws://127.0.0.1:${port}`);
+      if (again.ok) {
+        return { ok: true, pid: managedChild?.pid || null, external: true, started: true };
+      }
+      if (!managedChild || managedChild.killed) {
+        return {
+          ok: false,
+          message: "Gateway 进程已退出，自动启动失败。请检查本机 OpenClaw 安装与日志。",
+          installDocsUrl: PINNED_COMPAT.installDocsUrl,
+        };
+      }
+    }
+    return {
+      ok: false,
+      pid: managedChild?.pid || null,
+      external: true,
+      message: "已尝试自动启动 Gateway，但超时仍未就绪。",
+      installDocsUrl: PINNED_COMPAT.installDocsUrl,
+    };
   } catch (error) {
     return {
       ok: false,
@@ -155,10 +261,13 @@ function getInstallGuide() {
     steps: [
       "从官方仓库安装 OpenClaw Gateway（不要使用第三方魔改包）。",
       `兼容协议：${PINNED_COMPAT.label}（MOGU Bridge 按 hello-ok 探测 methods）。`,
-      "在本机启动 Gateway 后，于 MOGU 设置中填写地址并连接。",
-      "Gateway token 仅保存在主进程安全存储；渲染层不可读。",
+      "安装完成后，在 MOGU 点「连接」即可：未运行时会自动拉起 Gateway 再握手（无需先手动启动）。",
+      "本机已配置过 OpenClaw 时，可自动读取 ~/.openclaw 中的 token（仅主进程，渲染层不可读）。",
+      "若仍连不上：打开侧栏「OpenClaw」页查看状态，或点「官方安装文档」。",
     ],
     installDocsUrl: PINNED_COMPAT.installDocsUrl,
+    installHint:
+      "请先安装 OpenClaw Gateway。安装后回到 MOGU 点「连接」，将自动拉起并连接。",
   };
 }
 
@@ -177,4 +286,6 @@ module.exports = {
   stopGateway,
   getInstallGuide,
   detectCliPresent,
+  readLocalGatewayToken,
+  resolveOpenclawCliEntry,
 };

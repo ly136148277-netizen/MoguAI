@@ -17,7 +17,8 @@ const { gateCommand } = require("../src/main/permission-gate");
 const { decideFallback, FALLBACK_BLOCKED_AFTER_ACCEPTED } = require("../src/main/openclaw/fallback-pai");
 const { toPublicTask } = require("../src/main/task-public");
 const { exportDiagnosticPack } = require("../src/main/data-center");
-const { classifyLifecycle } = require("../src/main/openclaw/lifecycle");
+const { classifyLifecycle, getInstallGuide, startGateway } = require("../src/main/openclaw/lifecycle");
+const { buildConnectParams } = require("../src/main/openclaw/protocol");
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -225,4 +226,32 @@ test("beta: permission audit records high-risk deny", async () => {
   const rows = await audit.list({ limit: 5 });
   assert.equal(rows[0].allowed, false);
   assert.equal(rows[0].reason, "desktop_offline");
+});
+
+test("beta: connect params use OpenClaw-allowed client id/mode", () => {
+  const params = buildConnectParams({ token: "t", clientVersion: "1.6.0" });
+  assert.equal(params.client.id, "gateway-client");
+  assert.equal(params.client.mode, "backend");
+  assert.equal(params.role, "operator");
+});
+
+test("beta: install guide exposes docs URL and install hint", () => {
+  const guide = getInstallGuide();
+  assert.ok(guide.installDocsUrl);
+  assert.match(guide.installHint || "", /安装 OpenClaw/);
+  assert.ok((guide.steps || []).some((s) => /点「连接」|自动拉起/.test(s)));
+});
+
+test("beta: startGateway fails closed when external CLI command is invalid", async () => {
+  const result = await startGateway({
+    command: "mogu-openclaw-cli-not-installed-xyz",
+    port: 18791,
+    logger: null,
+  });
+  if (result.alreadyRunning) {
+    assert.ok(true, "port already occupied — skip");
+    return;
+  }
+  assert.equal(result.ok, false);
+  assert.ok(result.message || result.error);
 });

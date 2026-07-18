@@ -1178,23 +1178,70 @@ function registerIpcHandlers() {
   ipcMain.handle("openclaw:probe", async (_event, payload = {}) => {
     const settings = await settingsStore.load();
     const url = payload?.url || settings.openclawGatewayUrl || DEFAULT_GATEWAY_URL;
-    return openclawBridge.probe(url);
+    // Explicit UI probe may show a brief status; silent by default to avoid Agent bar flicker.
+    return openclawBridge.probe(url, { mutateState: payload?.mutateState === true });
   });
 
   ipcMain.handle("openclaw:connect", async (_event, payload = {}) => {
     const settings = await settingsStore.load();
     const url = payload?.url || settings.openclawGatewayUrl || DEFAULT_GATEWAY_URL;
+
+    // Ensure local Gateway is up before WS handshake (timeout → degraded UX).
+    const health = await openclawLifecycle.healthCheck(url);
+    if (!health.ok) {
+      const started = await openclawLifecycle.startGateway({ logger });
+      if (!started.ok && !started.alreadyRunning) {
+        const missingCli = /未找到本机 openclaw CLI|未找到本机 openclaw/i.test(
+          String(started.message || started.error || "")
+        );
+        const err = new Error(
+          missingCli
+            ? "本机未检测到 OpenClaw。请先安装 OpenClaw Gateway；装好后点「连接」会自动拉起并连上。"
+            : String(
+                started.message ||
+                  started.error ||
+                  "本机 OpenClaw Gateway 未运行，且自动启动失败。"
+              )
+        );
+        err.code = missingCli ? "openclaw_not_installed" : "gateway_not_running";
+        throw err;
+      }
+    }
+
     if (payload?.token) {
       const saved = await secretStore.set("openclawGatewayToken", String(payload.token).trim());
       if (!saved?.ok) throw new Error(saved?.error || "无法安全存储 Gateway token");
+    } else if (!(await secretStore.has("openclawGatewayToken"))) {
+      // Import from ~/.openclaw/openclaw.json for this machine only (never sent to renderer).
+      const localToken = await openclawLifecycle.readLocalGatewayToken();
+      if (localToken) {
+        const saved = await secretStore.set("openclawGatewayToken", localToken);
+        if (!saved?.ok) {
+          throw new Error(saved?.error || "无法安全存储从本机 OpenClaw 读取的 token");
+        }
+      }
     }
-    const status = await openclawBridge.connect({ url });
-    await settingsStore.update({
-      openclawEnabled: true,
-      openclawGatewayUrl: url,
-      agentRuntimeMode: settings.agentRuntimeMode === "pai" ? "openclaw" : settings.agentRuntimeMode,
-    });
-    return status;
+
+    try {
+      const status = await openclawBridge.connect({ url });
+      await settingsStore.update({
+        openclawEnabled: true,
+        openclawGatewayUrl: url,
+        agentRuntimeMode: settings.agentRuntimeMode === "pai" ? "openclaw" : settings.agentRuntimeMode,
+      });
+      return status;
+    } catch (error) {
+      const msg = String(error?.message || error);
+      // Only append "start Gateway" tip for reachability failures — not schema/auth errors.
+      if (/超时|ECONNREFUSED|gateway_not_running|未运行/i.test(msg) && !/invalid connect params/i.test(msg)) {
+        const wrapped = new Error(
+          `${msg}。请确认 Gateway 已启动（默认 ws://127.0.0.1:18789），并在设置中配置 token（本机可自动读取 ~/.openclaw）。`
+        );
+        wrapped.code = error.code || "gateway_connect_failed";
+        throw wrapped;
+      }
+      throw error;
+    }
   });
 
   ipcMain.handle("openclaw:disconnect", async () => openclawBridge.disconnect());
@@ -1202,9 +1249,16 @@ function registerIpcHandlers() {
   ipcMain.handle("openclaw:lifecycle", async () => {
     const settings = await settingsStore.load();
     const url = settings.openclawGatewayUrl || DEFAULT_GATEWAY_URL;
-    const probe = await openclawBridge.probe(url);
-    const bridgeStatus = openclawBridge.getPublicStatus();
+    // Health check must NOT call bridge.probe() (that used to flip state→probing and loop the UI).
     const health = await openclawLifecycle.healthCheck(url);
+    const probe = {
+      ok: health.ok,
+      reachable: health.ok,
+      url,
+      httpStatus: health.statusCode,
+      error: health.error || null,
+    };
+    const bridgeStatus = openclawBridge.getPublicStatus();
     const guide = openclawLifecycle.getInstallGuide();
     const lifecycle = openclawLifecycle.classifyLifecycle({
       probe,
@@ -1228,6 +1282,13 @@ function registerIpcHandlers() {
   ipcMain.handle("openclaw:stop", async () => openclawLifecycle.stopGateway());
 
   ipcMain.handle("openclaw:install-guide", async () => openclawLifecycle.getInstallGuide());
+
+  ipcMain.handle("openclaw:open-install-docs", async () => {
+    const guide = openclawLifecycle.getInstallGuide();
+    const docsUrl = guide.installDocsUrl || "https://github.com/openclaw/openclaw";
+    await shell.openExternal(docsUrl);
+    return { ok: true, url: docsUrl };
+  });
 
   ipcMain.handle("data:scan", async () => {
     const settings = await getPublicSettings();

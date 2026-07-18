@@ -24,12 +24,30 @@ const OpenclawPanel = (() => {
     els.docs?.addEventListener("click", () => openDocs());
 
     if (window.modelManager?.onOpenclawState) {
-      window.modelManager.onOpenclawState(() => refresh({ silent: true }));
+      // Paint from event only — never re-enter lifecycle/probe (that caused probing flicker loops).
+      window.modelManager.onOpenclawState((status) => {
+        if (els.version) {
+          els.version.textContent = status?.hello?.serverVersion
+            ? `服务端 ${status.hello.serverVersion}`
+            : `Bridge ${status?.state || "disconnected"}`;
+        }
+        if (els.state && status?.state) {
+          els.state.textContent = status.connected ? "connected" : status.state;
+        }
+        if (els.message && status?.state) {
+          els.message.textContent = status.connected
+            ? "已连接 Gateway"
+            : `Bridge 状态：${status.state}`;
+        }
+      });
     }
     window.AppRouter.onPage("openclaw", () => refresh());
   }
 
+  let refreshInFlight = false;
   async function refresh() {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
     try {
       const life = await window.modelManager.getOpenclawLifecycle();
       if (els.state) els.state.textContent = life.lifecycle || "unknown";
@@ -48,13 +66,18 @@ const OpenclawPanel = (() => {
       }
     } catch (error) {
       if (els.message) els.message.textContent = error.message;
+    } finally {
+      refreshInFlight = false;
     }
   }
 
   async function probe() {
     try {
       const settings = await window.modelManager.getSettings();
-      const result = await window.modelManager.probeOpenclaw({ url: settings.openclawGatewayUrl });
+      const result = await window.modelManager.probeOpenclaw({
+        url: settings.openclawGatewayUrl,
+        mutateState: false,
+      });
       window.AppCore?.setStatus?.(
         result?.reachable ? "Gateway 可探测" : `不可达：${result?.error || "offline"}`
       );
@@ -71,7 +94,12 @@ const OpenclawPanel = (() => {
       window.AppCore?.setStatus?.("已请求连接 OpenClaw");
       await refresh();
     } catch (error) {
-      window.AppCore?.setStatus?.(`连接失败：${error.message}`);
+      const msg = String(error?.message || error);
+      const needsInstall = /未检测|未找到|请先安装 OpenClaw|openclaw CLI|自动启动失败/i.test(msg);
+      window.AppCore?.setStatus?.(
+        needsInstall ? `${msg} · 请点下方「官方安装文档」安装后重试` : `连接失败：${msg}`
+      );
+      await refresh();
     }
   }
 

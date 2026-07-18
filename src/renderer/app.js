@@ -5,16 +5,14 @@ const AppRouter = (() => {
   /** @type {{ page: string, options: object }[]} */
   const history = [];
 
-  /** Sidebar highlight groups: child pages keep parent nav active */
+  /** Sidebar highlight groups: child pages keep parent nav active (v1.6 §6.5 IA). */
   const NAV_GROUPS = {
     home: ["home"],
     models: ["models", "downloads", "my-models"],
     agent: ["chat", "butler", "agent-intro"],
     tasks: ["tasks"],
-    create: ["studio", "comfyui"],
-    compose: ["compose"],
-    setup: ["setup"],
-    data: ["data"],
+    create: ["studio", "comfyui", "compose"],
+    env: ["setup", "data"],
     settings: ["settings", "openclaw"],
     help: ["help"],
   };

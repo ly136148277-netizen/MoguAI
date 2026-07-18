@@ -95,6 +95,7 @@ const AgentPanel = (() => {
     els.runtimeMode = document.getElementById("agent-runtime-mode");
     els.openclawState = document.getElementById("agent-openclaw-state");
     els.openclawConnectBtn = document.getElementById("agent-openclaw-connect-btn");
+    els.openclawInstallBtn = document.getElementById("agent-openclaw-install-btn");
     els.taskCard = document.getElementById("agent-task-card");
     els.taskId = document.getElementById("agent-task-id");
     els.taskStatus = document.getElementById("agent-task-status");
@@ -115,6 +116,7 @@ const AgentPanel = (() => {
     els.shutdownCustomBtn?.addEventListener("click", scheduleCustomMinutes);
     els.runtimeMode?.addEventListener("change", onRuntimeModeChange);
     els.openclawConnectBtn?.addEventListener("click", connectOpenclaw);
+    els.openclawInstallBtn?.addEventListener("click", openOpenclawInstallGuide);
     els.taskCancelBtn?.addEventListener("click", cancelActiveOpenclawTask);
 
     if (window.modelManager?.onOpenclawTask) {
@@ -250,14 +252,69 @@ const AgentPanel = (() => {
     await refreshStatus();
   }
 
+  function showOpenclawInstallCta(show) {
+    els.openclawInstallBtn?.classList.toggle("hidden", !show);
+  }
+
+  async function openOpenclawInstallGuide() {
+    try {
+      const guide = await window.modelManager.getOpenclawInstallGuide?.();
+      const hint =
+        guide?.installHint ||
+        "请先安装 OpenClaw Gateway。安装后点「连接」会自动拉起并连上。";
+      appendLocal(
+        "assistant",
+        `${hint}\n\n安装步骤也可在侧栏「OpenClaw」页查看。正在打开官方安装文档…`
+      );
+      await window.modelManager.openOpenclawInstallDocs?.();
+      window.AppRouter?.navigate?.("openclaw");
+    } catch (error) {
+      appendLocal("assistant", `打开安装引导失败：${error.message}`);
+    }
+  }
+
+  function needsOpenclawInstallHint(message = "") {
+    return /未检测|未找到|请先安装 OpenClaw|openclaw CLI|自动启动失败|gateway_not_running|未运行|ECONNREFUSED|超时/i.test(
+      String(message)
+    );
+  }
+
   async function connectOpenclaw() {
     try {
       els.openclawConnectBtn && (els.openclawConnectBtn.disabled = true);
+      showOpenclawInstallCta(false);
+      appendLocal("assistant", "正在连接 OpenClaw Gateway（若未运行会尝试自动启动）…");
       const status = await window.modelManager.connectOpenclaw?.({});
       paintOpenclawState(status);
-      appendLocal("assistant", status?.connected ? "已连接 OpenClaw Gateway。" : `连接状态：${status?.state || "unknown"}`);
+      if (status?.connected) {
+        showOpenclawInstallCta(false);
+        if (els.runtimeMode) {
+          els.runtimeMode.value = "openclaw";
+          runtimeMode = "openclaw";
+          await window.modelManager.updateSettings?.({
+            agentRuntimeMode: "openclaw",
+            openclawEnabled: true,
+          });
+        }
+        appendLocal("assistant", "已连接 OpenClaw。正在打开「添加模型」…");
+        await refreshStatus();
+        window.AppRouter?.navigate?.("models", { modelsMode: "gate" });
+        return;
+      }
+      appendLocal("assistant", `连接状态：${status?.state || "unknown"}`);
+      await refreshStatus();
     } catch (error) {
-      appendLocal("assistant", `连接 OpenClaw 失败：${error.message}`);
+      const msg = error.message || "";
+      const needsInstall = needsOpenclawInstallHint(msg);
+      if (needsInstall) {
+        showOpenclawInstallCta(true);
+        appendLocal(
+          "assistant",
+          `连接 OpenClaw 失败：${msg}\n\n请先安装 OpenClaw Gateway。装好后点「连接」会自动拉起并连上。\n点右上角「请安装 OpenClaw」可打开官方文档与安装说明。\n你也可以先继续用「PAI（兼容）」办事。`
+        );
+      } else {
+        appendLocal("assistant", `连接 OpenClaw 失败：${msg}`);
+      }
     } finally {
       if (els.openclawConnectBtn) els.openclawConnectBtn.disabled = false;
     }
@@ -266,8 +323,13 @@ const AgentPanel = (() => {
   function paintOpenclawState(status) {
     if (!els.openclawState) return;
     const state = status?.state || "disconnected";
+    // Ignore transient probe flicker if it ever leaks through.
+    if (state === "probing") return;
     const ver = status?.hello?.serverVersion ? ` · ${status.hello.serverVersion}` : "";
-    els.openclawState.textContent = `OpenClaw: ${state}${ver}`;
+    const label = status?.connected ? "connected" : state;
+    const next = `OpenClaw: ${label}${ver}`;
+    if (els.openclawState.textContent === next) return;
+    els.openclawState.textContent = next;
   }
 
   function showTaskCard(partial = {}) {

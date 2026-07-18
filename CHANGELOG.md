@@ -5,6 +5,28 @@
 
 ---
 
+## [1.6.0] - 2026-07-19
+
+### Added
+- **OpenClaw Bridge**：本机 Gateway 探测 / 握手 / 重连；token 仅主进程 `safeStorage`
+- **双轨 Agent**：OpenClaw（主推）与 PAI（兼容）；对话内任务卡片、流式事件、精确取消
+- **统一任务中心**：OpenClaw / PAI / Studio / ComfyUI 四源任务列表、筛选、重试、终态详情
+- **PermissionProxy**：L1/L2/L3 确认 UI；离线/超时/无 UI 拒绝高风险；审计日志
+- **数据中心**：目录扫描、诊断包导出（不含 secrets/token）、清理 dry-run
+- **OpenClaw 生命周期页**：状态分类、安装引导、外部 CLI 启停（不内嵌 Runtime）
+- 点「连接」时：Gateway 未运行则自动拉起；可导入本机 `~/.openclaw` token；未安装时提示并打开官方文档
+
+### Changed
+- 侧栏信息架构（§6.5）：首页 · 对话 · 任务 · 创作 · 模型 · 环境与数据 · 设置
+- 视频合成挂到创作子页签；OpenClaw 挂到设置子页签
+- 握手参数对齐 OpenClaw 协议枚举：`client.id=gateway-client`、`mode=backend`
+
+### Security
+- Gateway 已接受请求后等待超时 **禁止** 自动降级重发 PAI
+- 诊断包与公共任务载荷剥离 token / secrets
+
+---
+
 ## [1.5.3] - 2026-07-15
 
 ### Added

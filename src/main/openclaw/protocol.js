@@ -36,6 +36,15 @@ function parseFrame(raw) {
   return { ok: true, frame: data };
 }
 
+/**
+ * OpenClaw ConnectParams enums (gateway-protocol):
+ * - client.id: openclaw-android|cli|openclaw-control-ui|fingerprint|gateway-client|
+ *   openclaw-ios|openclaw-macos|node-host|openclaw-probe|test|openclaw-tui|webchat|webchat-ui
+ * - client.mode: backend|cli|node|probe|test|ui|webchat
+ *
+ * MOGU uses the reserved loopback helper path: gateway-client + backend
+ * (token auth, no device pairing required on local Gateway).
+ */
 function buildConnectParams({
   token,
   clientVersion = "1.6.0-alpha.1",
@@ -47,10 +56,11 @@ function buildConnectParams({
     minProtocol,
     maxProtocol,
     client: {
-      id: "mogu-ai",
+      id: "gateway-client",
+      displayName: "MOGU AI",
       version: String(clientVersion),
       platform: process.platform,
-      mode: "operator",
+      mode: "backend",
     },
     role: "operator",
     scopes: ["operator.read", "operator.write"],
@@ -58,7 +68,7 @@ function buildConnectParams({
     commands: [],
     permissions: {},
     locale,
-    userAgent: `mogu-ai/${clientVersion}`,
+    userAgent: `MOGU-AI/${clientVersion}`,
   };
   if (token) {
     params.auth = { token: String(token) };

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * v1.6 beta soak runner (dev gate — does not build user installer).
+ * v1.6 soak runner.
+ * - Pre-release (alpha/beta): automated gates only.
+ * - Stable 1.6.0: same tests + CHANGELOG / version consistency checks.
  * Usage: node scripts/soak_v1.6_beta.js
  */
 const { spawnSync } = require("node:child_process");
@@ -23,29 +25,49 @@ function fail(id, detail) {
 }
 
 function main() {
-  console.log(`MOGU AI v1.6 beta soak — package ${pkg.version}`);
-  console.log("Scope: automated gates only (no stable installer).\n");
+  const version = String(pkg.version || "");
+  const isPrerelease = /-(alpha|beta)/.test(version);
+  const isStable = version === "1.6.0";
 
-  if (!String(pkg.version).startsWith("1.6.0")) {
-    fail("version-prefix", `expected 1.6.0*, got ${pkg.version}`);
+  console.log(`MOGU AI v1.6 soak — package ${version}`);
+  console.log(isStable ? "Scope: stable cut gates.\n" : "Scope: automated gates (pre-release).\n");
+
+  if (!version.startsWith("1.6.0")) {
+    fail("version-prefix", `expected 1.6.0*, got ${version}`);
   } else {
-    pass("version-prefix", pkg.version);
+    pass("version-prefix", version);
   }
 
-  if (!/beta|alpha/.test(pkg.version)) {
-    fail("dev-channel", "stable version without soak tag — refuse silent stable cut");
+  if (isPrerelease) {
+    pass("channel", "pre-release");
+  } else if (isStable) {
+    pass("channel", "stable 1.6.0");
   } else {
-    pass("dev-channel", "pre-release channel");
+    fail("channel", `unexpected version shape: ${version}`);
   }
 
   const requiredDocs = [
     "docs/ROADMAP_TO_V2.md",
     "docs/OPENCLAW_BRIDGE.md",
     "docs/BETA_SOAK_v1.6.md",
+    "docs/RELEASE.md",
   ];
   for (const rel of requiredDocs) {
     if (fs.pathExistsSync(path.join(ROOT, rel))) pass(`doc:${rel}`);
     else fail(`doc:${rel}`, "missing");
+  }
+
+  if (isStable) {
+    const changelog = fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8");
+    if (/## \[1\.6\.0\]/.test(changelog)) pass("changelog-1.6.0");
+    else fail("changelog-1.6.0", "CHANGELOG.md missing ## [1.6.0] section");
+
+    const html = fs.readFileSync(path.join(ROOT, "src/renderer/index.html"), "utf8");
+    if (/data-nav="chat"[^>]*>对话</.test(html) && /环境与数据/.test(html) && !/data-nav="compose"/.test(html)) {
+      pass("ia-6.5", "nav: 对话/创作/环境与数据; compose not top-level");
+    } else {
+      fail("ia-6.5", "index.html nav does not match ROADMAP §6.5");
+    }
   }
 
   const requiredModules = [
@@ -77,17 +99,28 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`
+  if (isStable) {
+    console.log(`
+Stable soak green. Next:
+  1) npm run preflight:release
+  2) tag v1.6.0 (keep v1.5.5 as prior customer baseline until announce)
+  3) publish installer only when ready for customer switch
+
+See docs/BETA_SOAK_v1.6.md + docs/RELEASE.md
+`);
+  } else {
+    console.log(`
 Manual soak still required before stable v1.6.0:
   1) Real local Gateway connect + one Agent chat round-trip
   2) Kill Gateway mid-run → reconnect → task status recovers
   3) L3 delete command → UI confirm required; cancel denies
   4) Task center shows OpenClaw/PAI/Studio rows; cancel/retry works
   5) Data center export opens pack without secrets.json
-  6) npm run preflight:release when cutting stable (not for beta tag)
+  6) npm run preflight:release when cutting stable
 
 See docs/BETA_SOAK_v1.6.md
 `);
+  }
   process.exit(0);
 }
 

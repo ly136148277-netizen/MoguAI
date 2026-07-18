@@ -27,6 +27,9 @@ test("buildConnectParams includes operator scopes and optional token", () => {
   assert.equal(withToken.role, "operator");
   assert.deepEqual(withToken.scopes, ["operator.read", "operator.write"]);
   assert.equal(withToken.auth.token, "secret");
+  // Must match OpenClaw gateway-protocol enums (not free-form "mogu-ai" / "operator").
+  assert.equal(withToken.client.id, "gateway-client");
+  assert.equal(withToken.client.mode, "backend");
   const noToken = buildConnectParams({});
   assert.equal(noToken.auth, undefined);
 });

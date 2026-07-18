@@ -24,18 +24,15 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="sidebar__brand">
-        <span>Agent模型 · Agent · ComfyUI创作 · 合成</span>
+        <span>对话 · 任务 · 创作 · 模型</span>
       </div>
       <nav class="sidebar__nav">
         <button type="button" class="nav-item is-active" data-nav="home" data-nav-group="home">首页</button>
-        <button type="button" class="nav-item" data-nav="models" data-nav-group="models">Agent模型</button>
-        <button type="button" class="nav-item" data-nav="chat" data-nav-group="agent">Agent</button>
+        <button type="button" class="nav-item" data-nav="chat" data-nav-group="agent">对话</button>
         <button type="button" class="nav-item" data-nav="tasks" data-nav-group="tasks">任务</button>
-        <button type="button" class="nav-item" data-nav="studio" data-nav-group="create">ComfyUI创作</button>
-        <button type="button" class="nav-item" data-nav="compose" data-nav-group="compose">视频合成</button>
-        <button type="button" class="nav-item" data-nav="setup" data-nav-group="setup">环境</button>
-        <button type="button" class="nav-item" data-nav="data" data-nav-group="data">数据</button>
-        <button type="button" class="nav-item" data-nav="openclaw" data-nav-group="settings">OpenClaw</button>
+        <button type="button" class="nav-item" data-nav="studio" data-nav-group="create">创作</button>
+        <button type="button" class="nav-item" data-nav="models" data-nav-group="models">模型</button>
+        <button type="button" class="nav-item" data-nav="setup" data-nav-group="env">环境与数据</button>
 
         <div class="nav-section nav-section--spaced nav-section--tail">
           <button type="button" class="nav-item" data-nav="settings" data-nav-group="settings">设置</button>
@@ -43,7 +40,7 @@
         </div>
       </nav>
       <div class="sidebar__footer">
-        <p id="sidebar-version">v1.5.3</p>
+        <p id="sidebar-version">v1.6.0</p>
       </div>
     </aside>
 
@@ -252,6 +249,7 @@
               </select>
               <span id="agent-openclaw-state" class="agent-runtime__state">OpenClaw: —</span>
               <button type="button" class="btn btn--ghost btn--tiny" id="agent-openclaw-connect-btn">连接</button>
+              <button type="button" class="btn btn--primary btn--tiny hidden" id="agent-openclaw-install-btn" title="打开 OpenClaw 官方安装文档">请安装 OpenClaw</button>
             </div>
             <div id="agent-task-card" class="agent-task-card hidden">
               <div class="agent-task-card__row">
@@ -504,7 +502,11 @@
       <section id="view-setup" class="view">
         <div class="view-head view-head--compact">
           <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
-          <span class="view-category-label">环境中心</span>
+          <span class="view-category-label">环境与数据</span>
+        </div>
+        <div class="hub-tabs" data-hub="env">
+          <button type="button" class="hub-tab is-active" data-hub-nav="setup">环境</button>
+          <button type="button" class="hub-tab" data-hub-nav="data">数据</button>
         </div>
         <div class="setup-workspace panel">
           <div class="setup-head">
@@ -569,7 +571,11 @@
       <section id="view-studio" class="view">
         <div class="view-head view-head--compact">
           <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
-          <span class="view-category-label">ComfyUI创作</span>
+          <span class="view-category-label">创作</span>
+        </div>
+        <div class="hub-tabs" data-hub="create">
+          <button type="button" class="hub-tab is-active" data-hub-nav="studio">创作台</button>
+          <button type="button" class="hub-tab" data-hub-nav="compose">视频合成</button>
         </div>
         <div class="studio-workspace panel">
           <div id="studio-env-bar" class="studio-env-bar">
@@ -700,7 +706,7 @@
           </div>
 
           <div id="studio-tip" class="studio-tip">
-            <p>点 <strong>+</strong> 选工作流 → 写提示词 → 执行。短片出完后，去左侧「视频合成」拼长片。</p>
+            <p>点 <strong>+</strong> 选工作流 → 写提示词 → 执行。短片出完后，切到「视频合成」页签拼长片。</p>
             <button id="studio-tip-dismiss" class="btn btn--ghost btn--tiny" type="button">知道了</button>
           </div>
           <div id="studio-guide" class="studio-guide hidden" aria-hidden="true">
@@ -730,16 +736,20 @@
         </div>
       </section>
 
-      <!-- 视频合成：长片剪辑 / 拼接 -->
+      <!-- 视频合成：长片剪辑 / 拼接（创作子流程，非顶栏入口） -->
       <section id="view-compose" class="view">
         <div class="view-head view-head--compact">
           <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
-          <span class="view-category-label">视频合成</span>
+          <span class="view-category-label">创作 · 视频合成</span>
+        </div>
+        <div class="hub-tabs" data-hub="create">
+          <button type="button" class="hub-tab" data-hub-nav="studio">创作台</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="compose">视频合成</button>
         </div>
         <div class="compose-workspace panel">
           <div class="compose-hero">
             <h2>视频合成</h2>
-            <p>短镜头在「创作」出片；这里按时间线顺序一键拼成长视频（首次会自动准备 FFmpeg）。</p>
+            <p>短镜头在「创作台」出片；这里按时间线顺序一键拼成长视频（首次会自动准备 FFmpeg）。</p>
           </div>
 
           <div class="compose-tool-row">
@@ -945,12 +955,16 @@
         </div>
       </section>
 
-      <!-- 数据中心（只读 + 诊断导出） -->
+      <!-- 数据中心（只读 + 诊断导出；挂在「环境与数据」下） -->
       <section id="view-data" class="view">
         <div class="view-head view-head--compact">
           <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
-          <span class="view-category-label">数据中心</span>
+          <span class="view-category-label">环境与数据 · 数据</span>
           <button type="button" class="btn btn--ghost btn--tiny" id="data-refresh-btn">重新扫描</button>
+        </div>
+        <div class="hub-tabs" data-hub="env">
+          <button type="button" class="hub-tab" data-hub-nav="setup">环境</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="data">数据</button>
         </div>
         <div class="data-layout panel">
           <p id="data-summary" class="settings-section-hint"></p>
@@ -966,12 +980,16 @@
         </div>
       </section>
 
-      <!-- OpenClaw 生命周期 -->
+      <!-- OpenClaw 生命周期（设置子页，非顶栏入口） -->
       <section id="view-openclaw" class="view">
         <div class="view-head view-head--compact">
           <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
-          <span class="view-category-label">OpenClaw Gateway</span>
+          <span class="view-category-label">设置 · OpenClaw</span>
           <button type="button" class="btn btn--ghost btn--tiny" id="oc-life-refresh-btn">刷新</button>
+        </div>
+        <div class="hub-tabs" data-hub="settings">
+          <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="openclaw">OpenClaw</button>
         </div>
         <div class="openclaw-life panel">
           <div class="openclaw-life__status">
@@ -1004,6 +1022,10 @@
               <p data-i18n="pageSettingsDesc">下载、界面与更新选项</p>
             </div>
           </div>
+        </div>
+        <div class="hub-tabs" data-hub="settings">
+          <button type="button" class="hub-tab is-active" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
         </div>
         <form id="settings-form" class="settings-form panel">
           <label>下载线程数
@@ -1118,6 +1140,7 @@
           <h3 class="settings-section-title">OpenClaw Bridge</h3>
           <p class="settings-section-hint">
             主推 Agent Runtime。Gateway 需本机另行安装；MOGU 只连接与管理，不内嵌 Runtime。
+            连接状态与安装引导见上方「OpenClaw」页签。
           </p>
           <label class="checkbox-row">
             <input id="setting-openclaw-enabled" name="openclawEnabled" type="checkbox" />

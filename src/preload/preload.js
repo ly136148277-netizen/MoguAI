@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld("modelManager", {
   startOpenclaw: () => ipcRenderer.invoke("openclaw:start"),
   stopOpenclaw: () => ipcRenderer.invoke("openclaw:stop"),
   getOpenclawInstallGuide: () => ipcRenderer.invoke("openclaw:install-guide"),
+  openOpenclawInstallDocs: () => ipcRenderer.invoke("openclaw:open-install-docs"),
   scanDataCenter: () => ipcRenderer.invoke("data:scan"),
   exportDiagnosticPack: () => ipcRenderer.invoke("data:export-diagnostic"),
   planDataCleanup: () => ipcRenderer.invoke("data:cleanup-plan"),

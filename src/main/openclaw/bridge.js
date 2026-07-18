@@ -85,29 +85,42 @@ class OpenClawBridge extends EventEmitter {
 
   /**
    * Probe local Gateway without full auth (TCP/HTTP upgrade reachability).
+   * Does not flip connection state to "probing" (avoids UI flicker / probe loops).
+   * @param {string} [url]
+   * @param {{ mutateState?: boolean }} [options] mutateState only for explicit user probe actions
    */
-  async probe(url = this.url) {
-    this._setState(STATES.probing);
+  async probe(url = this.url, options = {}) {
+    const mutateState = options?.mutateState === true;
+    const previous = this.state;
+    const busy = ["ready", "connecting", "authenticating", "reconnecting"].includes(previous);
     const target = normalizeWsUrl(url || DEFAULT_GATEWAY_URL);
-    this.url = target;
-    const httpUrl = target.replace(/^ws/i, "http");
+    if (!busy) this.url = target;
+    const httpUrl = (busy ? this.url : target).replace(/^ws/i, "http");
+
+    if (mutateState && !busy) {
+      this._setState(STATES.probing);
+    }
 
     try {
       const result = await httpHeadOrGet(httpUrl, 4000);
-      this._setState(STATES.disconnected);
+      if (mutateState && !busy && this.state === STATES.probing) {
+        this._setState(STATES.disconnected);
+      }
       return {
         ok: true,
         reachable: result.statusCode > 0 && result.statusCode < 500,
-        url: target,
+        url: busy ? this.url : target,
         httpStatus: result.statusCode,
         error: null,
       };
     } catch (error) {
-      this._setState(STATES.disconnected);
+      if (mutateState && !busy && this.state === STATES.probing) {
+        this._setState(STATES.disconnected);
+      }
       return {
         ok: false,
         reachable: false,
-        url: target,
+        url: busy ? this.url : target,
         httpStatus: null,
         error: error.message,
       };
