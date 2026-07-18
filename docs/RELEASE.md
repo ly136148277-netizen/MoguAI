@@ -49,12 +49,18 @@ cd D:\Project\ai-model-manager
 }
 ```
 
-发版命令：
+发版命令（基线 **v1.5.5+**；勿再分发 v1.5.4）：
 
 ```powershell
-npm run dist
-.\scripts\publish_mogu_releases.ps1 -Version 1.4.0
+# 凭据优先：gh auth login，或本 shell 临时 GH_TOKEN（不要把长期 token 放进项目目录）
+gh auth status
+# 可选：$env:GH_TOKEN = "<short-lived PAT>"
+
+npm run preflight:release   # = npm test → dist → check:asar
+.\scripts\publish_mogu_releases.ps1   # 版本读 package.json
 ```
+
+打包白名单必须持续排除：`config/github.token`、`*.token`、`.env`、本地配置与 `scripts/`（见 `package.json` → `build.files` 与 `build/asar-denylist.js`）。
 
 Release：https://github.com/ly136148277-netizen/mogu-ai-releases/releases
 

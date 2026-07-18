@@ -45,6 +45,13 @@ const {
   buildMediaAllowRoots,
   assertAllowedMediaPath,
 } = require("./media-path");
+const {
+  OpenClawBridge,
+  decideFallback,
+  idMap,
+  DEFAULT_GATEWAY_URL,
+} = require("./openclaw");
+const { TaskStore } = require("./task-store");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
 const {
   getSetupStatus,
@@ -72,6 +79,8 @@ let logger = null;
 let paiBridge = null;
 let appUpdater = null;
 let studioStore = null;
+let taskStore = null;
+let openclawBridge = null;
 let allModelsCache = [];
 let promptTemplates = [];
 
@@ -151,12 +160,16 @@ async function getPublicSettings() {
   let settings = await settingsStore.load();
   settings = await migrateAgentApiKeyToSecretStore(settings);
   const configured = secretStore ? await secretStore.has("agentApiKey") : false;
+  const openclawTokenConfigured = secretStore ? await secretStore.has("openclawGatewayToken") : false;
   const secureStorageAvailable = secretStore ? secretStore.isEncryptionAvailable() : false;
   return {
     ...settings,
     agentApiKey: "",
     agentApiKeyConfigured: configured,
+    openclawGatewayToken: "",
+    openclawGatewayTokenConfigured: openclawTokenConfigured,
     secureStorageAvailable,
+    openclaw: openclawBridge ? openclawBridge.getPublicStatus() : { state: "disconnected", connected: false },
   };
 }
 
@@ -306,6 +319,7 @@ function initServices() {
   secretStore = new SecretStore(path.join(userData, "secrets.json"));
   chatSessions = new ChatSessionStore(path.join(userData, "chat-sessions"));
   studioStore = new StudioStore(path.join(userData, "studio-pipeline.json"));
+  taskStore = new TaskStore(path.join(userData, "tasks.json"));
   logger = new Logger(path.join(userData, "logs"));
   paiBridge = new PaiBridge();
   ollama = new OllamaService();
@@ -315,6 +329,13 @@ function initServices() {
     onComplete: (payload) => handleDownloadComplete(payload),
     onError: (payload) => sendToRenderer("download-error", payload),
   });
+  openclawBridge = new OpenClawBridge({
+    clientVersion: app.getVersion(),
+    logger,
+    getToken: async () => (secretStore ? secretStore.get("openclawGatewayToken") : ""),
+  });
+  openclawBridge.on("state", (status) => sendToRenderer("openclaw-state", status));
+  openclawBridge.on("event", (evt) => sendToRenderer("openclaw-event", evt));
 
   const promptsPath = path.join(appPath, "config", "prompts.json");
   if (fs.pathExistsSync(promptsPath)) {
@@ -574,9 +595,24 @@ function registerIpcHandlers() {
       }
       delete next.agentApiKey;
     }
+    if (Object.prototype.hasOwnProperty.call(next, "openclawGatewayToken")) {
+      const token = String(next.openclawGatewayToken || "").trim();
+      if (token) {
+        const saved = await secretStore.set("openclawGatewayToken", token);
+        if (!saved?.ok) {
+          throw new Error(saved?.error || "无法安全存储 OpenClaw Gateway token");
+        }
+      } else if (next.clearOpenclawGatewayToken === true) {
+        await secretStore.delete("openclawGatewayToken");
+      }
+      delete next.openclawGatewayToken;
+    }
     delete next.clearAgentApiKey;
+    delete next.clearOpenclawGatewayToken;
     delete next.agentApiKeyConfigured;
+    delete next.openclawGatewayTokenConfigured;
     delete next.secureStorageAvailable;
+    delete next.openclaw;
     if (Object.keys(next).length) {
       await settingsStore.update(next);
     }
@@ -1018,7 +1054,147 @@ function registerIpcHandlers() {
         }
       }
     }
+    if (result?.ok && taskStore && (promptId || payload?.moguTaskId)) {
+      try {
+        if (payload?.moguTaskId) {
+          await taskStore.update(payload.moguTaskId, { status: "cancelled", promptId });
+        }
+      } catch {
+        // best-effort task sync
+      }
+    }
     return { ...result, runId, promptId: promptId || result?.promptId || null };
+  });
+
+  ipcMain.handle("openclaw:status", async () => openclawBridge.getPublicStatus());
+
+  ipcMain.handle("openclaw:probe", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    const url = payload?.url || settings.openclawGatewayUrl || DEFAULT_GATEWAY_URL;
+    return openclawBridge.probe(url);
+  });
+
+  ipcMain.handle("openclaw:connect", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    const url = payload?.url || settings.openclawGatewayUrl || DEFAULT_GATEWAY_URL;
+    if (payload?.token) {
+      const saved = await secretStore.set("openclawGatewayToken", String(payload.token).trim());
+      if (!saved?.ok) throw new Error(saved?.error || "无法安全存储 Gateway token");
+    }
+    const status = await openclawBridge.connect({ url });
+    await settingsStore.update({
+      openclawEnabled: true,
+      openclawGatewayUrl: url,
+      agentRuntimeMode: settings.agentRuntimeMode === "pai" ? "openclaw" : settings.agentRuntimeMode,
+    });
+    return status;
+  });
+
+  ipcMain.handle("openclaw:disconnect", async () => openclawBridge.disconnect());
+
+  ipcMain.handle("openclaw:decide-fallback", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    return decideFallback({
+      bridgeState: openclawBridge.state,
+      openclawEnabled: settings.openclawEnabled === true,
+      fallbackToPai: settings.openclawFallbackToPai !== false,
+      requestAcceptedByGateway: payload?.requestAcceptedByGateway === true,
+      waitTimedOut: payload?.waitTimedOut === true,
+    });
+  });
+
+  ipcMain.handle("tasks:list", async (_event, payload = {}) => {
+    await taskStore.load();
+    return { ok: true, tasks: await taskStore.list(payload || {}) };
+  });
+
+  ipcMain.handle("tasks:get", async (_event, moguTaskId) => {
+    const task = await taskStore.get(String(moguTaskId || ""));
+    return { ok: Boolean(task), task };
+  });
+
+  ipcMain.handle("tasks:create", async (_event, payload = {}) => {
+    const task = await taskStore.create(payload || {});
+    return { ok: true, task };
+  });
+
+  ipcMain.handle("tasks:update", async (_event, payload = {}) => {
+    const id = payload?.moguTaskId;
+    if (!id) throw new Error("moguTaskId 不能为空");
+    const task = await taskStore.update(String(id), payload || {});
+    return { ok: Boolean(task), task };
+  });
+
+  ipcMain.handle("tasks:cancel", async (_event, payload = {}) => {
+    const moguTaskId = payload?.moguTaskId ? String(payload.moguTaskId) : null;
+    const mapping = moguTaskId ? await taskStore.getMapping(moguTaskId) : null;
+    const resolved = idMap.resolveCancelMapping({
+      mapping,
+      promptId: payload?.promptId || null,
+      runId: payload?.runId || null,
+      taskId: payload?.taskId || null,
+      sessionKey: payload?.sessionKey || null,
+    });
+    if (!resolved.ok) {
+      return {
+        ok: false,
+        needsConfirmation: true,
+        reason: resolved.reason,
+        message: resolved.message,
+      };
+    }
+
+    // OpenClaw precise cancel when we have Gateway IDs and bridge is ready.
+    if (
+      resolved.mapping.source === "openclaw" &&
+      openclawBridge.state === "ready" &&
+      (resolved.mapping.taskId || resolved.mapping.runId || resolved.mapping.sessionKey)
+    ) {
+      try {
+        if (resolved.mapping.taskId) {
+          await openclawBridge.request("tasks.cancel", {
+            taskId: resolved.mapping.taskId,
+            reason: payload?.reason || "cancelled_by_mogu",
+          });
+        } else if (resolved.mapping.sessionKey || resolved.mapping.runId) {
+          await openclawBridge.request("sessions.abort", {
+            key: resolved.mapping.sessionKey || undefined,
+            runId: resolved.mapping.runId || undefined,
+          });
+        }
+        if (moguTaskId) await taskStore.update(moguTaskId, { status: "cancelled" });
+        return { ok: true, precise: true, mapping: resolved.mapping };
+      } catch (error) {
+        return {
+          ok: false,
+          precise: true,
+          error: error.message,
+          mapping: resolved.mapping,
+        };
+      }
+    }
+
+    // Studio / Comfy path: require promptId; no guessing.
+    if (resolved.mapping.promptId) {
+      const settings = await settingsStore.load();
+      const paiRoot = paiBridge.resolvePaiRoot(settings);
+      const result = await cancelComfyUiJob(paiRoot, {
+        promptId: resolved.mapping.promptId,
+        forceGlobal: payload?.forceGlobal === true,
+      });
+      if (result?.ok && moguTaskId) {
+        await taskStore.update(moguTaskId, { status: "cancelled" });
+      }
+      return { ...result, mapping: resolved.mapping };
+    }
+
+    return {
+      ok: false,
+      needsConfirmation: true,
+      reason: "missing_precise_id",
+      message: "没有可用于精确取消的 ID。",
+      mapping: resolved.mapping,
+    };
   });
 
   ipcMain.handle("pai:catalog", async () => {
@@ -1340,6 +1516,13 @@ function registerIpcHandlers() {
     const pollMs = Math.max(1000, Number(settings.comfyUiPollIntervalMs) || 2500);
     let promptId = payload?.promptId || null;
     trackComfyJob(runId, { promptId, source: "studio", startedAt });
+    const taskRow = await taskStore.create({
+      source: "studio",
+      name: payload?.t2i_workflow || payload?.i2v_workflow || "创作台出片",
+      status: "running",
+      promptId,
+    });
+    const moguTaskId = taskRow.moguTaskId;
 
     let baselineIds = new Set();
     try {
@@ -1357,11 +1540,13 @@ function registerIpcHandlers() {
         if (snap.promptId && !promptId) {
           promptId = snap.promptId;
           updateTrackedPromptId(runId, promptId);
+          await taskStore.update(moguTaskId, { promptId, status: "running" });
         }
-        sendToRenderer("pai-run-progress", { runId, ...snap, ...extra });
+        sendToRenderer("pai-run-progress", { runId, moguTaskId, ...snap, ...extra });
       } catch (error) {
         sendToRenderer("pai-run-progress", {
           runId,
+          moguTaskId,
           ok: false,
           phase: "offline",
           message: error.message,
@@ -1386,6 +1571,12 @@ function registerIpcHandlers() {
         const pipeline = await studioStore.load();
         result.postTool = await openStudioPostTool(payload?.tool, result.path, pipeline.customTools || []);
       }
+      await taskStore.update(moguTaskId, {
+        status: result?.ok ? "succeeded" : "failed",
+        promptId,
+        outputPaths: result?.path ? [result.path] : [],
+        errorMessage: result?.ok ? null : result?.error || result?.message || "failed",
+      });
       await emitProgress({
         phase: result?.ok ? "completed" : "failed",
         message: result?.message || result?.error || (result?.ok ? "完成" : "失败"),
@@ -1393,8 +1584,13 @@ function registerIpcHandlers() {
         done: true,
         resultOk: result?.ok === true,
       });
-      return { runId, result, promptId };
+      return { runId, moguTaskId, result, promptId };
     } catch (error) {
+      await taskStore.update(moguTaskId, {
+        status: "failed",
+        promptId,
+        errorMessage: error.message,
+      });
       await emitProgress({ phase: "failed", message: error.message });
       throw error;
     } finally {

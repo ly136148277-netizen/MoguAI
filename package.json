@@ -1,7 +1,7 @@
 {
   "name": "ai-model-manager",
-  "version": "1.5.5",
-  "description": "MOGU AI — 本地 Agent 与 ComfyUI 创作台",
+  "version": "1.6.0-alpha.1",
+  "description": "MOGU AI — 本地 Agent 控制面（OpenClaw Bridge alpha）",
   "homepage": "https://github.com/ly136148277-netizen/MoguAI#readme",
   "repository": {
     "type": "git",
@@ -20,7 +20,8 @@
     "acceptance": "node scripts/acceptance_v1.4.0.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "check:asar": "node -e \"require('./build/asar-denylist').assertResourcesClean('dist/win-unpacked')\""
+    "check:asar": "node -e \"require('./build/asar-denylist').assertResourcesClean('dist/win-unpacked')\"",
+    "preflight:release": "npm test && npm run dist && npm run check:asar"
   },
   "keywords": [
     "electron",

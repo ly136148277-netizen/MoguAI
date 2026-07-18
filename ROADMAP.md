@@ -17,7 +17,8 @@
 | V1.2 | ✅ 已完成（发版号 v1.2.1） | 体验优化 + 图标 + sha256 校验 |
 | V1.3 | ✅ 已完成（v1.3.0） | MOGU AI 品牌、聊天导出、Ollama 引导、保存路径提示 |
 | V1.4–V1.5.3 | ✅ 已完成 | CDN、自动更新、创作台、视频合成、环境中心、发版 |
-| V1.5.4 → V2.0 | 📋 规划中 | 见 [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)（安全债 → Bridge → Skills → 助手控制中心） |
+| V1.5.5 | ✅ 基线 | 打包白名单 + ASAR denylist；`v1.5.4` 安装包已 yank |
+| V1.6.0-alpha → V2.0 | 📋 进行中 | 见 [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)（Bridge → 任务中心 → Skills → 助手控制中心） |
 
 ---
 

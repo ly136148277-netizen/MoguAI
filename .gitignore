@@ -53,6 +53,7 @@ scripts/mogu_daily*
 scripts/mogu_incidents*
 
 # Unrelated local tooling / maps / wechat (not part of desktop app)
+# News/map push ops live in sibling repo: D:\Project\mogu-news-ops
 __pycache__/
 *.pyc
 wechat-miniprogram/
@@ -63,7 +64,18 @@ docs/events_*
 docs/map.html
 docs/map_config.js
 docs/verify/
+docs/.nojekyll
 docker-compose*.yml
 mogu-ai-creator.html
 requirements-daily-news.txt
 config/xuzhou_*.json
+config/mogu_*.example.json
+scripts/MoguPushScheduler.vbs
+scripts/deploy_map_pages.bat
+scripts/probe_bendibao*.py
+scripts/publish_mogu_map.ps1
+scripts/run_scheduled_push.ps1
+scripts/setup_scheduled_tasks*
+scripts/setup_wechat_domain.ps1
+scripts/test_feeds.py
+scripts/tasks/

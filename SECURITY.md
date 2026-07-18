@@ -34,7 +34,16 @@ We aim to respond within 7 days.
 
 ## Packaging / release boundary
 
+- Baseline for development and users: **v1.5.5+**. **v1.5.4 installers are permanently yanked** — do not install or redistribute them.
 - electron-builder uses an **explicit runtime file allowlist** (not `.gitignore`).
-- `config/github.token`, `*.token`, `.env`, `secrets.json`, news configs, and `scripts/` must never ship in `app.asar`.
+- Keep excluding from packs forever: `config/github.token`, `*.token`, `.env`, `secrets.json`, local news configs, and `scripts/`.
 - `build/afterPack.js` runs an ASAR denylist check; any hit fails the build.
-- **v1.5.4 installers were yanked** after a local secret was packaged; use **v1.5.5+** only.
+
+## Release credentials (maintainers)
+
+Prefer, in order:
+
+1. `gh auth login` (GitHub CLI credential store)
+2. Temporary shell `GH_TOKEN` / `GITHUB_TOKEN` (session only; unset after publish)
+
+Avoid storing tokens under the project tree. If `config/github.token` is unavoidable, use a **short-lived, least-privilege** classic/fine-grained PAT and **revoke it immediately after publish**.
