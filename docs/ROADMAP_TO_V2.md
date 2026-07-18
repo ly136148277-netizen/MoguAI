@@ -113,7 +113,7 @@ MOGU 桌面端（品牌 · 体验 · 权限 · 资产）
 
 契约全文见 [`OPENCLAW_BRIDGE.md`](./OPENCLAW_BRIDGE.md)（**不得**缩成仅 `status` / `send`）。
 
-**alpha.1（当前）** — 只连「用户已安装并运行的 Gateway」，不做自动安装。
+**alpha.1 / alpha.2 已完成** — 只连「用户已安装并运行的 Gateway」，不做自动安装。
 
 - [x] 本机 Gateway 探测与健康状态（`openclaw:probe`）
 - [x] WebSocket 握手、认证、版本/能力探测（`hello-ok`）
@@ -125,27 +125,44 @@ MOGU 桌面端（品牌 · 体验 · 权限 · 资产）
 - [x] **alpha.2** `openclaw:session-create` / `send` / `abort` + 流式事件 + TaskStore 终态
 - [x] **alpha.2** Agent 双轨（OpenClaw / PAI）+ 对话内最小任务卡片
 - [x] **alpha.2** Mock Gateway 契约测试
-- [ ] 安装/升级引导（官方安装路径，版本钉扎，不 fork）
-- [ ] 启停 Gateway、状态灯（首页 + 环境页）
-- [ ] 设置页完整 UI（地址、端口、启用、版本、降级开关）
-- [ ] **alpha.3** 完整任务中心页 + 数据中心只读 + 权限确认 UI
 
-### 6.2 对话工作台（双轨过渡）
+### 6.2 alpha.3 执行切片（开发版，不做稳定用户安装包）
+
+**下一刀编码：`alpha.3-01` 统一任务契约与 IPC**（任务中心 / 权限确认 / 数据中心的共同依赖）。
+
+| 切片 | 范围 | 验收要点 |
+|------|------|----------|
+| **alpha.3-01** | TaskStore 可迁移 schema；统一 OpenClaw / PAI / Studio / ComfyUI 字段；`tasks:list/get/cancel/retry` 主进程 IPC + preload；重启恢复、事件幂等、分页与状态查询 | 断线、重启、重复事件不产生重复任务或错误终态 |
+| **alpha.3-02** | PermissionProxy 接入真实确认 UI；固定 L1/L2/L3；离线/超时/无 UI → 拒绝高风险；审计 + Gateway approval 双重校验 | L3 无法绕过 MOGU 确认 |
+| **alpha.3-03** | 完整任务中心页：来源/状态/时间筛选；IDs、日志、输出路径；流式更新、精确取消、重试、终态详情；导航/空态/失败/恢复 UI 测试 | 四源任务统一可见可操作 |
+| **alpha.3-04** | 数据中心只读：扫描可配置目录；占用/最近运行/日志摘要；导出配置·会话·任务·诊断包（排除 token/key/大模型）；清理仅 dry-run，真删二次确认 | 无可导出密钥、默认可审 |
+| **alpha.3-05** | OpenClaw 生命周期与设置：未安装/未运行/已连接/版本不兼容；地址·端口·启用·降级·版本；官方安装升级引导（钉扎兼容版）；启停与健康检查 | **不 fork、不内嵌 Gateway** |
+
+**alpha.3 发布门（须同时通过后再打开发 tag）：**
+
+```text
+npm test
++ Bridge / Mock Gateway 契约测试
++ 任务中心关键 UI 测试
++ 断线恢复与精确取消测试
++ token / 日志 / 媒体路径安全检查
++ npm run preflight:release
++ 文档、版本号、ASAR 内容一致性
+→ 仅发布 v1.6.0-alpha.3 开发 tag（不制作稳定用户安装包）
+```
+
+### 6.3 对话工作台（双轨过渡）
 
 - [x] Agent 页支持模式：`PAI（兼容）` | `OpenClaw（主推）`（alpha.2）
 - [x] OpenClaw 模式下：消息进 Gateway；对话内最小任务卡片（流式/取消/错误）（alpha.2）
-- [ ] **授权归属：** 高风险 `mogu.*` 统一走 MOGU 权限代理（含外部渠道触发）；桌面不在线 → 默认拒绝/超时拒绝，禁止绕过确认（alpha.3）
+- [ ] **授权归属：** 高风险 `mogu.*` 统一走 MOGU 权限代理；桌面离线 / 确认超时 / 无确认 UI → 一律拒绝（alpha.3-02）
 
-### 6.3 任务中心
+### 6.4 任务中心 / 数据中心 / Bridge 设置
 
-- [ ] 统一列表：来源（Studio / PAI / OpenClaw）、状态、重试、取消、日志、输出路径
-- [ ] ID 模型对齐 Gateway：`sessionKey`/`sessionId`、`runId`、`taskId` + 本端 `moguTaskId` / Comfy `prompt_id`
-
-### 6.4 数据中心（只读 + 备份雏形）
-
-- [ ] 扫描占用：AppData / PAI / Ollama / ComfyUI（可配置路径）
-- [ ] 一键导出备份包（配置 + 会话索引 + 清单；模型文件可选/外挂）
-- [ ] 清理策略：缓存 / 旧 runs（默认需确认）
+- [ ] 统一列表与操作（依赖 alpha.3-01 + alpha.3-03）
+- [ ] ID 模型：`moguTaskId` + Gateway `sessionKey`/`sessionId`/`runId`/`taskId` + Comfy `prompt_id`
+- [ ] 数据中心只读扫描与诊断导出（alpha.3-04）
+- [ ] Gateway 生命周期与设置页（alpha.3-05）
 
 ### 6.5 信息架构（轻重组，不大翻）
 
@@ -158,7 +175,7 @@ MOGU 桌面端（品牌 · 体验 · 权限 · 资产）
 - 「Agent模型 / Agent」合并认知到 **对话 + 模型**
 - 「视频合成」挂在 **创作** 子流程，不抢主入口
 
-**退出标准：** 用户能在 MOGU 里看到 OpenClaw 绿灯、发通一条办事消息；任务中心能看见 Studio 与 Agent 任务。
+**退出标准（alpha.3）：** 统一任务契约稳定；任务中心可见四源任务；L3 必经确认；数据中心可导出无密钥诊断包；Gateway 状态与设置完整（仍不内嵌）。
 
 ---
 
@@ -177,12 +194,14 @@ Skill 说明（SKILL.md）
 + 任务 ID、日志、输出契约
 ```
 
+交付顺序建议：`mogu.comfy → mogu.studio → mogu.ollama → mogu.pc → mogu.media`。每个 Skill 须具备预检、精确取消、失败重试与 provenance。
+
 | 名称 | 能力 | 验收（四件套齐全） |
 |------|------|-------------------|
-| `mogu.pc` | 打开应用、搜文件、备份 | 可调用 + L2/L3 权限代理 + 任务/日志 |
 | `mogu.comfy` | 列工作流、提交/取消、进度 | 绑定 `prompt_id` / 任务中心；精确取消 |
 | `mogu.studio` | 创作台参数化出片 | 与 Studio UI 同步 + 输出契约 |
 | `mogu.ollama` | 模型列表、导入、聊天路由 | 与模型页一致 |
+| `mogu.pc` | 打开应用、搜文件、备份 | 可调用 + L2/L3 权限代理 + 任务/日志 |
 | `mogu.media` | 拼接、打开外部剪辑 | 路径白名单 + FFmpeg 等实现 |
 
 - [ ] 禁止只交 `SKILL.md` 而无实现/权限/任务契约
@@ -276,20 +295,22 @@ flowchart LR
 
 ## 十一、近期执行顺序（给开发用）
 
-1. **v1.5.5 已收口（基线）**：安全热修 + 打包白名单 + ASAR denylist；`v1.5.4` 安装包永久废弃  
-2. **契约基线**：[`OPENCLAW_BRIDGE.md`](./OPENCLAW_BRIDGE.md)  
-3. **当前下一步 v1.6.0-alpha.3**：完整任务中心 + 统一任务列表 + 数据中心只读/备份 + 权限确认 UI（alpha.1/2 已完成 Bridge + 流式 Run + 双轨对话；先不接外部渠道、不做 Skills 市场）  
+1. **v1.5.5** 稳定用户基线（勿覆盖）  
+2. **v1.6.0-alpha.1 / alpha.2** 已保存开发 tag（Bridge + 流式 Run + 双轨对话）  
+3. **当前下一刀：`alpha.3-01` 统一任务契约与 IPC** → 再 02 权限 UI → 03 任务中心 → 04 数据中心 → 05 Gateway 生命周期；整包过发布门后打 `v1.6.0-alpha.3`  
+4. **v1.6 beta / 稳定**：本地 Gateway 对话往返、任务恢复、权限流程 soak 后再定；外部渠道 / 自动安装 / Skills 市场继续后置  
+5. **v1.7 Skills**：公共注册与执行契约；顺序建议 `mogu.comfy → mogu.studio → mogu.ollama → mogu.pc → mogu.media`（每 Skill：SKILL.md + 实现 + 权限 + 任务/日志/输出；含预检、精确取消、重试、provenance）  
+6. **v2.0 控制中心**：对话为默认首页；OpenClaw 默认 Runtime，PAI 兼容/高级；权限中心、会话隔离、备份诊断；渠道经 OpenClaw，不自研第二套；不多平台原生客户端 / 大市场  
 
 ```text
-v1.5.5 收口
-→ Bridge 探测与认证
-→ 流式 Agent Run
-→ 统一任务模型
-→ 任务中心
-→ 双轨对话
-→ 权限代理
-→ Skills 化（v1.7）
-→ 外部渠道（更后）
+v1.5.5 用户基线
+→ alpha.1 Bridge / TaskStore
+→ alpha.2 流式 Run / 双轨对话
+→ alpha.3-01 统一任务契约 ← 下一刀
+→ alpha.3-02…05 → tag v1.6.0-alpha.3
+→ v1.6 beta soak → v1.6.0 稳定
+→ v1.7 Skills
+→ v2.0 控制中心（渠道后置）
 ```
 
 ---
