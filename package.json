@@ -21,6 +21,7 @@
     "acceptance:v1.4": "node scripts/acceptance_v1.4.0.js",
     "acceptance:v1.7": "node scripts/acceptance_v1.7.js",
     "acceptance:v2.0": "node scripts/acceptance_v2.0.js",
+    "acceptance:coding": "node scripts/acceptance_coding_bridge.js",
     "soak:beta": "node scripts/soak_v1.6_beta.js",
     "soak:v1.7": "node scripts/soak_v1.7.js",
     "soak:v2.0": "node scripts/soak_v2.0.js",

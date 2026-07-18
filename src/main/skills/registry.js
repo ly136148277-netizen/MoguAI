@@ -7,6 +7,7 @@ const SKILL_IDS = Object.freeze([
   "mogu.ollama",
   "mogu.pc",
   "mogu.media",
+  "mogu.coding",
 ]);
 
 const SKILL_META = Object.freeze({
@@ -54,6 +55,15 @@ const SKILL_META = Object.freeze({
     ops: ["concat", "ensure", "preflight"],
     env: ["ffmpeg"],
     source: "pai",
+  },
+  "mogu.coding": {
+    id: "mogu.coding",
+    title: "编程双引擎",
+    summary: "Codex CLI + trae-agent 统一入口、任务追踪与换引擎重试",
+    riskDefault: 2,
+    ops: ["status", "preflight", "run", "cancel", "retry", "trajectory"],
+    env: [],
+    source: "coding",
   },
 });
 

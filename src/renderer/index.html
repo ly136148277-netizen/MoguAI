@@ -236,6 +236,19 @@
           <span class="view-category-label">对话</span>
         </div>
         <div id="agent-workspace" class="agent-workspace panel">
+          <div id="agent-brain-banner" class="agent-brain-banner" role="status">
+            <div class="agent-brain-banner__copy">
+              <strong>第一步：配置大脑</strong>
+              <span id="agent-brain-banner-text">
+                MOGU 本身是调度中心。请先选「本机 Ollama 模型」或「联网 API」并填好密钥，才能听懂指令并自动调用工具。未配置时只能看内置教程。
+              </span>
+            </div>
+            <div class="agent-brain-banner__actions">
+              <button type="button" class="btn btn--primary btn--tiny" id="agent-brain-goto-api">配置联网 API</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="agent-brain-goto-local">配置本机模型</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="agent-brain-banner-dismiss" title="本次会话隐藏">稍后</button>
+            </div>
+          </div>
           <div id="agent-oc-banner" class="agent-oc-banner hidden" role="status">
             <span id="agent-oc-banner-text">尚未连接 OpenClaw Gateway。</span>
             <button type="button" class="btn btn--primary btn--tiny" id="agent-oc-banner-connect">连接</button>
@@ -275,6 +288,9 @@
               </div>
               <div id="agent-task-stream" class="agent-task-card__stream"></div>
               <div id="agent-task-error" class="agent-task-card__error"></div>
+              <div class="agent-task-card__row agent-task-card__coding hidden" id="agent-coding-actions">
+                <button type="button" class="btn btn--primary btn--tiny" id="agent-coding-retry-other">换引擎重试</button>
+              </div>
             </div>
             <div class="agent-toolbar">
               <div class="agent-toolbar__cmds">
@@ -282,6 +298,7 @@
                 <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="列出工作流">列出工作流</button>
                 <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="搜索 ">搜索文件</button>
                 <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="备份 PAI">备份 PAI</button>
+                <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="编程状态">编程引擎</button>
                 <button type="button" class="btn btn--ghost btn--tiny" data-agent-cmd="怎么用MOGU AI">怎么用</button>
               </div>
               <div class="agent-toolbar__aside">
@@ -941,6 +958,7 @@
                 <option value="pai">PAI</option>
                 <option value="studio">Studio</option>
                 <option value="comfy">ComfyUI</option>
+                <option value="coding">编程</option>
               </select>
               <select id="tasks-filter-status" class="toolbar__select">
                 <option value="">全部状态</option>
@@ -1123,7 +1141,7 @@
             <button type="button" class="btn btn--primary back-home-btn" data-i18n="backHome">← 返回</button>
             <div class="view-head__main">
               <h2 data-i18n="pageSettingsTitle">软件设置</h2>
-              <p data-i18n="pageSettingsDesc">下载、界面与更新选项</p>
+              <p data-i18n="pageSettingsDesc">先配置大脑，再调下载与其它选项</p>
             </div>
           </div>
         </div>
@@ -1135,6 +1153,63 @@
           <button type="button" class="hub-tab" data-hub-nav="channels">渠道</button>
         </div>
         <form id="settings-form" class="settings-form panel">
+          <div id="settings-brain-anchor" class="settings-brain-callout">
+            <h3 class="settings-section-title">① 先配置大脑（必做）</h3>
+            <p class="settings-section-hint">
+              <strong>体验者请从这里开始。</strong>MOGU 是「大脑 + 工具」：大脑负责听懂你的话并调度；本机办事、编程、出片都是工具。
+              不配大脑 = 不会自动办事，只能看内置说明。
+            </p>
+            <ol class="openclaw-life__guide">
+              <li>选通道：推荐「联网 API」；无网可选「本机 Ollama」。</li>
+              <li>联网：选服务商 → 填 API Key → 填模型名 → 可点「测试大脑」。</li>
+              <li>本机：先到「模型」下载/导入 Ollama，再回来选本地模型。</li>
+              <li>保存设置后回「对话」，直接下指令即可（不必再为工具单独填 Key）。</li>
+            </ol>
+          </div>
+          <label>大脑通道
+            <select id="setting-agent-channel" name="agentBrainChannel">
+              <option value="builtin">内置教程（不调度工具，仅说明）</option>
+              <option value="local">本机 Ollama（大脑+工具）</option>
+              <option value="api">联网 API（大脑+工具，推荐）</option>
+            </select>
+          </label>
+          <p class="settings-section-hint">
+            API Key 只填下面这一处（工具共用）。计费按供应商调用，不是双倍订阅。
+          </p>
+          <div id="setting-agent-local-block" class="settings-agent-block hidden">
+            <label>本地模型（Ollama 已导入）
+              <select id="setting-agent-local-model" name="agentLocalModel">
+                <option value="">请选择模型…</option>
+              </select>
+            </label>
+            <p class="settings-section-hint">没有可选模型时，请先到「模型」下载并导入 Ollama。</p>
+          </div>
+          <div id="setting-agent-api-block" class="settings-agent-block hidden">
+            <label>服务商预设
+              <select id="setting-agent-api-preset" name="agentApiPreset">
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="qwen">通义千问</option>
+                <option value="moonshot">月之暗面 Kimi</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            <label>API Base URL
+              <input id="setting-agent-api-base" name="agentApiBaseUrl" type="text" spellcheck="false" placeholder="https://api.deepseek.com/v1" />
+            </label>
+            <label>API Key
+              <input id="setting-agent-api-key" name="agentApiKey" type="password" spellcheck="false" placeholder="sk-…" autocomplete="off" />
+            </label>
+            <label>模型名
+              <input id="setting-agent-api-model" name="agentApiModel" type="text" spellcheck="false" placeholder="deepseek-chat" />
+            </label>
+          </div>
+          <div class="settings-inline-actions">
+            <button id="setting-agent-test-btn" class="btn btn--primary" type="button">测试大脑连通</button>
+            <span id="setting-agent-test-status" class="settings-inline-status"></span>
+          </div>
+
+          <h3 class="settings-section-title">② 下载与其它</h3>
           <label>下载线程数
             <select id="setting-threads" name="downloadThreads">
               <option value="1">1 线程</option>
@@ -1174,49 +1249,6 @@
             <input id="setting-auto-ollama" name="autoStartOllama" type="checkbox" />
             启动时自动启动 Ollama（若已安装未运行）
           </label>
-          <h3 class="settings-section-title">Agent 引导模型</h3>
-          <p class="settings-section-hint">
-            办事仍走本机 PAI。这里只配置「脑子」：答疑、引导、帮你写可执行指令。可选内置教程、本机 Ollama，或联网第一梯队（OpenAI 兼容）。
-          </p>
-          <label>Agent 通道
-            <select id="setting-agent-channel" name="agentBrainChannel">
-              <option value="builtin">内置教程（免模型）</option>
-              <option value="local">本机 Ollama 模型</option>
-              <option value="api">联网 API（OpenAI 兼容）</option>
-            </select>
-          </label>
-          <div id="setting-agent-local-block" class="settings-agent-block hidden">
-            <label>本地模型（Ollama 已导入）
-              <select id="setting-agent-local-model" name="agentLocalModel">
-                <option value="">请选择模型…</option>
-              </select>
-            </label>
-            <p class="settings-section-hint">没有可选模型时，请先到「模型」下载并导入 Ollama。</p>
-          </div>
-          <div id="setting-agent-api-block" class="settings-agent-block hidden">
-            <label>服务商预设
-              <select id="setting-agent-api-preset" name="agentApiPreset">
-                <option value="deepseek">DeepSeek</option>
-                <option value="openai">OpenAI</option>
-                <option value="qwen">通义千问</option>
-                <option value="moonshot">月之暗面 Kimi</option>
-                <option value="custom">自定义</option>
-              </select>
-            </label>
-            <label>API Base URL
-              <input id="setting-agent-api-base" name="agentApiBaseUrl" type="text" spellcheck="false" placeholder="https://api.deepseek.com/v1" />
-            </label>
-            <label>API Key
-              <input id="setting-agent-api-key" name="agentApiKey" type="password" spellcheck="false" placeholder="sk-…" autocomplete="off" />
-            </label>
-            <label>模型名
-              <input id="setting-agent-api-model" name="agentApiModel" type="text" spellcheck="false" placeholder="deepseek-chat" />
-            </label>
-          </div>
-          <div class="settings-inline-actions">
-            <button id="setting-agent-test-btn" class="btn btn--primary" type="button">测试 Agent 脑子</button>
-            <span id="setting-agent-test-status" class="settings-inline-status"></span>
-          </div>
 
           <h3 class="settings-section-title">AI 管家（PAI）</h3>
           <p class="settings-section-hint">连接本机 PAI，用于开软件、ComfyUI 工作流、文件操作等。</p>
@@ -1270,6 +1302,31 @@
             <input id="setting-openclaw-token" name="openclawGatewayToken" type="password" autocomplete="off" placeholder="留空则保持不变" />
           </label>
           <p id="setting-openclaw-token-hint" class="settings-section-hint"></p>
+          <h3 class="settings-section-title">编程工具（Codex + trae-agent）</h3>
+          <p class="settings-section-hint">
+            只是工具：复用上方大脑 API Key / Base URL，无需再填密钥。在此设置工作区与默认引擎即可。对话：`编程状态` / `编程: …`。详见 docs/CODING_BRIDGE.md。
+          </p>
+          <label>默认引擎
+            <select id="setting-coding-engine" name="codingDefaultEngine">
+              <option value="codex">Codex CLI</option>
+              <option value="trae">trae-agent</option>
+            </select>
+          </label>
+          <label>默认工作区
+            <input id="setting-coding-workspace" name="codingWorkspace" type="text" placeholder="例如 D:\Project\ai-model-manager" />
+          </label>
+          <label>Codex 路径（可选，空则 PATH / npx）
+            <input id="setting-coding-codex-path" name="codingCodexPath" type="text" placeholder="codex 可执行文件或留空" />
+          </label>
+          <label>trae-cli 路径（可选）
+            <input id="setting-coding-trae-path" name="codingTraePath" type="text" placeholder="trae-cli 或留空用 vendor+uv" />
+          </label>
+          <label>模型（可选，传给引擎）
+            <input id="setting-coding-model" name="codingModel" type="text" placeholder="如 gpt-5.6 / gpt-4o" />
+          </label>
+          <label>trae provider（可选）
+            <input id="setting-coding-provider" name="codingProvider" type="text" placeholder="openai / anthropic / ollama…" />
+          </label>
           <label>界面主题
             <select id="setting-theme" name="theme">
               <option value="dark">深色</option>

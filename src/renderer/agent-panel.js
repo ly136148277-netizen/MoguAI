@@ -14,6 +14,9 @@ const AgentPanel = (() => {
   let streamBuffer = "";
   let unsubOpenclawTask = null;
   let unsubOpenclawState = null;
+  /** @type {{ prompt: string, engine: string, workspace?: string, moguTaskId?: string }|null} */
+  let lastCodingRetry = null;
+  let brainBannerDismissed = false;
 
   const CMD_RE =
     /^(打开|列出|备份|删除|删掉|搜索|搜\s|抓取|出片|开始|同步|运行|启动|关闭|导入|下载|恢复|确认|移动|复制|写入|识别|检测|帮我打开|帮我删|帮我搜|请打开|请删除|请备份)/i;
@@ -102,6 +105,13 @@ const AgentPanel = (() => {
     els.taskStream = document.getElementById("agent-task-stream");
     els.taskError = document.getElementById("agent-task-error");
     els.taskCancelBtn = document.getElementById("agent-task-cancel-btn");
+    els.codingActions = document.getElementById("agent-coding-actions");
+    els.codingRetryOther = document.getElementById("agent-coding-retry-other");
+    els.brainBanner = document.getElementById("agent-brain-banner");
+    els.brainBannerText = document.getElementById("agent-brain-banner-text");
+    els.brainGotoApi = document.getElementById("agent-brain-goto-api");
+    els.brainGotoLocal = document.getElementById("agent-brain-goto-local");
+    els.brainBannerDismiss = document.getElementById("agent-brain-banner-dismiss");
     els.ocBanner = document.getElementById("agent-oc-banner");
     els.ocBannerText = document.getElementById("agent-oc-banner-text");
     els.ocBannerConnect = document.getElementById("agent-oc-banner-connect");
@@ -125,6 +135,13 @@ const AgentPanel = (() => {
     els.openclawConnectBtn?.addEventListener("click", connectOpenclaw);
     els.openclawInstallBtn?.addEventListener("click", openOpenclawInstallGuide);
     els.taskCancelBtn?.addEventListener("click", cancelActiveOpenclawTask);
+    els.codingRetryOther?.addEventListener("click", retryCodingOtherEngine);
+    els.brainGotoApi?.addEventListener("click", () => openBrainSettings("api"));
+    els.brainGotoLocal?.addEventListener("click", () => openBrainSettings("local"));
+    els.brainBannerDismiss?.addEventListener("click", () => {
+      brainBannerDismissed = true;
+      els.brainBanner?.classList.add("hidden");
+    });
     els.ocBannerConnect?.addEventListener("click", connectOpenclaw);
     els.ocBannerPai?.addEventListener("click", switchToPaiCompat);
     els.sessionsRefresh?.addEventListener("click", () => refreshSessions());
@@ -173,10 +190,85 @@ const AgentPanel = (() => {
     showAgentMode();
     window.ButlerUI?.bindMessages?.(els.messages);
     await refreshStatus();
+    await refreshBrainBanner();
     await refreshSessions();
     await refreshShutdownStatus();
     ensureWelcome();
     els.input?.focus();
+  }
+
+  function openBrainSettings(preferChannel) {
+    try {
+      if (preferChannel) sessionStorage.setItem("moguBrainPreferChannel", preferChannel);
+      sessionStorage.setItem("moguFocusBrainSettings", "1");
+    } catch {
+      /* ignore */
+    }
+    window.AppRouter?.navigate?.("settings");
+  }
+
+  /**
+   * @returns {Promise<{ ready: boolean, channel: string, reason: string }>}
+   */
+  async function getBrainSetupState() {
+    try {
+      const settings = await window.modelManager.getSettings();
+      const channel = settings.agentBrainChannel || "builtin";
+      if (channel === "builtin") {
+        return {
+          ready: false,
+          channel,
+          reason: "当前是「内置教程」，不会自动调用工具。请先配置联网 API 或本机 Ollama 模型。",
+        };
+      }
+      if (channel === "api") {
+        if (!settings.agentApiKeyConfigured) {
+          return {
+            ready: false,
+            channel,
+            reason: "已选联网 API，但还没有保存 API Key。请到设置填写密钥并保存。",
+          };
+        }
+        if (!String(settings.agentApiBaseUrl || "").trim() || !String(settings.agentApiModel || "").trim()) {
+          return {
+            ready: false,
+            channel,
+            reason: "请补全 API Base URL 和模型名，保存后再试。",
+          };
+        }
+        return { ready: true, channel, reason: "" };
+      }
+      if (channel === "local") {
+        if (!String(settings.agentLocalModel || "").trim()) {
+          return {
+            ready: false,
+            channel,
+            reason: "已选本机模型，但尚未选择 Ollama 模型。请先到「模型」导入，再在设置里选中。",
+          };
+        }
+        return { ready: true, channel, reason: "" };
+      }
+      return { ready: false, channel, reason: "未知大脑通道，请到设置重新选择。" };
+    } catch (error) {
+      return { ready: false, channel: "unknown", reason: error.message || "无法读取设置" };
+    }
+  }
+
+  async function refreshBrainBanner() {
+    if (!els.brainBanner) return;
+    if (brainBannerDismissed) {
+      els.brainBanner.classList.add("hidden");
+      return;
+    }
+    const state = await getBrainSetupState();
+    if (state.ready) {
+      els.brainBanner.classList.add("hidden");
+      return;
+    }
+    els.brainBanner.classList.remove("hidden");
+    if (els.brainBannerText) {
+      els.brainBannerText.textContent = state.reason;
+    }
   }
 
   async function switchToPaiCompat() {
@@ -279,17 +371,14 @@ const AgentPanel = (() => {
     appendLocal(
       "assistant",
       [
-        "你好，我是 MOGU AI Agent。",
+        "欢迎使用 MOGU AI。",
         "",
-        "直接打字即可，例如：",
-        "· 打开 ComfyUI",
-        "· 列出工作流",
-        "· 搜索 桌面",
-        "· 备份 PAI",
-        "· 怎么用创作台",
+        "【请先做这一步】配置大脑——否则软件不知道怎么自动办事。",
+        "1. 点上方橙色条「配置联网 API」（推荐），或「配置本机模型」",
+        "2. 保存后回到对话，直接用自然语言下指令",
         "",
-        "删除文件等危险操作会二次确认。",
-        "还没有模型？点右上角「去添加模型」。添好后可在设置里把引导换成更聪明的本机/联网模型。",
+        "大脑 = 听懂你的话并调度；本机 / 编程 / 出片都是工具（Key 只填大脑一次）。",
+        "未配置前只能看内置说明，不会自动调用工具。",
       ].join("\n")
     );
     welcomed = true;
@@ -543,6 +632,24 @@ const AgentPanel = (() => {
     if (/^搜索\s*/.test(t)) return { skillId: "mogu.pc", op: "search", args: { command: t } };
     if (/备份\s*PAI|备份项目/.test(t)) return { skillId: "mogu.pc", op: "backup", args: {} };
     if (/拼接|合成视频|一键拼接/.test(t)) return { skillId: "mogu.media", op: "preflight", args: {} };
+    if (/^编程状态|^编程引擎|^coding\s*status/i.test(t)) {
+      return { skillId: "mogu.coding", op: "status", args: {} };
+    }
+    const codingRun = t.match(
+      /^(?:用\s*)?(codex|trae|trae-agent)\s*(?:在\s*)?(.+?)\s*(?:里|中)?\s*(?:改|修|写|实现|编程)[:：\s]+(.+)$/i
+    );
+    if (codingRun) {
+      const eng = /trae/i.test(codingRun[1]) ? "trae" : "codex";
+      return {
+        skillId: "mogu.coding",
+        op: "run",
+        args: { engine: eng, workspace: codingRun[2].trim(), prompt: codingRun[3].trim() },
+      };
+    }
+    if (/^(?:编程|改代码|写代码|修bug|修\s*bug)[:：\s]+(.+)$/i.test(t)) {
+      const prompt = t.replace(/^(?:编程|改代码|写代码|修bug|修\s*bug)[:：\s]+/i, "").trim();
+      return { skillId: "mogu.coding", op: "run", args: { prompt } };
+    }
     return null;
   }
 
@@ -557,40 +664,145 @@ const AgentPanel = (() => {
       replaceTempAssistant(`⛔ ${result.error || result.message || "权限已拒绝"}`);
       return result;
     }
-    if (result?.moguTaskId) {
+    if (result?.moguTaskId || mapped.skillId === "mogu.coding") {
       showTaskCard({
-        moguTaskId: result.moguTaskId,
-        status: result.ok === false ? "failed" : "succeeded",
+        moguTaskId: result.moguTaskId || "—",
+        status: result.ok === false ? "failed" : result.op === "status" ? "idle" : "succeeded",
+        streamText: result.log || result.trajectorySummary || "",
         error: result.error || "",
       });
     }
+    if (mapped.skillId === "mogu.coding" && mapped.op === "run") {
+      lastCodingRetry = {
+        prompt: mapped.args?.prompt || "",
+        engine: result?.engine || mapped.args?.engine || "codex",
+        workspace: result?.workspace || mapped.args?.workspace,
+        moguTaskId: result?.moguTaskId,
+      };
+      els.codingActions?.classList.toggle("hidden", !(result?.canRetryOtherEngine || result?.ok === false));
+    } else {
+      els.codingActions?.classList.add("hidden");
+    }
     replaceTempAssistant(
       result?.ok === false
-        ? `Skill 失败：${result.error || result.message || JSON.stringify(result.preflight || {})}`
+        ? `Skill 失败：${result.error || result.message || JSON.stringify(result.preflight || {})}${
+            result?.canRetryOtherEngine ? `\n可点任务卡「换引擎重试」改用 ${result.altEngine || "另一引擎"}。` : ""
+          }`
         : `Skill 完成（${mapped.skillId}.${mapped.op}）${result.moguTaskId ? `\n任务 ${result.moguTaskId}` : ""}\n${summarizeSkillResult(result)}`
     );
     return result;
   }
 
+  async function retryCodingOtherEngine() {
+    if (!lastCodingRetry?.prompt) {
+      appendLocal("assistant", "没有可重试的编程任务。");
+      return;
+    }
+    const next = /trae/i.test(lastCodingRetry.engine) ? "codex" : "trae";
+    setFormBusy(true);
+    try {
+      appendLocal("assistant", `正在用 ${next} 重试…`, { temp: true });
+      const result = await window.modelManager.invokeSkill({
+        skillId: "mogu.coding",
+        op: "retry",
+        args: {
+          engine: lastCodingRetry.engine,
+          toEngine: next,
+          prompt: lastCodingRetry.prompt,
+          workspace: lastCodingRetry.workspace,
+        },
+      });
+      lastCodingRetry.engine = result?.engine || next;
+      lastCodingRetry.moguTaskId = result?.moguTaskId;
+      showTaskCard({
+        moguTaskId: result?.moguTaskId || "—",
+        status: result?.ok === false ? "failed" : "succeeded",
+        streamText: result?.log || "",
+        error: result?.error || "",
+      });
+      els.codingActions?.classList.toggle("hidden", !(result?.canRetryOtherEngine || result?.ok === false));
+      replaceTempAssistant(
+        result?.ok === false
+          ? `换引擎重试失败：${result.error || ""}`
+          : `换引擎重试完成（${result?.engine || next}）\n${summarizeSkillResult(result)}`
+      );
+    } catch (error) {
+      replaceTempAssistant(`换引擎重试异常：${error.message}`);
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
   function summarizeSkillResult(result) {
     if (!result || typeof result !== "object") return "";
+    if (result.engines) {
+      const c = result.engines.codex;
+      const t = result.engines.trae;
+      return [
+        `Codex: ${c?.installed ? "就绪" : "未安装"} ${c?.version || ""}`,
+        `trae-agent: ${t?.installed ? "就绪" : "未安装"} ${t?.message || ""}`,
+        result.workspace ? `工作区：${result.workspace}` : "工作区：未设置（设置 → 编程双引擎）",
+      ].join("\n");
+    }
     if (result.catalog) return `工作流条目：${JSON.stringify(result.catalog).slice(0, 400)}`;
+    if (result.log) return String(result.log).slice(0, 800);
+    if (result.trajectorySummary) return `轨迹：\n${String(result.trajectorySummary).slice(0, 800)}`;
     if (result.command) return `命令：${result.command}`;
     if (result.outputPaths?.length) return `输出：${result.outputPaths.join(", ")}`;
-    if (result.provenance) return `provenance：${JSON.stringify(result.provenance).slice(0, 400)}`;
+    if (result.provenance && typeof result.provenance === "object") {
+      return `provenance：${JSON.stringify(result.provenance).slice(0, 400)}`;
+    }
     if (result.result) return JSON.stringify(result.result).slice(0, 400);
     return "";
   }
 
   async function runAgentText(text) {
+    const brainState = await getBrainSetupState();
+    await refreshBrainBanner();
+
+    // 未配大脑：先引导去设置；说明类问题仍可用内置教程
+    if (!brainState.ready) {
+      if (/怎么用|如何使用|教程|帮助|什么是|怎样|不会用/i.test(text)) {
+        await answerWithBrain(text);
+        return;
+      }
+      appendLocal("user", text);
+      history.push({ role: "user", content: text });
+      appendLocal(
+        "assistant",
+        [
+          "还不能自动执行这条指令——请先配置大脑。",
+          "",
+          brainState.reason,
+          "",
+          "点上方橙色条：「配置联网 API」（推荐）或「配置本机模型」。",
+          "保存后回到对话再发送。问用法可以说「怎么用创作台」。",
+        ].join("\n")
+      );
+      brainBannerDismissed = false;
+      await refreshBrainBanner();
+      return;
+    }
+
+    // 大脑模式（API / 本机）：直接输入指令 → 自动选工具执行
+    if (
+      (brainState.channel === "api" || brainState.channel === "local") &&
+      typeof window.modelManager.agentBrainAct === "function"
+    ) {
+      await runBrainAct(text);
+      await refreshStatus();
+      return;
+    }
+
     const kind = classify(text);
     if (kind === "help") {
       await answerWithBrain(text);
       return;
     }
 
-    // PAI（兼容）模式：已知办事指令优先走 SkillRuntime。
-    if (runtimeMode !== "openclaw" && mapTextToSkill(text)) {
+    // 内置教程模式：精确指令仍可走 Skill；编程双 Runtime 均可
+    const skillMapped = mapTextToSkill(text);
+    if (skillMapped && (runtimeMode !== "openclaw" || skillMapped.skillId === "mogu.coding")) {
       setFormBusy(true);
       try {
         const skillResult = await trySkillInvoke(text);
@@ -625,6 +837,73 @@ const AgentPanel = (() => {
       els.input?.focus();
     }
     await refreshStatus();
+  }
+
+  async function runBrainAct(text) {
+    appendLocal("user", text);
+    history.push({ role: "user", content: text });
+    setFormBusy(true);
+    appendLocal("assistant", "大脑调度中…", { temp: true });
+    let unsub = null;
+    try {
+      if (window.modelManager.onBrainProgress) {
+        unsub = window.modelManager.onBrainProgress((p) => {
+          if (p?.phase === "tool") {
+            showTaskCard({
+              moguTaskId: p.tool || "brain",
+              status: "running",
+              streamText: `调用工具 ${p.tool}…`,
+            });
+          }
+        });
+      }
+      const result = await window.modelManager.agentBrainAct({
+        text,
+        history: history.slice(0, -1),
+      });
+      const steps = result?.steps || [];
+      if (steps.length) {
+        const last = steps[steps.length - 1];
+        showTaskCard({
+          moguTaskId: last.moguTaskId || last.tool || "brain",
+          status: steps.every((s) => s.ok) ? "succeeded" : "failed",
+          streamText: steps
+            .map((s) => `${s.tool}.${s.op} → ${s.ok ? "ok" : s.error || "fail"}`)
+            .join("\n"),
+          error: steps.find((s) => !s.ok)?.error || "",
+        });
+        const codingFail = steps.find((s) => s.skillId === "mogu.coding" && !s.ok);
+        if (codingFail) {
+          lastCodingRetry = {
+            prompt: text,
+            engine: "codex",
+            moguTaskId: codingFail.moguTaskId,
+          };
+          els.codingActions?.classList.remove("hidden");
+        }
+      }
+      const reply =
+        result?.content ||
+        (steps.length
+          ? `已调度 ${steps.length} 个工具步骤。`
+          : "大脑未返回内容。请检查 API Key / 模型。");
+      replaceTempAssistant(reply);
+      history.push({ role: "assistant", content: reply });
+      if (history.length > 20) history = history.slice(-20);
+      window.AppCore?.setStatus?.(
+        result?.provider === "api" ? "大脑（API）已调度" : "大脑（本机）已调度"
+      );
+    } catch (error) {
+      replaceTempAssistant(
+        `大脑调度失败：${error.message}\n\n请到设置确认「大脑通道」为联网 API 或本机模型，并已填写密钥。也可先用「编程状态」等精确指令。`
+      );
+      history.push({ role: "assistant", content: error.message });
+      window.AppCore?.setStatus?.(`大脑失败：${error.message}`);
+    } finally {
+      if (typeof unsub === "function") unsub();
+      setFormBusy(false);
+      els.input?.focus();
+    }
   }
 
   async function scheduleCustomMinutes() {
@@ -801,25 +1080,30 @@ const AgentPanel = (() => {
             ? `本机 · ${settings.agentLocalModel || "Ollama"}`
             : "内置教程";
 
+      const brainSetup = await getBrainSetupState();
+      const brainLabel = brainSetup.ready
+        ? brain
+        : "大脑未配置（请先设 API 或本机模型）";
+
       if (runtimeMode === "openclaw") {
         if (oc?.connected) {
-          setStatus("online", `OpenClaw 就绪 · 引导：${brain}`);
+          setStatus(brainSetup.ready ? "online" : "stopped", `OpenClaw 就绪 · ${brainLabel}`);
         } else {
-          setStatus("stopped", `OpenClaw ${oc?.state || "未连接"} · 引导：${brain}`);
+          setStatus("stopped", `OpenClaw ${oc?.state || "未连接"} · ${brainLabel}`);
         }
+        await refreshBrainBanner();
         return;
       }
 
       const status = await window.modelManager.getPaiStatus();
       if (!status.installed) {
-        setStatus("offline", `引导：${brain} · PAI 未就绪（问用法仍可用）`);
-        return;
+        setStatus("offline", `${brainLabel} · PAI 未就绪`);
+      } else if (status.running) {
+        setStatus(brainSetup.ready ? "online" : "stopped", `PAI 就绪 · ${brainLabel}`);
+      } else {
+        setStatus("stopped", `${brainLabel} · PAI 未运行`);
       }
-      if (status.running) {
-        setStatus("online", `PAI 就绪 · 引导：${brain}`);
-        return;
-      }
-      setStatus("stopped", `引导：${brain} · PAI 未运行（发指令会自动连）`);
+      await refreshBrainBanner();
     } catch (error) {
       setStatus("offline", `状态检测失败：${error.message}`);
     }

@@ -425,6 +425,57 @@ body {
   display: none;
 }
 
+.agent-brain-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  padding: 0.7rem 0.9rem;
+  margin: 0 0 0.35rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(220, 140, 40, 0.12);
+  font-size: 0.86rem;
+  flex-shrink: 0;
+}
+
+.agent-brain-banner.hidden {
+  display: none;
+}
+
+.agent-brain-banner__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 12rem;
+  flex: 1;
+  line-height: 1.45;
+}
+
+.agent-brain-banner__copy strong {
+  font-size: 0.92rem;
+}
+
+.agent-brain-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.settings-brain-callout {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(220, 140, 40, 0.08);
+}
+
+.settings-brain-callout .settings-section-title {
+  margin-top: 0;
+}
+
 .agent-split {
   display: grid;
   grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);

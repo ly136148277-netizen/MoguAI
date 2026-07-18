@@ -80,7 +80,7 @@ const {
 const { StudioStore } = require("./studio-store");
 const { SkillRuntime } = require("./skills/runtime");
 const { initAutoUpdater } = require("./updater");
-const { chatWithBrain, testBrain, API_PRESETS } = require("./agent-brain");
+const { chatWithBrain, testBrain, runBrainAgent, API_PRESETS } = require("./agent-brain");
 const powerControl = require("./power-control");
 
 let mainWindow = null;
@@ -396,6 +396,7 @@ function initServices() {
     logger,
     getSettings: () => settingsStore.load(),
     updateSettings: (partial) => settingsStore.update(partial),
+    getAgentApiKey: async () => (secretStore ? secretStore.get("agentApiKey") : ""),
     emitProgress: (payload) => sendToRenderer("skill-progress", payload),
   });
   downloader = new DownloadEngine(storage, settingsStore, {
@@ -715,6 +716,19 @@ function registerIpcHandlers() {
       ollama,
       userText: String(payload.text || "").trim(),
       history: Array.isArray(payload.history) ? payload.history : [],
+    });
+  });
+
+  ipcMain.handle("agent:brain-act", async (_event, payload = {}) => {
+    const settings = await loadSettingsInternal();
+    return runBrainAgent({
+      settings,
+      ollama,
+      skillRuntime,
+      userText: String(payload.text || "").trim(),
+      history: Array.isArray(payload.history) ? payload.history : [],
+      maxRounds: Math.min(6, Math.max(1, Number(payload.maxRounds) || 4)),
+      onProgress: (p) => sendToRenderer("brain-progress", p),
     });
   });
 

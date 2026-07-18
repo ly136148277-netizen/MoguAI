@@ -17,9 +17,11 @@ const handlers = {
   "mogu.ollama": require("./handlers/ollama"),
   "mogu.pc": require("./handlers/pc"),
   "mogu.media": require("./handlers/media"),
+  "mogu.coding": require("./handlers/coding"),
 };
 
-const READ_OPS = new Set(["list", "status", "preflight", "ensure"]);
+const READ_OPS = new Set(["list", "status", "preflight", "ensure", "trajectory"]);
+const SKIP_TASK_OPS = new Set(["list", "status", "preflight", "ensure", "trajectory", "cancel"]);
 
 class SkillRuntime {
   /**
@@ -226,7 +228,7 @@ class SkillRuntime {
     }
 
     let task = null;
-    if (!options.skipTask && !READ_OPS.has(operation)) {
+    if (!options.skipTask && !SKIP_TASK_OPS.has(operation) && !READ_OPS.has(operation)) {
       task = await this.deps.taskStore.create({
         source: def.source || "pai",
         kind: `skill.${skillId}.${operation}`,

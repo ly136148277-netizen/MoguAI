@@ -137,6 +137,8 @@ contextBridge.exposeInMainWorld("modelManager", {
   onComposeProgress: (callback) => subscribe("compose-progress", callback),
   getAgentBrainPresets: () => ipcRenderer.invoke("agent:brain-presets"),
   agentBrainChat: (payload) => ipcRenderer.invoke("agent:brain-chat", payload),
+  agentBrainAct: (payload) => ipcRenderer.invoke("agent:brain-act", payload || {}),
+  onBrainProgress: (callback) => subscribe("brain-progress", callback),
   testAgentBrain: () => ipcRenderer.invoke("agent:brain-test"),
   getShutdownStatus: () => ipcRenderer.invoke("power:shutdown-status"),
   scheduleShutdown: (payload) => ipcRenderer.invoke("power:shutdown-schedule", payload),

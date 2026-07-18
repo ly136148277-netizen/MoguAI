@@ -36,6 +36,13 @@
       "version": "1.7.0",
       "bundled": true,
       "description": "FFmpeg 拼接"
+    },
+    {
+      "id": "mogu.coding",
+      "title": "编程双引擎",
+      "version": "2.1.0",
+      "bundled": true,
+      "description": "Codex CLI + trae-agent 统一编程入口"
     }
   ]
 }

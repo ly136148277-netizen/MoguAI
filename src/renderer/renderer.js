@@ -63,6 +63,12 @@ const settingOpenclawFallbackEl = document.getElementById("setting-openclaw-fall
 const settingAgentRuntimeEl = document.getElementById("setting-agent-runtime");
 const settingOpenclawTokenEl = document.getElementById("setting-openclaw-token");
 const settingOpenclawTokenHintEl = document.getElementById("setting-openclaw-token-hint");
+const settingCodingEngineEl = document.getElementById("setting-coding-engine");
+const settingCodingWorkspaceEl = document.getElementById("setting-coding-workspace");
+const settingCodingCodexPathEl = document.getElementById("setting-coding-codex-path");
+const settingCodingTraePathEl = document.getElementById("setting-coding-trae-path");
+const settingCodingModelEl = document.getElementById("setting-coding-model");
+const settingCodingProviderEl = document.getElementById("setting-coding-provider");
 
 const AGENT_API_PRESETS = {
   deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
@@ -363,6 +369,24 @@ async function loadSettingsForm() {
       ? "Token 已配置（渲染层不可见内容）"
       : "尚未配置 Gateway token";
   }
+  if (settingCodingEngineEl) {
+    settingCodingEngineEl.value = settings.codingDefaultEngine === "trae" ? "trae" : "codex";
+  }
+  if (settingCodingWorkspaceEl) {
+    settingCodingWorkspaceEl.value = settings.codingWorkspace || "";
+  }
+  if (settingCodingCodexPathEl) {
+    settingCodingCodexPathEl.value = settings.codingCodexPath || "";
+  }
+  if (settingCodingTraePathEl) {
+    settingCodingTraePathEl.value = settings.codingTraePath || "";
+  }
+  if (settingCodingModelEl) {
+    settingCodingModelEl.value = settings.codingModel || "";
+  }
+  if (settingCodingProviderEl) {
+    settingCodingProviderEl.value = settings.codingProvider || "";
+  }
   if (settingAgentChannelEl) {
     settingAgentChannelEl.value = settings.agentBrainChannel || "builtin";
   }
@@ -388,6 +412,26 @@ async function loadSettingsForm() {
     settingAgentApiModelEl.value = settings.agentApiModel || "";
   }
   await fillAgentLocalModels(settings.agentLocalModel || "");
+
+  // 对话页「配置大脑」跳转：预选通道并滚到设置顶部
+  try {
+    const prefer = sessionStorage.getItem("moguBrainPreferChannel");
+    const focusBrain = sessionStorage.getItem("moguFocusBrainSettings");
+    if (prefer === "api" || prefer === "local") {
+      if (settingAgentChannelEl) settingAgentChannelEl.value = prefer;
+      sessionStorage.removeItem("moguBrainPreferChannel");
+    }
+    if (focusBrain === "1") {
+      sessionStorage.removeItem("moguFocusBrainSettings");
+      queueMicrotask(() => {
+        document.getElementById("settings-brain-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        settingAgentChannelEl?.focus?.();
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+
   syncAgentBrainBlocks();
   window.AppI18n.setTheme(settings.theme || "dark");
   window.AppI18n.setLocale(settings.locale || "zh");
@@ -878,6 +922,12 @@ settingsFormEl.addEventListener("submit", async (event) => {
     agentApiPreset: settingAgentApiPresetEl?.value || "custom",
     agentApiBaseUrl: settingAgentApiBaseEl?.value?.trim() || "",
     agentApiModel: settingAgentApiModelEl?.value?.trim() || "",
+    codingDefaultEngine: settingCodingEngineEl?.value === "trae" ? "trae" : "codex",
+    codingWorkspace: settingCodingWorkspaceEl?.value?.trim() || "",
+    codingCodexPath: settingCodingCodexPathEl?.value?.trim() || "",
+    codingTraePath: settingCodingTraePathEl?.value?.trim() || "",
+    codingModel: settingCodingModelEl?.value?.trim() || "",
+    codingProvider: settingCodingProviderEl?.value?.trim() || "",
   };
   const apiKeyInput = settingAgentApiKeyEl?.value?.trim() || "";
   if (apiKeyInput) {
@@ -889,7 +939,12 @@ settingsFormEl.addEventListener("submit", async (event) => {
   }
   await window.modelManager.updateSettings(settingsPayload);
   await loadSettingsForm();
-  setStatus("设置已保存");
+  const channel = settingAgentChannelEl?.value || "builtin";
+  if (channel === "api" || channel === "local") {
+    setStatus("大脑已保存。请回到「对话」直接下指令。");
+  } else {
+    setStatus("设置已保存（当前仍是内置教程，不会自动调度工具）");
+  }
 });
 
 settingAgentChannelEl?.addEventListener("change", syncAgentBrainBlocks);

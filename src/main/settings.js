@@ -44,7 +44,17 @@ const DEFAULT_SETTINGS = {
     "mogu.ollama": true,
     "mogu.pc": true,
     "mogu.media": true,
+    "mogu.coding": true,
   },
+  /** Coding bridge (Codex CLI + trae-agent) */
+  codingDefaultEngine: "codex",
+  codingWorkspace: "",
+  codingCodexPath: "",
+  codingTraePath: "",
+  codingVendorRoot: "",
+  codingModel: "",
+  codingProvider: "",
+  codingSandbox: "",
 };
 
 class SettingsStore {

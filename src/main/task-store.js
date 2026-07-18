@@ -10,7 +10,7 @@ const MAX_TEXT_LENGTH = 12_000;
 const MAX_LOG_LENGTH = 4_000;
 const MAX_OUTPUTS = 100;
 
-const SOURCES = new Set(["openclaw", "pai", "studio", "comfy", "unknown"]);
+const SOURCES = new Set(["openclaw", "pai", "studio", "comfy", "coding", "unknown"]);
 const STATUSES = new Set([
   "queued",
   "running",

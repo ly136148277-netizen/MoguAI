@@ -21,6 +21,7 @@ const SkillsPanel = (() => {
     try {
       const data = await window.modelManager.listSkills();
       paintEnv(data.env || {});
+      await paintCodingStatus();
       paintList(data.skills || []);
       await loadWhitelist();
       if (els.status) {
@@ -84,6 +85,26 @@ const SkillsPanel = (() => {
           `<span class="home-env-chip${ok ? "" : " home-env-chip--warn"}">${label} ${ok ? "就绪" : "未就绪"}</span>`
       )
       .join("");
+  }
+
+  async function paintCodingStatus() {
+    try {
+      const st = await window.modelManager.invokeSkill?.({
+        skillId: "mogu.coding",
+        op: "status",
+        args: {},
+      });
+      if (!st?.engines || !els.env) return;
+      const cOk = Boolean(st.engines.codex?.installed);
+      const tOk = Boolean(st.engines.trae?.installed);
+      els.env.insertAdjacentHTML(
+        "beforeend",
+        `<span class="home-env-chip${cOk ? "" : " home-env-chip--warn"}">Codex ${cOk ? "就绪" : "未安装"}</span>` +
+          `<span class="home-env-chip${tOk ? "" : " home-env-chip--warn"}">trae-agent ${tOk ? "就绪" : "未安装"}</span>`
+      );
+    } catch {
+      /* ignore */
+    }
   }
 
   function paintList(skills) {
