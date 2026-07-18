@@ -629,8 +629,11 @@ const StudioPanel = (() => {
       return;
     }
 
+    // Confirm UI is owned by main-process PermissionProxy inside pai:studio-run.
+    // Keep local modal only if preload permission bridge is unavailable.
+    const mainGate = Boolean(window.modelManager?.onPermissionRequest && window.modelManager?.respondPermission);
     const command = "确认创作台出片";
-    if (window.ButlerRisk && window.ButlerUI?.showConfirmModal) {
+    if (!mainGate && window.ButlerRisk && window.ButlerUI?.showConfirmModal) {
       const assessment = window.ButlerRisk.assess(command, 2);
       if (assessment.needsConfirm) {
         const approved = await window.ButlerUI.showConfirmModal({

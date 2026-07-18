@@ -327,6 +327,15 @@ const AgentPanel = (() => {
     setFormBusy(true);
     try {
       const result = await window.modelManager.openclawSend?.({ text });
+      if (result?.permissionDenied) {
+        replaceTempAssistant(`⛔ ${result.message || "权限已拒绝"}`);
+        showTaskCard({
+          moguTaskId: activeMoguTaskId || "—",
+          status: "failed",
+          error: result.message || result.reason || "permission_denied",
+        });
+        return;
+      }
       if (result?.usePai) {
         replaceTempAssistant(`${result.message}\n\n已按策略切换到 PAI（请求尚未被 Gateway 接受）。`);
         if (window.ButlerUI?.runCommand) {

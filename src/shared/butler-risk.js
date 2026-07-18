@@ -177,6 +177,7 @@ const butlerRiskApi = {
   assessPaiResponse,
   buildConfirmedCommand,
   detectRequiredLevel,
+  describeRisk,
   hasConfirmPrefix,
   isWorkflowRun,
 };

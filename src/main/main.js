@@ -51,7 +51,10 @@ const {
   idMap,
   DEFAULT_GATEWAY_URL,
   AgentRunService,
+  PermissionProxy,
+  PermissionAudit,
 } = require("./openclaw");
+const { gateCommand } = require("./permission-gate");
 const { TaskStore, SCHEMA_VERSION: TASK_SCHEMA_VERSION } = require("./task-store");
 const { toPublicTask, toPublicTaskPage } = require("./task-public");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
@@ -84,6 +87,10 @@ let studioStore = null;
 let taskStore = null;
 let openclawBridge = null;
 let agentRunService = null;
+let permissionProxy = null;
+let permissionAudit = null;
+let desktopOnline = true;
+let confirmUiReady = false;
 let allModelsCache = [];
 let promptTemplates = [];
 
@@ -286,6 +293,15 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  desktopOnline = true;
+  mainWindow.on("focus", () => {
+    desktopOnline = true;
+  });
+  mainWindow.on("closed", () => {
+    confirmUiReady = false;
+    desktopOnline = BrowserWindow.getAllWindows().some((win) => !win.isDestroyed());
+    mainWindow = null;
+  });
 
   if (!app.isPackaged && process.env.ELECTRON_DEVTOOLS === "1") {
     mainWindow.webContents.openDevTools({ mode: "detach" });
@@ -332,6 +348,27 @@ function initServices() {
     });
   });
   logger = new Logger(path.join(userData, "logs"));
+  permissionAudit = new PermissionAudit(path.join(userData, "logs", "permission-audit.jsonl"));
+  permissionProxy = new PermissionProxy({
+    logger,
+    audit: permissionAudit,
+    timeoutMs: 60_000,
+    isDesktopOnline: () =>
+      desktopOnline && BrowserWindow.getAllWindows().some((win) => !win.isDestroyed()),
+    hasConfirmUi: () => confirmUiReady && Boolean(mainWindow) && !mainWindow.isDestroyed(),
+    askUser: (req) => {
+      sendToRenderer("permission-request", {
+        requestId: req.requestId,
+        tool: req.tool,
+        action: req.action,
+        riskLevel: req.riskLevel,
+        channel: req.channel,
+        sessionKey: req.sessionKey,
+        runId: req.runId,
+        title: req.title,
+      });
+    },
+  });
   paiBridge = new PaiBridge();
   ollama = new OllamaService();
   downloader = new DownloadEngine(storage, settingsStore, {
@@ -1009,6 +1046,26 @@ function registerIpcHandlers() {
     return paiBridge.ensureRunning(settings, logger);
   });
 
+  ipcMain.handle("permission:ui-ready", async () => {
+    confirmUiReady = true;
+    desktopOnline = true;
+    return { ok: true };
+  });
+
+  ipcMain.handle("permission:respond", async (_event, payload = {}) => {
+    const requestId = payload?.requestId ? String(payload.requestId) : "";
+    if (!requestId || !permissionProxy) {
+      return { ok: false, reason: "invalid_request" };
+    }
+    const accepted = permissionProxy.respond(requestId, payload?.allowed === true, payload?.reason || "");
+    return { ok: accepted };
+  });
+
+  ipcMain.handle("permission:audit-list", async (_event, payload = {}) => {
+    const entries = permissionAudit ? await permissionAudit.list(payload || {}) : [];
+    return { ok: true, entries };
+  });
+
   ipcMain.handle("pai:run", async (_event, payload) => {
     const settings = await settingsStore.load();
     if (!(await paiBridge.ping(settings))) {
@@ -1018,8 +1075,28 @@ function registerIpcHandlers() {
     if (!command || typeof command !== "string") {
       throw new Error("命令不能为空");
     }
-    const level = payload?.level ?? settings.paiDefaultLevel ?? 1;
-    return paiBridge.run(settings, command.trim(), level);
+    const trimmed = command.trim();
+    const gate = await gateCommand(permissionProxy, trimmed, {
+      tool: "pai.command",
+      channel: payload?.channel || "desktop",
+      requireGatewayApproval: payload?.requireGatewayApproval === true,
+      gatewayApproved: payload?.gatewayApproved === true,
+    });
+    if (!gate.allowed) {
+      return {
+        ok: false,
+        needs_confirm: false,
+        permissionDenied: true,
+        error: gate.message,
+        reason: gate.reason,
+        riskLevel: gate.riskLevel,
+      };
+    }
+    const level = Math.max(
+      Number(payload?.level ?? settings.paiDefaultLevel ?? 1) || 1,
+      Number(gate.requiredLevel) || 1
+    );
+    return paiBridge.run(settings, gate.confirmedCommand || trimmed, level);
   });
 
   ipcMain.handle("pai:doctor", async () => {
@@ -1132,6 +1209,25 @@ function registerIpcHandlers() {
 
   ipcMain.handle("openclaw:send", async (_event, payload = {}) => {
     const settings = await settingsStore.load();
+    const text = String(payload?.text || payload?.message || "").trim();
+    const gate = await gateCommand(permissionProxy, text, {
+      tool: "openclaw.send",
+      channel: payload?.channel || "desktop",
+      sessionKey: payload?.sessionKey || null,
+      requireGatewayApproval: payload?.requireGatewayApproval === true,
+      gatewayApproved: payload?.gatewayApproved === true,
+    });
+    if (!gate.allowed) {
+      return {
+        ok: false,
+        accepted: false,
+        usePai: false,
+        permissionDenied: true,
+        reason: gate.reason,
+        message: gate.message,
+        riskLevel: gate.riskLevel,
+      };
+    }
     // Dual-track guard: only allow PAI fallback before Gateway accepts.
     if (openclawBridge.state !== "ready" && settings.openclawFallbackToPai !== false) {
       const decision = decideFallback({
@@ -1153,7 +1249,7 @@ function registerIpcHandlers() {
     }
     try {
       return await agentRunService.send({
-        text: payload?.text || payload?.message || "",
+        text,
         sessionKey: payload?.sessionKey || null,
         name: payload?.name || null,
       });
@@ -1329,6 +1425,26 @@ function registerIpcHandlers() {
     if (!command || typeof command !== "string") {
       throw new Error("命令不能为空");
     }
+    const trimmed = command.trim();
+    const gate = await gateCommand(permissionProxy, trimmed, {
+      tool: "pai.command",
+      channel: payload?.channel || "desktop",
+      runId: payload?.runId || null,
+      requireGatewayApproval: payload?.requireGatewayApproval === true,
+      gatewayApproved: payload?.gatewayApproved === true,
+    });
+    if (!gate.allowed) {
+      return {
+        ok: false,
+        result: {
+          ok: false,
+          permissionDenied: true,
+          error: gate.message,
+          reason: gate.reason,
+          riskLevel: gate.riskLevel,
+        },
+      };
+    }
 
     const level = payload?.level ?? settings.paiDefaultLevel ?? 1;
     const runId = payload?.runId || `run-${Date.now()}`;
@@ -1379,7 +1495,7 @@ function registerIpcHandlers() {
     }, pollMs);
 
     try {
-      const result = await paiBridge.run(settings, command.trim(), level);
+      const result = await paiBridge.run(settings, gate.confirmedCommand || trimmed, Math.max(level, gate.requiredLevel || 1));
       await emitProgress({ done: true, resultOk: result?.ok === true });
       return { runId, result, promptId };
     } finally {
@@ -1607,6 +1723,28 @@ function registerIpcHandlers() {
 
   ipcMain.handle("pai:studio-run", async (_event, payload) => {
     const settings = await settingsStore.load();
+    const studioLabel = payload?.t2i_workflow || payload?.i2v_workflow || "确认创作台出片";
+    const gate = await gateCommand(permissionProxy, `确认创作台 ${studioLabel}`, {
+      tool: "mogu.studio.run",
+      channel: payload?.channel || "desktop",
+      runId: payload?.runId || null,
+      riskLevel: 2,
+      requireGatewayApproval: payload?.requireGatewayApproval === true,
+      gatewayApproved: payload?.gatewayApproved === true,
+    });
+    if (!gate.allowed) {
+      return {
+        runId: payload?.runId || null,
+        moguTaskId: null,
+        result: {
+          ok: false,
+          permissionDenied: true,
+          error: gate.message,
+          reason: gate.reason,
+          riskLevel: gate.riskLevel,
+        },
+      };
+    }
     await paiBridge.ensureRunning(settings, logger);
     const runId = payload?.runId || `studio-${Date.now()}`;
     const paiRoot = paiBridge.resolvePaiRoot(settings);

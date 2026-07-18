@@ -44,6 +44,8 @@ const ButlerUI = (() => {
     initLevelPicker();
     initConfirmModal();
     initProgressListener();
+    initPermissionBridge();
+    window.modelManager?.permissionUiReady?.().catch(() => {});
 
     els.form.addEventListener("submit", handleSubmit);
     els.ensureBtn.addEventListener("click", () => ensurePai(true));
@@ -124,10 +126,39 @@ const ButlerUI = (() => {
     });
   }
 
+  function initPermissionBridge() {
+    if (!window.modelManager?.onPermissionRequest) return;
+    window.modelManager.onPermissionRequest(async (req) => {
+      if (!req?.requestId) return;
+      const riskLevel = Number(req.riskLevel) || 2;
+      const assessment = {
+        risk:
+          (window.ButlerRisk?.describeRisk?.(riskLevel, req.action || req.tool || "") || null) || {
+            title: req.title || (riskLevel >= 3 ? "L3 危险操作确认" : "L2 操作确认"),
+            message: "主进程权限代理请求确认。未确认将拒绝执行。",
+            detail: `${req.tool || ""}\n${req.action || ""}`.trim(),
+            confirmLabel: riskLevel >= 3 ? "确认执行（L3）" : "确认执行（L2）",
+            severity: riskLevel >= 3 ? "high" : "medium",
+          },
+      };
+      const approved = await showConfirmModal(assessment);
+      try {
+        await window.modelManager.respondPermission({
+          requestId: req.requestId,
+          allowed: approved === true,
+          reason: approved ? "ui_approved" : "ui_denied",
+        });
+      } catch {
+        // ignore
+      }
+    });
+  }
+
   function showConfirmModal(assessment) {
     return new Promise((resolve) => {
+      // Fail closed: missing modal/UI must never auto-approve L2/L3.
       if (!els.confirmModal || !assessment?.risk) {
-        resolve(true);
+        resolve(false);
         return;
       }
 
@@ -198,20 +229,29 @@ const ButlerUI = (() => {
     }
   }
 
+  function mainOwnsPermissionUi() {
+    return Boolean(window.modelManager?.onPermissionRequest && window.modelManager?.respondPermission);
+  }
+
   async function runCommand(text, options = {}) {
     const level = Number(options.level ?? els.level.value) || 2;
     const displayText = options.displayText ?? text;
+    const mainGate = mainOwnsPermissionUi();
 
     if (!options.skipRiskCheck && window.ButlerRisk) {
       const assessment = window.ButlerRisk.assess(text, level);
       if (assessment.needsConfirm) {
-        const approved = await showConfirmModal(assessment);
-        if (!approved) {
-          appendMessage("system", "已取消执行");
-          return null;
-        }
         if (assessment.suggestedLevel > level) {
           setLevelValue(String(assessment.suggestedLevel));
+        }
+        // Real confirm is owned by main-process PermissionProxy (fail-closed).
+        // Keep local modal only as legacy fallback when preload bridge is missing.
+        if (!mainGate) {
+          const approved = await showConfirmModal(assessment);
+          if (!approved) {
+            appendMessage("system", "已取消执行");
+            return null;
+          }
         }
         text = assessment.confirmedCommand || text;
       }
@@ -241,13 +281,21 @@ const ButlerUI = (() => {
         result = await window.modelManager.runPaiCommand({ command: text, level: runLevel });
       }
 
+      if (result?.permissionDenied) {
+        appendMessage("assistant", `⛔ ${result.error || result.message || "权限已拒绝"}`, { error: true });
+        window.AppCore.setStatus("权限已拒绝");
+        return result;
+      }
+
       if (!options.skipPaiConfirm && window.ButlerRisk) {
         const paiAssessment = window.ButlerRisk.assessPaiResponse(text, result);
         if (paiAssessment) {
-          const approved = await showConfirmModal(paiAssessment);
-          if (!approved) {
-            appendMessage("system", "已取消执行");
-            return null;
+          if (!mainGate) {
+            const approved = await showConfirmModal(paiAssessment);
+            if (!approved) {
+              appendMessage("system", "已取消执行");
+              return null;
+            }
           }
           setBusy(false);
           return runCommand(paiAssessment.confirmedCommand || text, {

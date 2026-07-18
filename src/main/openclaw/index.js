@@ -1,7 +1,8 @@
 const { OpenClawBridge, STATES, normalizeWsUrl, DEFAULT_GATEWAY_URL } = require("./bridge");
 const protocol = require("./protocol");
 const idMap = require("./id-map");
-const { PermissionProxy } = require("./permissions");
+const { PermissionProxy, DEFAULT_TIMEOUT_MS } = require("./permissions");
+const { PermissionAudit } = require("./permission-audit");
 const { decideFallback, FALLBACK_BLOCKED_AFTER_ACCEPTED } = require("./fallback-pai");
 const { adaptMethods, requireMethod, METHOD_CANDIDATES } = require("./methods-adapter");
 const { AgentRunService } = require("./agent-run");
@@ -14,6 +15,8 @@ module.exports = {
   protocol,
   idMap,
   PermissionProxy,
+  PermissionAudit,
+  DEFAULT_TIMEOUT_MS,
   decideFallback,
   FALLBACK_BLOCKED_AFTER_ACCEPTED,
   adaptMethods,
