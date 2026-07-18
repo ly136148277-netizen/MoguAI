@@ -96,10 +96,18 @@ class AgentRunService {
 
     const task = await this.taskStore.create({
       source: "openclaw",
+      kind: "agent_run",
+      executor: "openclaw",
       name: name || message.slice(0, 48),
       status: "queued",
       sessionKey: key,
       sessionId,
+      requestText: message,
+      replay: {
+        kind: "openclaw.send",
+        text: message,
+        sessionKey: key,
+      },
     });
 
     this.emitToRenderer("openclaw-task", {
@@ -297,11 +305,16 @@ class AgentRunService {
       return;
     }
 
+    const eventId = buildEventId(evt);
+    const eventSeq = evt.seq != null ? Number(evt.seq) : undefined;
+
     if (evt.kind === "agent_delta" && evt.text) {
       active.buffer = `${active.buffer || ""}${evt.text}`;
       await this.taskStore.update(active.moguTaskId, {
         status: "running",
         logSummary: active.buffer.slice(-240),
+        eventId,
+        eventSeq,
       });
     }
 
@@ -311,6 +324,8 @@ class AgentRunService {
         status,
         errorMessage: evt.error || null,
         logSummary: active.buffer?.slice(-500) || evt.text || status,
+        eventId: eventId || (runId ? `${runId}:terminal:${status}` : null),
+        eventSeq,
       });
       this._activeByRunId.delete(runId);
     }
@@ -354,6 +369,17 @@ function sanitizePayload(payload) {
   delete clone.token;
   delete clone.deviceToken;
   return clone;
+}
+
+function buildEventId(evt) {
+  if (!evt || typeof evt !== "object") return null;
+  if (evt.eventId) return String(evt.eventId);
+  if (evt.seq != null && evt.runId) return `${evt.runId}:seq:${evt.seq}`;
+  if (evt.runId && evt.kind === "terminal" && evt.status) {
+    return `${evt.runId}:terminal:${evt.status}`;
+  }
+  if (evt.runId && evt.ts != null) return `${evt.runId}:${evt.kind || "event"}:${evt.ts}`;
+  return null;
 }
 
 module.exports = {

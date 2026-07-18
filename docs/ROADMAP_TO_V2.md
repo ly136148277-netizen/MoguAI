@@ -132,7 +132,7 @@ MOGU 桌面端（品牌 · 体验 · 权限 · 资产）
 
 | 切片 | 范围 | 验收要点 |
 |------|------|----------|
-| **alpha.3-01** | TaskStore 可迁移 schema；统一 OpenClaw / PAI / Studio / ComfyUI 字段；`tasks:list/get/cancel/retry` 主进程 IPC + preload；重启恢复、事件幂等、分页与状态查询 | 断线、重启、重复事件不产生重复任务或错误终态 |
+| **alpha.3-01** ✅ | TaskStore schema v2 可迁移；统一 OpenClaw / PAI / Studio / ComfyUI 字段；`tasks:list/get/cancel/retry` IPC + preload；重启恢复、事件幂等、分页与状态查询 | 断线、重启、重复事件不产生重复任务或错误终态 |
 | **alpha.3-02** | PermissionProxy 接入真实确认 UI；固定 L1/L2/L3；离线/超时/无 UI → 拒绝高风险；审计 + Gateway approval 双重校验 | L3 无法绕过 MOGU 确认 |
 | **alpha.3-03** | 完整任务中心页：来源/状态/时间筛选；IDs、日志、输出路径；流式更新、精确取消、重试、终态详情；导航/空态/失败/恢复 UI 测试 | 四源任务统一可见可操作 |
 | **alpha.3-04** | 数据中心只读：扫描可配置目录；占用/最近运行/日志摘要；导出配置·会话·任务·诊断包（排除 token/key/大模型）；清理仅 dry-run，真删二次确认 | 无可导出密钥、默认可审 |
@@ -297,7 +297,7 @@ flowchart LR
 
 1. **v1.5.5** 稳定用户基线（勿覆盖）  
 2. **v1.6.0-alpha.1 / alpha.2** 已保存开发 tag（Bridge + 流式 Run + 双轨对话）  
-3. **当前下一刀：`alpha.3-01` 统一任务契约与 IPC** → 再 02 权限 UI → 03 任务中心 → 04 数据中心 → 05 Gateway 生命周期；整包过发布门后打 `v1.6.0-alpha.3`  
+3. **当前下一刀：`alpha.3-02` 权限确认代理 UI**（`alpha.3-01` 统一任务契约已落地）→ 再 03 任务中心 → 04 数据中心 → 05 Gateway 生命周期；整包过发布门后打 `v1.6.0-alpha.3`  
 4. **v1.6 beta / 稳定**：本地 Gateway 对话往返、任务恢复、权限流程 soak 后再定；外部渠道 / 自动安装 / Skills 市场继续后置  
 5. **v1.7 Skills**：公共注册与执行契约；顺序建议 `mogu.comfy → mogu.studio → mogu.ollama → mogu.pc → mogu.media`（每 Skill：SKILL.md + 实现 + 权限 + 任务/日志/输出；含预检、精确取消、重试、provenance）  
 6. **v2.0 控制中心**：对话为默认首页；OpenClaw 默认 Runtime，PAI 兼容/高级；权限中心、会话隔离、备份诊断；渠道经 OpenClaw，不自研第二套；不多平台原生客户端 / 大市场  
@@ -306,8 +306,9 @@ flowchart LR
 v1.5.5 用户基线
 → alpha.1 Bridge / TaskStore
 → alpha.2 流式 Run / 双轨对话
-→ alpha.3-01 统一任务契约 ← 下一刀
-→ alpha.3-02…05 → tag v1.6.0-alpha.3
+→ alpha.3-01 统一任务契约 ✅
+→ alpha.3-02 权限确认 UI ← 下一刀
+→ alpha.3-03…05 → tag v1.6.0-alpha.3
 → v1.6 beta soak → v1.6.0 稳定
 → v1.7 Skills
 → v2.0 控制中心（渠道后置）

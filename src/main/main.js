@@ -52,7 +52,8 @@ const {
   DEFAULT_GATEWAY_URL,
   AgentRunService,
 } = require("./openclaw");
-const { TaskStore } = require("./task-store");
+const { TaskStore, SCHEMA_VERSION: TASK_SCHEMA_VERSION } = require("./task-store");
+const { toPublicTask, toPublicTaskPage } = require("./task-public");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
 const {
   getSetupStatus,
@@ -322,6 +323,14 @@ function initServices() {
   chatSessions = new ChatSessionStore(path.join(userData, "chat-sessions"));
   studioStore = new StudioStore(path.join(userData, "studio-pipeline.json"));
   taskStore = new TaskStore(path.join(userData, "tasks.json"));
+  taskStore.on("change", (payload) => {
+    sendToRenderer("task-change", {
+      type: payload?.type || "updated",
+      schemaVersion: payload?.schemaVersion,
+      task: toPublicTask(payload?.task),
+      eventId: payload?.eventId || null,
+    });
+  });
   logger = new Logger(path.join(userData, "logs"));
   paiBridge = new PaiBridge();
   ollama = new OllamaService();
@@ -1169,25 +1178,60 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("tasks:list", async (_event, payload = {}) => {
-    await taskStore.load();
-    return { ok: true, tasks: await taskStore.list(payload || {}) };
+    const page = await taskStore.listPage(payload || {});
+    return toPublicTaskPage(page);
   });
 
-  ipcMain.handle("tasks:get", async (_event, moguTaskId) => {
-    const task = await taskStore.get(String(moguTaskId || ""));
-    return { ok: Boolean(task), task };
+  ipcMain.handle("tasks:get", async (_event, payload) => {
+    const id =
+      typeof payload === "string" || typeof payload === "number"
+        ? String(payload)
+        : String(payload?.moguTaskId || "");
+    const task = await taskStore.get(id);
+    return { ok: Boolean(task), task: toPublicTask(task), schemaVersion: TASK_SCHEMA_VERSION };
   });
 
   ipcMain.handle("tasks:create", async (_event, payload = {}) => {
     const task = await taskStore.create(payload || {});
-    return { ok: true, task };
+    return { ok: true, task: toPublicTask(task) };
   });
 
   ipcMain.handle("tasks:update", async (_event, payload = {}) => {
     const id = payload?.moguTaskId;
     if (!id) throw new Error("moguTaskId 不能为空");
     const task = await taskStore.update(String(id), payload || {});
-    return { ok: Boolean(task), task };
+    return { ok: Boolean(task), task: toPublicTask(task) };
+  });
+
+  ipcMain.handle("tasks:retry", async (_event, payload = {}) => {
+    const id = payload?.moguTaskId ? String(payload.moguTaskId) : "";
+    if (!id) throw new Error("moguTaskId 不能为空");
+    const existing = await taskStore.get(id);
+    if (!existing) {
+      return { ok: false, reason: "not_found", message: "任务不存在。" };
+    }
+    if (!["failed", "cancelled", "timed_out", "succeeded"].includes(existing.status)) {
+      return { ok: false, reason: "not_terminal", message: "仅终态任务可重试。" };
+    }
+    if (!existing.replay) {
+      return {
+        ok: false,
+        reason: "missing_replay",
+        message: "任务缺少可重放描述，无法安全重试。",
+      };
+    }
+    const task = await taskStore.retry(id, {
+      idempotencyKey: payload?.idempotencyKey || null,
+    });
+    if (!task) {
+      return { ok: false, reason: "not_retryable", message: "无法创建重试任务。" };
+    }
+    return {
+      ok: true,
+      task: toPublicTask(task),
+      needsExecution: true,
+      retryOf: id,
+    };
   });
 
   ipcMain.handle("tasks:cancel", async (_event, payload = {}) => {
@@ -1209,26 +1253,15 @@ function registerIpcHandlers() {
       };
     }
 
-    // OpenClaw precise cancel when we have Gateway IDs and bridge is ready.
-    if (
-      resolved.mapping.source === "openclaw" &&
-      openclawBridge.state === "ready" &&
-      (resolved.mapping.taskId || resolved.mapping.runId || resolved.mapping.sessionKey)
-    ) {
+    // OpenClaw: prefer AgentRunService (methods adapter + TaskStore write-back).
+    if (resolved.mapping.source === "openclaw" && moguTaskId) {
       try {
-        if (resolved.mapping.taskId) {
-          await openclawBridge.request("tasks.cancel", {
-            taskId: resolved.mapping.taskId,
-            reason: payload?.reason || "cancelled_by_mogu",
-          });
-        } else if (resolved.mapping.sessionKey || resolved.mapping.runId) {
-          await openclawBridge.request("sessions.abort", {
-            key: resolved.mapping.sessionKey || undefined,
-            runId: resolved.mapping.runId || undefined,
-          });
-        }
-        if (moguTaskId) await taskStore.update(moguTaskId, { status: "cancelled" });
-        return { ok: true, precise: true, mapping: resolved.mapping };
+        return await agentRunService.abort({
+          moguTaskId,
+          runId: resolved.mapping.runId,
+          taskId: resolved.mapping.taskId,
+          sessionKey: resolved.mapping.sessionKey,
+        });
       } catch (error) {
         return {
           ok: false,
@@ -1583,9 +1616,20 @@ function registerIpcHandlers() {
     trackComfyJob(runId, { promptId, source: "studio", startedAt });
     const taskRow = await taskStore.create({
       source: "studio",
+      kind: "studio_run",
+      executor: "studio",
       name: payload?.t2i_workflow || payload?.i2v_workflow || "创作台出片",
       status: "running",
       promptId,
+      replay: {
+        kind: "studio.run",
+        payload: {
+          t2i_workflow: payload?.t2i_workflow || null,
+          i2v_workflow: payload?.i2v_workflow || null,
+          tool: payload?.tool || null,
+          level: payload?.level ?? 2,
+        },
+      },
     });
     const moguTaskId = taskRow.moguTaskId;
 
