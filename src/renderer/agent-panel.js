@@ -444,11 +444,76 @@ const AgentPanel = (() => {
     }
   }
 
+  function mapTextToSkill(text) {
+    const t = String(text || "").trim();
+    if (!t) return null;
+    if (/^列出工作流/.test(t)) return { skillId: "mogu.comfy", op: "list", args: {} };
+    if (/^(确认出片|出片)/.test(t) || /工作流/.test(t) && /出片|生成/.test(t)) {
+      return { skillId: "mogu.comfy", op: "run", args: { command: t } };
+    }
+    if (/^打开\s*/.test(t)) return { skillId: "mogu.pc", op: "open", args: { command: t } };
+    if (/^搜索\s*/.test(t)) return { skillId: "mogu.pc", op: "search", args: { command: t } };
+    if (/备份\s*PAI|备份项目/.test(t)) return { skillId: "mogu.pc", op: "backup", args: {} };
+    if (/拼接|合成视频|一键拼接/.test(t)) return { skillId: "mogu.media", op: "preflight", args: {} };
+    return null;
+  }
+
+  async function trySkillInvoke(text) {
+    const mapped = mapTextToSkill(text);
+    if (!mapped || !window.modelManager?.invokeSkill) return null;
+    appendLocal("user", text);
+    history.push({ role: "user", content: text });
+    appendLocal("assistant", `Skill ${mapped.skillId}.${mapped.op} 执行中…`, { temp: true });
+    const result = await window.modelManager.invokeSkill(mapped);
+    if (result?.permissionDenied) {
+      replaceTempAssistant(`⛔ ${result.error || result.message || "权限已拒绝"}`);
+      return result;
+    }
+    if (result?.moguTaskId) {
+      showTaskCard({
+        moguTaskId: result.moguTaskId,
+        status: result.ok === false ? "failed" : "succeeded",
+        error: result.error || "",
+      });
+    }
+    replaceTempAssistant(
+      result?.ok === false
+        ? `Skill 失败：${result.error || result.message || JSON.stringify(result.preflight || {})}`
+        : `Skill 完成（${mapped.skillId}.${mapped.op}）${result.moguTaskId ? `\n任务 ${result.moguTaskId}` : ""}\n${summarizeSkillResult(result)}`
+    );
+    return result;
+  }
+
+  function summarizeSkillResult(result) {
+    if (!result || typeof result !== "object") return "";
+    if (result.catalog) return `工作流条目：${JSON.stringify(result.catalog).slice(0, 400)}`;
+    if (result.command) return `命令：${result.command}`;
+    if (result.outputPaths?.length) return `输出：${result.outputPaths.join(", ")}`;
+    if (result.provenance) return `provenance：${JSON.stringify(result.provenance).slice(0, 400)}`;
+    if (result.result) return JSON.stringify(result.result).slice(0, 400);
+    return "";
+  }
+
   async function runAgentText(text) {
     const kind = classify(text);
     if (kind === "help") {
       await answerWithBrain(text);
       return;
+    }
+
+    // PAI（兼容）模式：已知办事指令优先走 SkillRuntime。
+    if (runtimeMode !== "openclaw" && mapTextToSkill(text)) {
+      setFormBusy(true);
+      try {
+        const skillResult = await trySkillInvoke(text);
+        if (skillResult) {
+          await refreshStatus();
+          return;
+        }
+      } finally {
+        setFormBusy(false);
+        els.input?.focus();
+      }
     }
 
     if (runtimeMode === "openclaw") {

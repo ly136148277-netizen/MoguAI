@@ -990,6 +990,7 @@
         <div class="hub-tabs" data-hub="settings">
           <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
           <button type="button" class="hub-tab is-active" data-hub-nav="openclaw">OpenClaw</button>
+          <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
         </div>
         <div class="openclaw-life panel">
           <div class="openclaw-life__status">
@@ -1012,6 +1013,30 @@
         </div>
       </section>
 
+      <!-- Skills 管理（设置子页） -->
+      <section id="view-skills" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">设置 · 技能</span>
+          <button type="button" class="btn btn--ghost btn--tiny" id="skills-refresh-btn">刷新</button>
+        </div>
+        <div class="hub-tabs" data-hub="settings">
+          <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="skills">技能</button>
+        </div>
+        <div class="skills-layout panel">
+          <p class="settings-section-hint">每个 Skill = SKILL.md + 主进程实现 + 权限代理 + 任务契约。执行始终在 MOGU，不内嵌 OpenClaw。</p>
+          <div id="skills-env" class="home-env-lights"></div>
+          <div class="settings-inline-actions">
+            <button type="button" class="btn btn--ghost btn--tiny" id="skills-sync-docs-btn">同步说明到 OpenClaw</button>
+          </div>
+          <div id="skills-list" class="skills-list"></div>
+          <pre id="skills-doc" class="tasks-detail__log"></pre>
+          <p id="skills-status" class="settings-section-hint"></p>
+        </div>
+      </section>
+
       <!-- 软件设置 -->
       <section id="view-settings" class="view">
         <div class="view-head">
@@ -1026,6 +1051,7 @@
         <div class="hub-tabs" data-hub="settings">
           <button type="button" class="hub-tab is-active" data-hub-nav="settings">通用设置</button>
           <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
+          <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
         </div>
         <form id="settings-form" class="settings-form panel">
           <label>下载线程数
@@ -1282,6 +1308,7 @@
   <script src="tasks-panel.js"></script>
   <script src="data-panel.js"></script>
   <script src="openclaw-panel.js"></script>
+  <script src="skills-panel.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

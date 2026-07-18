@@ -1261,6 +1261,7 @@ window.AppCore = {
   window.TasksPanel?.init();
   window.DataPanel?.init();
   window.OpenclawPanel?.init();
+  window.SkillsPanel?.init();
   window.PageController.init();
 
   await loadMeta();

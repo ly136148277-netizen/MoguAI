@@ -5,6 +5,28 @@
 
 ---
 
+## [1.7.0] - 2026-07-19
+
+### Added
+- **SkillRuntime**：统一 `skills:list/invoke/preflight`；五 Skills 四件套（`mogu.comfy/studio/ollama/pc/media`）
+- 设置 → **技能** 管理页（启用、环境灯、说明、同步 SKILL.md 到 OpenClaw）
+- `mogu.studio` 预检 / provenance / 同参 retry；`mogu.comfy` 精确取消需 `promptId`
+- Agent（PAI 兼容）已知指令优先走 Skills
+- 验收：`npm run acceptance:v1.7` / `npm run soak:v1.7`
+- 文档：`docs/SKILLS_v1.7.md`
+
+### Changed
+- 默认 `acceptance` 脚本指向 v1.7
+
+---
+
+## [1.7.0-alpha.1] - 2026-07-19
+
+### Added
+- SkillRuntime 骨架、`mogu.comfy` 四件套、技能页壳（开发切片）
+
+---
+
 ## [1.6.0] - 2026-07-19
 
 ### Added

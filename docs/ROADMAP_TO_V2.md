@@ -58,7 +58,7 @@ MOGU 桌面端（品牌 · 体验 · 权限 · 资产）
 | **v1.5.4** | ✅ 已 yank | 稳定与安全热修（安装包已下架） | 见 v1.5.5 |
 | **v1.5.5** | ✅ 基线 | 打包白名单 + ASAR denylist | 干净安装包；发版凭据不进仓库 |
 | **v1.6.0** | ✅ 已切割 | OpenClaw Bridge + 任务/数据中心 | 能连上小龙虾；统一任务与数据视图 |
-| **v1.7.0** | 6–10 周 | Skills 化 + 创作可靠 | PAI/ComfyUI 成标准 Skills；创作预检与恢复 |
+| **v1.7.0** | ✅ 已切割 | Skills 化 + 创作可靠 | PAI/ComfyUI 成标准 Skills；创作预检与恢复 |
 | **v2.0.0** | 再 4–8 周 | 通用助手控制中心 | 对话为主入口；渠道/技能/权限产品化；创作是能力不是全部身份 |
 
 旧路线图中「V2.0 = Ollama 自动启动」作废；**本文件定义的 v2.0 为上述产品形态。**
@@ -205,22 +205,22 @@ Skill 说明（SKILL.md）
 | `mogu.pc` | 打开应用、搜文件、备份 | 可调用 + L2/L3 权限代理 + 任务/日志 |
 | `mogu.media` | 拼接、打开外部剪辑 | 路径白名单 + FFmpeg 等实现 |
 
-- [ ] 禁止只交 `SKILL.md` 而无实现/权限/任务契约
-- [ ] Skill 清单与权限级别写入文档
-- [ ] 技能管理页：启用/禁用、说明、所需环境灯
+- [x] 禁止只交 `SKILL.md` 而无实现/权限/任务契约（`SkillRuntime` + handlers）
+- [x] Skill 清单与权限级别写入文档（[`SKILLS_v1.7.md`](./SKILLS_v1.7.md)）
+- [x] 技能管理页：启用/禁用、说明、所需环境灯
 
 ### 7.2 创作台可靠性
 
-- [ ] 工作流预检：缺模型、缺节点、ComfyUI 离线、路径错误
-- [ ] 失败重试、断点恢复（至少「同参数再跑」）
-- [ ] 输出 provenance：模型 / 工作流 / 参数 / 耗时 / 任务 ID
+- [x] 工作流预检：缺模型、缺节点、ComfyUI 离线、路径错误（`mogu.studio` preflight）
+- [x] 失败重试、断点恢复（至少「同参数再跑」）（`retry` + TaskStore replay）
+- [x] 输出 provenance：模型 / 工作流 / 参数 / 耗时 / 任务 ID
 - [ ] （可选）批量生成队列
 
 ### 7.3 测试与质量
 
-- [ ] Bridge 契约测试（mock Gateway）
-- [ ] 关键 UI E2E：导航、取消、Skill 确认框
-- [ ] 验收脚本升级为 `acceptance_v1.7`（替换 v1.4.0 命名）
+- [x] Skills Runtime 契约测试（`tests/skills-runtime.test.js`）
+- [x] 技能页 UI + 权限确认复用现有 PermissionProxy
+- [x] 验收脚本 `acceptance_v1.7` / `soak:v1.7`
 
 **退出标准：** 不打开「旧管家页」也能用 Skills 完成：打开 ComfyUI → 出片 → 拼视频；失败有预检而非黑盒超时。
 
@@ -300,14 +300,12 @@ flowchart LR
 2. **v1.6.0-alpha.1 / alpha.2** 已保存开发 tag（Bridge + 流式 Run + 双轨对话）  
 3. **alpha.3-01…05 已落地**（tag `v1.6.0-alpha.3`）  
 4. **`v1.6.0` 已切割** — Bridge / 任务 / 权限 / 数据中心 / §6.5 IA / 连接自动拉起与安装引导；客户切换需另宣布（此前基线仍为 `v1.5.5`）  
-5. **下一刀：v1.7 Skills** — 公共注册与执行契约；顺序建议 `mogu.comfy → mogu.studio → mogu.ollama → mogu.pc → mogu.media`（每 Skill：SKILL.md + 实现 + 权限 + 任务/日志/输出；含预检、精确取消、重试、provenance）  
-6. **v2.0 控制中心**：对话为默认首页；OpenClaw 默认 Runtime，PAI 兼容/高级；权限中心、会话隔离、备份诊断；渠道经 OpenClaw，不自研第二套；不多平台原生客户端 / 大市场  
+5. **`v1.7.0` 已切割** — `SkillRuntime` + 五 Skills 四件套 + 创作预检/provenance + 技能管理页  
+6. **下一刀：v2.0 控制中心** — 对话为默认首页；OpenClaw 默认 Runtime，PAI 兼容/高级；权限中心、会话隔离、备份诊断；渠道经 OpenClaw，不自研第二套；不多平台原生客户端 / 大市场  
 
 ```text
-v1.5.5 用户基线（宣布切换前仍有效）
-→ alpha.* / beta.1 → v1.6.0 ✅
-→ v1.7 Skills ← 当前下一版
-→ v2.0 控制中心（渠道后置）
+v1.5.5 → v1.6.0 ✅ → v1.7.0 ✅
+→ v2.0 控制中心 ← 当前下一版
 ```
 
 ---

@@ -75,6 +75,7 @@ const {
   scanAndApplyComfyUi,
 } = require("./setup-hub");
 const { StudioStore } = require("./studio-store");
+const { SkillRuntime } = require("./skills/runtime");
 const { initAutoUpdater } = require("./updater");
 const { chatWithBrain, testBrain, API_PRESETS } = require("./agent-brain");
 const powerControl = require("./power-control");
@@ -96,6 +97,7 @@ let openclawBridge = null;
 let agentRunService = null;
 let permissionProxy = null;
 let permissionAudit = null;
+let skillRuntime = null;
 let desktopOnline = true;
 let confirmUiReady = false;
 let allModelsCache = [];
@@ -378,6 +380,18 @@ function initServices() {
   });
   paiBridge = new PaiBridge();
   ollama = new OllamaService();
+  skillRuntime = new SkillRuntime({
+    taskStore,
+    permissionProxy,
+    paiBridge,
+    ollama,
+    studioStore,
+    userDataPath: userData,
+    logger,
+    getSettings: () => settingsStore.load(),
+    updateSettings: (partial) => settingsStore.update(partial),
+    emitProgress: (payload) => sendToRenderer("skill-progress", payload),
+  });
   downloader = new DownloadEngine(storage, settingsStore, {
     stateDir: getDownloadStateDir(),
     onProgress: (progress) => sendToRenderer("download-progress", progress),
@@ -1282,6 +1296,25 @@ function registerIpcHandlers() {
   ipcMain.handle("openclaw:stop", async () => openclawLifecycle.stopGateway());
 
   ipcMain.handle("openclaw:install-guide", async () => openclawLifecycle.getInstallGuide());
+
+  ipcMain.handle("skills:list", async () => skillRuntime.list());
+  ipcMain.handle("skills:set-enabled", async (_event, payload = {}) =>
+    skillRuntime.setEnabled(payload.skillId || payload.id, payload.enabled !== false)
+  );
+  ipcMain.handle("skills:doc", async (_event, payload = {}) =>
+    skillRuntime.getDoc(payload.skillId || payload.id)
+  );
+  ipcMain.handle("skills:preflight", async (_event, payload = {}) =>
+    skillRuntime.preflight(payload.skillId || payload.id, payload.args || payload || {})
+  );
+  ipcMain.handle("skills:invoke", async (_event, payload = {}) =>
+    skillRuntime.invoke(payload.skillId || payload.id, payload.op || "run", payload.args || {}, {
+      channel: payload.channel || "desktop",
+      skipPermission: payload.skipPermission === true,
+      skipTask: payload.skipTask === true,
+    })
+  );
+  ipcMain.handle("skills:sync-openclaw-docs", async () => skillRuntime.syncOpenclawDocs());
 
   ipcMain.handle("openclaw:open-install-docs", async () => {
     const guide = openclawLifecycle.getInstallGuide();

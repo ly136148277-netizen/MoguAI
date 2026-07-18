@@ -37,6 +37,14 @@ const DEFAULT_SETTINGS = {
   openclawEnabled: false,
   openclawGatewayUrl: "ws://127.0.0.1:18789",
   openclawFallbackToPai: true,
+  /** Skill enable map: { "mogu.comfy": true, ... } */
+  skillsEnabled: {
+    "mogu.comfy": true,
+    "mogu.studio": true,
+    "mogu.ollama": true,
+    "mogu.pc": true,
+    "mogu.media": true,
+  },
 };
 
 class SettingsStore {

@@ -8,7 +8,7 @@
 | 安装来源 | 本机 `dist\*.exe`、`npm start`、开发 tag（alpha/beta） | **仅** `mogu-ai-releases` 上的**稳定**安装包 |
 | 账号 / Token / 密钥 | 只存在 `%APPDATA%\ai-model-manager\`（本机 userData） | **不进安装包**；用户各自在自己电脑上配置 |
 | PAI 路径、电话、本地目录 | 你的设置，只影响你 | 客户自己的环境，互不相干 |
-| 当前稳定基线 | 本机可跑 `v1.6.0` | **`v1.6.0`**（已发 mogu-ai-releases；`v1.5.5` 保留为历史安装包） |
+| 当前稳定基线 | 本机可跑 `v1.7.0` | **`v1.7.0`**（Skills Runtime；历史包保留 `v1.6.0` / `v1.5.5`） |
 
 原则：
 

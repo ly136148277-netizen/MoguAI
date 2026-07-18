@@ -13,7 +13,7 @@ const AppRouter = (() => {
     tasks: ["tasks"],
     create: ["studio", "comfyui", "compose"],
     env: ["setup", "data"],
-    settings: ["settings", "openclaw"],
+    settings: ["settings", "openclaw", "skills"],
     help: ["help"],
   };
 

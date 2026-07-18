@@ -4085,6 +4085,33 @@ body {
   line-height: 1.5;
 }
 
+.skills-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.skills-card {
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.skills-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.skills-card__toggle {
+  margin-left: auto;
+}
+
+.home-env-chip--warn {
+  opacity: 0.75;
+}
+
 @media (max-width: 900px) {
   .tasks-split {
     grid-template-columns: 1fr;

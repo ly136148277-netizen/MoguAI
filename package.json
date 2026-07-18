@@ -1,7 +1,7 @@
 {
   "name": "ai-model-manager",
-  "version": "1.6.0",
-  "description": "MOGU AI — 本地 Agent 控制面（OpenClaw Bridge v1.6 beta）",
+  "version": "1.7.0",
+  "description": "MOGU AI — Skills Runtime v1.7",
   "homepage": "https://github.com/ly136148277-netizen/MoguAI#readme",
   "repository": {
     "type": "git",
@@ -17,8 +17,11 @@
     "start": "electron .",
     "test": "node --test tests/*.test.js",
     "screenshots": "electron scripts/capture-readme-screenshots.js",
-    "acceptance": "node scripts/acceptance_v1.4.0.js",
+    "acceptance": "node scripts/acceptance_v1.7.js",
+    "acceptance:v1.4": "node scripts/acceptance_v1.4.0.js",
+    "acceptance:v1.7": "node scripts/acceptance_v1.7.js",
     "soak:beta": "node scripts/soak_v1.6_beta.js",
+    "soak:v1.7": "node scripts/soak_v1.7.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "check:asar": "node -e \"require('./build/asar-denylist').assertResourcesClean('dist/win-unpacked')\"",
@@ -56,6 +59,7 @@
     },
     "files": [
       "src/**/*",
+      "skills/**/*",
       "catalog/**/*",
       "assets/icon.png",
       "assets/icon.ico",
