@@ -297,8 +297,8 @@ flowchart LR
 
 1. **v1.5.5** 稳定用户基线（勿覆盖）  
 2. **v1.6.0-alpha.1 / alpha.2** 已保存开发 tag（Bridge + 流式 Run + 双轨对话）  
-3. **alpha.3-01…05 已落地** → 开发 tag `v1.6.0-alpha.3`；下一阶段 **v1.6 beta soak**（本地 Gateway 对话往返、任务恢复、权限流程），再定稳定 `v1.6.0`；外部渠道 / Skills 仍后置  
-4. **v1.6 beta / 稳定**：本地 Gateway 对话往返、任务恢复、权限流程 soak 后再定；外部渠道 / 自动安装 / Skills 市场继续后置  
+3. **alpha.3-01…05 已落地**（tag `v1.6.0-alpha.3`）  
+4. **当前：`v1.6.0-beta.1` soak** — 自动门禁 `npm run soak:beta` + 手工清单见 [`BETA_SOAK_v1.6.md`](./BETA_SOAK_v1.6.md)；通过后再定稳定 `v1.6.0`；外部渠道 / 自动安装 / Skills 仍后置  
 5. **v1.7 Skills**：公共注册与执行契约；顺序建议 `mogu.comfy → mogu.studio → mogu.ollama → mogu.pc → mogu.media`（每 Skill：SKILL.md + 实现 + 权限 + 任务/日志/输出；含预检、精确取消、重试、provenance）  
 6. **v2.0 控制中心**：对话为默认首页；OpenClaw 默认 Runtime，PAI 兼容/高级；权限中心、会话隔离、备份诊断；渠道经 OpenClaw，不自研第二套；不多平台原生客户端 / 大市场  
 
@@ -307,8 +307,8 @@ v1.5.5 用户基线
 → alpha.1 Bridge / TaskStore
 → alpha.2 流式 Run / 双轨对话
 → alpha.3-01…05 ✅ → tag v1.6.0-alpha.3
-→ v1.6 beta soak ← 下一阶段
-→ v1.6.0 稳定
+→ v1.6.0-beta.1 soak ← 当前
+→ 手工 Gateway soak → v1.6.0 稳定
 
 → v1.7 Skills
 → v2.0 控制中心（渠道后置）
