@@ -121,17 +121,20 @@ MOGU 桌面端（品牌 · 体验 · 权限 · 资产）
 - [x] 断线、超时、重连
 - [x] OpenClaw 不可用可降级 PAI；**Gateway 已接受后等待超时禁止自动重发**
 - [x] 统一任务模型入库（`TaskStore`）+ 精确取消（无 ID → needsConfirmation）
+- [x] **alpha.2** `hello-ok.features.methods` 适配层（不硬编码 send 方法名）
+- [x] **alpha.2** `openclaw:session-create` / `send` / `abort` + 流式事件 + TaskStore 终态
+- [x] **alpha.2** Agent 双轨（OpenClaw / PAI）+ 对话内最小任务卡片
+- [x] **alpha.2** Mock Gateway 契约测试
 - [ ] 安装/升级引导（官方安装路径，版本钉扎，不 fork）
 - [ ] 启停 Gateway、状态灯（首页 + 环境页）
-- [ ] **创建会话 + 发起 Agent Run**（alpha.2）
-- [ ] **流式事件订阅进对话 UI**（alpha.2）
 - [ ] 设置页完整 UI（地址、端口、启用、版本、降级开关）
+- [ ] **alpha.3** 完整任务中心页 + 数据中心只读 + 权限确认 UI
 
 ### 6.2 对话工作台（双轨过渡）
 
-- [ ] Agent 页支持模式：`内置/PAI（兼容）` | `OpenClaw（主推）`
-- [ ] OpenClaw 模式下：消息进 Gateway；MOGU 负责 UI、确认框、任务卡片
-- [ ] **授权归属：** 高风险 `mogu.*` 统一走 MOGU 权限代理（含外部渠道触发）；桌面不在线 → 默认拒绝/超时拒绝，禁止绕过确认
+- [x] Agent 页支持模式：`PAI（兼容）` | `OpenClaw（主推）`（alpha.2）
+- [x] OpenClaw 模式下：消息进 Gateway；对话内最小任务卡片（流式/取消/错误）（alpha.2）
+- [ ] **授权归属：** 高风险 `mogu.*` 统一走 MOGU 权限代理（含外部渠道触发）；桌面不在线 → 默认拒绝/超时拒绝，禁止绕过确认（alpha.3）
 
 ### 6.3 任务中心
 
@@ -275,7 +278,7 @@ flowchart LR
 
 1. **v1.5.5 已收口（基线）**：安全热修 + 打包白名单 + ASAR denylist；`v1.5.4` 安装包永久废弃  
 2. **契约基线**：[`OPENCLAW_BRIDGE.md`](./OPENCLAW_BRIDGE.md)  
-3. **当前下一步 v1.6.0-alpha**：Bridge 探测/认证 → 流式 Agent Run → 统一任务模型 → 任务中心 → 双轨对话 → 权限代理（先不接外部渠道、不做 Skills 市场）  
+3. **当前下一步 v1.6.0-alpha.3**：完整任务中心 + 统一任务列表 + 数据中心只读/备份 + 权限确认 UI（alpha.1/2 已完成 Bridge + 流式 Run + 双轨对话；先不接外部渠道、不做 Skills 市场）  
 
 ```text
 v1.5.5 收口

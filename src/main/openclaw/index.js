@@ -3,6 +3,8 @@ const protocol = require("./protocol");
 const idMap = require("./id-map");
 const { PermissionProxy } = require("./permissions");
 const { decideFallback, FALLBACK_BLOCKED_AFTER_ACCEPTED } = require("./fallback-pai");
+const { adaptMethods, requireMethod, METHOD_CANDIDATES } = require("./methods-adapter");
+const { AgentRunService } = require("./agent-run");
 
 module.exports = {
   OpenClawBridge,
@@ -14,4 +16,8 @@ module.exports = {
   PermissionProxy,
   decideFallback,
   FALLBACK_BLOCKED_AFTER_ACCEPTED,
+  adaptMethods,
+  requireMethod,
+  METHOD_CANDIDATES,
+  AgentRunService,
 };

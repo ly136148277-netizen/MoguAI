@@ -10,6 +10,7 @@ const {
   normalizeGatewayEvent,
   makeReqId,
 } = require("./protocol");
+const { adaptMethods } = require("./methods-adapter");
 
 const STATES = Object.freeze({
   disconnected: "disconnected",
@@ -30,17 +31,27 @@ class OpenClawBridge extends EventEmitter {
     super();
     this.getToken = opts.getToken || (async () => "");
     this.logger = opts.logger || null;
-    this.clientVersion = opts.clientVersion || "1.6.0-alpha.1";
+    this.clientVersion = opts.clientVersion || "1.6.0-alpha.2";
     this.url = DEFAULT_GATEWAY_URL;
     this.state = STATES.disconnected;
     this._ws = null;
     this._pending = new Map();
     this._hello = null;
+    this._methodsAdapter = adaptMethods([]);
     this._reconnectAttempt = 0;
     this._reconnectTimer = null;
     this._manualClose = false;
+    this._suppressReconnect = false;
     this._requestTimeoutMs = 30_000;
     this._connectTimeoutMs = 12_000;
+  }
+
+  getAvailableMethods() {
+    return this._methodsAdapter?.available || [];
+  }
+
+  getMethodsAdapter() {
+    return this._methodsAdapter || adaptMethods([]);
   }
 
   getPublicStatus() {
@@ -59,6 +70,9 @@ class OpenClawBridge extends EventEmitter {
             scopes: this._hello.scopes || [],
           }
         : null,
+      methods: this._methodsAdapter?.resolved || {},
+      canAgentRun: Boolean(this._methodsAdapter?.canAgentRun),
+      canAbort: Boolean(this._methodsAdapter?.canAbort),
       reconnectAttempt: this._reconnectAttempt,
     };
   }
@@ -102,6 +116,7 @@ class OpenClawBridge extends EventEmitter {
 
   async connect({ url, token } = {}) {
     this._manualClose = false;
+    this._suppressReconnect = false;
     if (url) this.url = normalizeWsUrl(url);
     const authToken = token != null ? String(token) : await this.getToken();
 
@@ -116,6 +131,7 @@ class OpenClawBridge extends EventEmitter {
 
   async disconnect() {
     this._manualClose = true;
+    this._suppressReconnect = true;
     this._clearReconnect();
     this._rejectAllPending("disconnected");
     if (this._ws) {
@@ -197,15 +213,28 @@ class OpenClawBridge extends EventEmitter {
             settled = true;
             clearTimeout(connectTimer);
             this._hello = summarizeHelloOk(payload);
+            this._methodsAdapter = adaptMethods(this._hello.methods || []);
             this._reconnectAttempt = 0;
             this._setState(STATES.ready);
+            this.emit("ready", this.getPublicStatus());
             resolve(this.getPublicStatus());
           },
           reject: (error) => {
             if (settled) return;
             settled = true;
             clearTimeout(connectTimer);
-            this._setState(STATES.auth_failed);
+            const msg = String(error?.message || error || "");
+            if (/auth|token|unauthorized|forbidden/i.test(msg)) {
+              this._suppressReconnect = true;
+              this._setState(STATES.auth_failed);
+            } else {
+              this._setState(STATES.degraded);
+            }
+            try {
+              ws.close();
+            } catch {
+              // ignore
+            }
             reject(error);
           },
           timer: null,
@@ -231,8 +260,8 @@ class OpenClawBridge extends EventEmitter {
         this._ws = null;
         this._hello = null;
         this._rejectAllPending("socket_closed");
-        if (this._manualClose) {
-          this._setState(STATES.disconnected);
+        if (this._manualClose || this._suppressReconnect || this.state === STATES.auth_failed) {
+          if (this.state !== STATES.auth_failed) this._setState(STATES.disconnected);
           return;
         }
         this._setState(STATES.reconnecting);

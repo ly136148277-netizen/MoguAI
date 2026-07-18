@@ -9,6 +9,11 @@ const AgentPanel = (() => {
   let shutdownTimer = null;
   /** @type {{role:string, content:string}[]} */
   let history = [];
+  let runtimeMode = "pai";
+  let activeMoguTaskId = null;
+  let streamBuffer = "";
+  let unsubOpenclawTask = null;
+  let unsubOpenclawState = null;
 
   const CMD_RE =
     /^(打开|列出|备份|删除|删掉|搜索|搜\s|抓取|出片|开始|同步|运行|启动|关闭|导入|下载|恢复|确认|移动|复制|写入|识别|检测|帮我打开|帮我删|帮我搜|请打开|请删除|请备份)/i;
@@ -87,6 +92,15 @@ const AgentPanel = (() => {
     els.gotoStudio = document.getElementById("agent-goto-studio-btn");
     els.chatPicker = document.getElementById("chat-picker");
     els.chatWorkspace = document.getElementById("chat-workspace");
+    els.runtimeMode = document.getElementById("agent-runtime-mode");
+    els.openclawState = document.getElementById("agent-openclaw-state");
+    els.openclawConnectBtn = document.getElementById("agent-openclaw-connect-btn");
+    els.taskCard = document.getElementById("agent-task-card");
+    els.taskId = document.getElementById("agent-task-id");
+    els.taskStatus = document.getElementById("agent-task-status");
+    els.taskStream = document.getElementById("agent-task-stream");
+    els.taskError = document.getElementById("agent-task-error");
+    els.taskCancelBtn = document.getElementById("agent-task-cancel-btn");
 
     els.gotoStudio?.addEventListener("click", () => window.AppRouter.navigate("studio"));
     document.getElementById("agent-goto-models-btn")?.addEventListener("click", () => {
@@ -99,6 +113,18 @@ const AgentPanel = (() => {
 
     els.form?.addEventListener("submit", handleSubmit);
     els.shutdownCustomBtn?.addEventListener("click", scheduleCustomMinutes);
+    els.runtimeMode?.addEventListener("change", onRuntimeModeChange);
+    els.openclawConnectBtn?.addEventListener("click", connectOpenclaw);
+    els.taskCancelBtn?.addEventListener("click", cancelActiveOpenclawTask);
+
+    if (window.modelManager?.onOpenclawTask) {
+      unsubOpenclawTask = window.modelManager.onOpenclawTask(onOpenclawTaskEvent);
+    }
+    if (window.modelManager?.onOpenclawState) {
+      unsubOpenclawState = window.modelManager.onOpenclawState((status) => {
+        paintOpenclawState(status);
+      });
+    }
 
     document.querySelectorAll("[data-agent-cmd]").forEach((button) => {
       button.addEventListener("click", async () => {
@@ -211,10 +237,152 @@ const AgentPanel = (() => {
     await runAgentText(text);
   }
 
+  async function onRuntimeModeChange() {
+    runtimeMode = els.runtimeMode?.value || "pai";
+    try {
+      await window.modelManager.updateSettings({
+        agentRuntimeMode: runtimeMode,
+        openclawEnabled: runtimeMode === "openclaw",
+      });
+    } catch {
+      // ignore
+    }
+    await refreshStatus();
+  }
+
+  async function connectOpenclaw() {
+    try {
+      els.openclawConnectBtn && (els.openclawConnectBtn.disabled = true);
+      const status = await window.modelManager.connectOpenclaw?.({});
+      paintOpenclawState(status);
+      appendLocal("assistant", status?.connected ? "已连接 OpenClaw Gateway。" : `连接状态：${status?.state || "unknown"}`);
+    } catch (error) {
+      appendLocal("assistant", `连接 OpenClaw 失败：${error.message}`);
+    } finally {
+      if (els.openclawConnectBtn) els.openclawConnectBtn.disabled = false;
+    }
+  }
+
+  function paintOpenclawState(status) {
+    if (!els.openclawState) return;
+    const state = status?.state || "disconnected";
+    const ver = status?.hello?.serverVersion ? ` · ${status.hello.serverVersion}` : "";
+    els.openclawState.textContent = `OpenClaw: ${state}${ver}`;
+  }
+
+  function showTaskCard(partial = {}) {
+    els.taskCard?.classList.remove("hidden");
+    if (partial.moguTaskId && els.taskId) {
+      activeMoguTaskId = partial.moguTaskId;
+      els.taskId.textContent = partial.moguTaskId;
+    }
+    if (partial.status && els.taskStatus) els.taskStatus.textContent = partial.status;
+    if (partial.streamText != null && els.taskStream) els.taskStream.textContent = partial.streamText;
+    if (partial.error != null && els.taskError) els.taskError.textContent = partial.error || "";
+  }
+
+  function onOpenclawTaskEvent(payload) {
+    if (!payload) return;
+    if (payload.moguTaskId) activeMoguTaskId = payload.moguTaskId;
+    if (payload.streamText) streamBuffer = payload.streamText;
+    else if (payload.kind === "agent_delta" && payload.text) {
+      streamBuffer += payload.text;
+    }
+    showTaskCard({
+      moguTaskId: payload.moguTaskId || activeMoguTaskId,
+      status: payload.status || "running",
+      streamText: streamBuffer,
+      error: payload.error || "",
+    });
+    if (["succeeded", "failed", "cancelled", "timed_out"].includes(payload.status) && streamBuffer) {
+      replaceTempAssistant(streamBuffer);
+      history.push({ role: "assistant", content: streamBuffer });
+    }
+  }
+
+  async function cancelActiveOpenclawTask() {
+    if (!activeMoguTaskId) {
+      appendLocal("assistant", "当前没有可取消的 OpenClaw 任务。");
+      return;
+    }
+    try {
+      const result = await window.modelManager.openclawAbort?.({ moguTaskId: activeMoguTaskId });
+      if (result?.needsConfirmation) {
+        appendLocal("assistant", result.message || "缺少精确 ID，无法安全取消。");
+        return;
+      }
+      showTaskCard({ moguTaskId: activeMoguTaskId, status: result?.ok ? "cancelled" : "failed", error: result?.error || "" });
+      appendLocal("assistant", result?.ok ? "已精确取消当前任务。" : `取消失败：${result?.error || "未知错误"}`);
+    } catch (error) {
+      appendLocal("assistant", `取消失败：${error.message}`);
+    }
+  }
+
+  async function runOpenclawText(text) {
+    appendLocal("user", text);
+    history.push({ role: "user", content: text });
+    streamBuffer = "";
+    showTaskCard({ moguTaskId: "…", status: "queued", streamText: "", error: "" });
+    appendLocal("assistant", "OpenClaw 处理中…", { temp: true });
+    setFormBusy(true);
+    try {
+      const result = await window.modelManager.openclawSend?.({ text });
+      if (result?.usePai) {
+        replaceTempAssistant(`${result.message}\n\n已按策略切换到 PAI（请求尚未被 Gateway 接受）。`);
+        if (window.ButlerUI?.runCommand) {
+          await window.ButlerUI.runCommand(text);
+        }
+        return;
+      }
+      if (result?.accepted === false && result?.ok === false && result?.reason === "gateway_accepted_no_auto_fallback") {
+        replaceTempAssistant(result.message || "等待超时；请求已接受，不会降级重发。");
+        showTaskCard({
+          moguTaskId: result.moguTaskId,
+          status: "timed_out",
+          error: result.message || "",
+        });
+        return;
+      }
+      if (result?.ok === false && result?.accepted) {
+        replaceTempAssistant(result.message || "Gateway 已接受但未完成；可查询/重连/取消，不会自动重发。");
+        showTaskCard({
+          moguTaskId: result.moguTaskId,
+          status: "timed_out",
+          error: result.message || "",
+        });
+        return;
+      }
+      if (result?.moguTaskId) {
+        showTaskCard({
+          moguTaskId: result.moguTaskId,
+          status: "running",
+          streamText: streamBuffer,
+        });
+      }
+      // Stream/final text arrives via openclaw-task events.
+    } catch (error) {
+      replaceTempAssistant(`OpenClaw 失败：${error.message}`);
+      showTaskCard({
+        moguTaskId: activeMoguTaskId || "—",
+        status: "failed",
+        error: error.message,
+      });
+    } finally {
+      setFormBusy(false);
+      els.input?.focus();
+    }
+  }
+
   async function runAgentText(text) {
     const kind = classify(text);
     if (kind === "help") {
       await answerWithBrain(text);
+      return;
+    }
+
+    if (runtimeMode === "openclaw") {
+      await runOpenclawText(text);
+      await refreshStatus();
       return;
     }
 
@@ -393,6 +561,14 @@ const AgentPanel = (() => {
   async function refreshStatus() {
     try {
       const settings = await window.modelManager.getSettings();
+      runtimeMode = settings.agentRuntimeMode === "openclaw" ? "openclaw" : "pai";
+      if (els.runtimeMode && els.runtimeMode.value !== runtimeMode) {
+        els.runtimeMode.value = runtimeMode;
+      }
+
+      const oc = settings.openclaw || (await window.modelManager.getOpenclawStatus?.());
+      paintOpenclawState(oc);
+
       const brain =
         settings.agentBrainChannel === "api"
           ? `联网 · ${settings.agentApiModel || "API"}`
@@ -400,13 +576,22 @@ const AgentPanel = (() => {
             ? `本机 · ${settings.agentLocalModel || "Ollama"}`
             : "内置教程";
 
+      if (runtimeMode === "openclaw") {
+        if (oc?.connected) {
+          setStatus("online", `OpenClaw 就绪 · 引导：${brain}`);
+        } else {
+          setStatus("stopped", `OpenClaw ${oc?.state || "未连接"} · 引导：${brain}`);
+        }
+        return;
+      }
+
       const status = await window.modelManager.getPaiStatus();
       if (!status.installed) {
         setStatus("offline", `引导：${brain} · PAI 未就绪（问用法仍可用）`);
         return;
       }
       if (status.running) {
-        setStatus("online", `Agent 就绪 · 引导：${brain}`);
+        setStatus("online", `PAI 就绪 · 引导：${brain}`);
         return;
       }
       setStatus("stopped", `引导：${brain} · PAI 未运行（发指令会自动连）`);

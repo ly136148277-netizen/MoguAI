@@ -50,6 +50,7 @@ const {
   decideFallback,
   idMap,
   DEFAULT_GATEWAY_URL,
+  AgentRunService,
 } = require("./openclaw");
 const { TaskStore } = require("./task-store");
 const { scanLocalEnvironment, applyComfyUiToPai } = require("./env-scan");
@@ -81,6 +82,7 @@ let appUpdater = null;
 let studioStore = null;
 let taskStore = null;
 let openclawBridge = null;
+let agentRunService = null;
 let allModelsCache = [];
 let promptTemplates = [];
 
@@ -334,8 +336,20 @@ function initServices() {
     logger,
     getToken: async () => (secretStore ? secretStore.get("openclawGatewayToken") : ""),
   });
+  agentRunService = new AgentRunService({
+    bridge: openclawBridge,
+    taskStore,
+    getSettings: () => settingsStore.load(),
+    logger,
+    emitToRenderer: sendToRenderer,
+  });
+  agentRunService.bindEvents();
   openclawBridge.on("state", (status) => sendToRenderer("openclaw-state", status));
-  openclawBridge.on("event", (evt) => sendToRenderer("openclaw-event", evt));
+  openclawBridge.on("ready", () => {
+    agentRunService.recoverAfterReconnect().catch((error) => {
+      logger?.warn?.("openclaw recover failed", { message: error.message });
+    });
+  });
 
   const promptsPath = path.join(appPath, "config", "prompts.json");
   if (fs.pathExistsSync(promptsPath)) {
@@ -1101,6 +1115,57 @@ function registerIpcHandlers() {
       requestAcceptedByGateway: payload?.requestAcceptedByGateway === true,
       waitTimedOut: payload?.waitTimedOut === true,
     });
+  });
+
+  ipcMain.handle("openclaw:session-create", async (_event, payload = {}) => {
+    return agentRunService.sessionCreate(payload || {});
+  });
+
+  ipcMain.handle("openclaw:send", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    // Dual-track guard: only allow PAI fallback before Gateway accepts.
+    if (openclawBridge.state !== "ready" && settings.openclawFallbackToPai !== false) {
+      const decision = decideFallback({
+        bridgeState: openclawBridge.state,
+        openclawEnabled: settings.openclawEnabled === true || settings.agentRuntimeMode === "openclaw",
+        fallbackToPai: settings.openclawFallbackToPai !== false,
+        requestAcceptedByGateway: false,
+        waitTimedOut: false,
+      });
+      if (decision.usePai) {
+        return {
+          ok: false,
+          usePai: true,
+          reason: decision.reason,
+          message: decision.message,
+          accepted: false,
+        };
+      }
+    }
+    try {
+      return await agentRunService.send({
+        text: payload?.text || payload?.message || "",
+        sessionKey: payload?.sessionKey || null,
+        name: payload?.name || null,
+      });
+    } catch (error) {
+      if (error.accepted) {
+        return {
+          ok: false,
+          accepted: true,
+          usePai: false,
+          moguTaskId: error.moguTaskId || null,
+          reason: error.code || "gateway_accepted_no_auto_fallback",
+          message: error.message,
+          fallback: error.fallback || null,
+        };
+      }
+      throw error;
+    }
+  });
+
+  ipcMain.handle("openclaw:abort", async (_event, payload = {}) => {
+    return agentRunService.abort(payload || {});
   });
 
   ipcMain.handle("tasks:list", async (_event, payload = {}) => {

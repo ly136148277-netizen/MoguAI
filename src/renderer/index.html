@@ -241,6 +241,25 @@
               <span id="agent-status-dot" class="butler-status__dot"></span>
               <span id="agent-status-text">打字即可办事或提问</span>
             </div>
+            <div class="agent-runtime" id="agent-runtime-bar">
+              <label class="agent-runtime__label">运行时</label>
+              <select id="agent-runtime-mode" class="agent-runtime__select" title="Agent 运行时">
+                <option value="openclaw">OpenClaw（主推）</option>
+                <option value="pai">PAI（兼容）</option>
+              </select>
+              <span id="agent-openclaw-state" class="agent-runtime__state">OpenClaw: —</span>
+              <button type="button" class="btn btn--ghost btn--tiny" id="agent-openclaw-connect-btn">连接</button>
+            </div>
+            <div id="agent-task-card" class="agent-task-card hidden">
+              <div class="agent-task-card__row">
+                <strong>任务</strong>
+                <span id="agent-task-id" class="agent-task-card__mono">—</span>
+                <span id="agent-task-status" class="agent-task-card__badge">idle</span>
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-task-cancel-btn">取消</button>
+              </div>
+              <div id="agent-task-stream" class="agent-task-card__stream"></div>
+              <div id="agent-task-error" class="agent-task-card__error"></div>
+            </div>
             <div class="agent-toolbar">
               <div class="agent-toolbar__cmds">
                 <button type="button" class="btn btn--primary btn--tiny" data-agent-cmd="打开 ComfyUI">打开 ComfyUI</button>
