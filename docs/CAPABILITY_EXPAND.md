@@ -23,3 +23,8 @@
 ## 大脑工具表
 
 `BRAIN_TOOLS` 由 `registry` 的 ops 生成，与 SkillRuntime 对齐（含 `cancel` / `import` / `trajectory` 等）。
+
+## P0 打磨（编程审阅 + 大脑记忆）
+
+- 编程任务卡：文件列表 / diff / 确认提交 / 跑测试；`status` 带可复制安装命令
+- 大脑：开聊前自动 `memory.recall`；长对话摘要压缩；步骤条 `agent-brain-steps`

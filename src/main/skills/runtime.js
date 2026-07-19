@@ -35,6 +35,7 @@ const READ_OPS = new Set([
   "open",
   "remember",
   "forget",
+  "review",
 ]);
 const SKIP_TASK_OPS = new Set([
   "list",
@@ -49,6 +50,8 @@ const SKIP_TASK_OPS = new Set([
   "open",
   "remember",
   "forget",
+  "review",
+  "verify",
 ]);
 
 class SkillRuntime {

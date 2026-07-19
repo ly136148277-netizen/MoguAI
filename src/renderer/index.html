@@ -280,6 +280,7 @@
               <button type="button" class="btn btn--ghost btn--tiny" id="agent-openclaw-connect-btn">连接</button>
               <button type="button" class="btn btn--primary btn--tiny hidden" id="agent-openclaw-install-btn" title="打开 OpenClaw 官方安装文档">请安装 OpenClaw</button>
             </div>
+            <div id="agent-brain-steps" class="agent-brain-steps hidden" aria-live="polite"></div>
             <div id="agent-task-card" class="agent-task-card hidden">
               <div class="agent-task-card__row">
                 <strong>任务</strong>
@@ -289,7 +290,25 @@
               </div>
               <div id="agent-task-stream" class="agent-task-card__stream"></div>
               <div id="agent-task-error" class="agent-task-card__error"></div>
+              <div id="agent-coding-review" class="agent-coding-review hidden">
+                <div class="agent-coding-review__head">
+                  <strong>改动审阅</strong>
+                  <span id="agent-coding-file-count" class="agent-task-card__mono"></span>
+                </div>
+                <pre id="agent-coding-files" class="agent-coding-review__files"></pre>
+                <details id="agent-coding-diff-details" class="agent-coding-review__diff">
+                  <summary>查看 diff</summary>
+                  <pre id="agent-coding-diff"></pre>
+                </details>
+                <label class="agent-coding-review__msg">
+                  提交说明
+                  <input id="agent-coding-commit-msg" type="text" spellcheck="false" placeholder="chore: …" />
+                </label>
+              </div>
               <div class="agent-task-card__row agent-task-card__coding hidden" id="agent-coding-actions">
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-coding-refresh-review">刷新改动</button>
+                <button type="button" class="btn btn--primary btn--tiny" id="agent-coding-commit-btn">确认提交</button>
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-coding-verify-btn">跑测试</button>
                 <button type="button" class="btn btn--primary btn--tiny" id="agent-coding-retry-other">换引擎重试</button>
               </div>
             </div>

@@ -100,7 +100,9 @@ function probeCodex(settings = {}) {
       version: null,
       path: null,
       vendorRepo: fs.pathExistsSync(vendor.codexRepo) ? vendor.codexRepo : null,
-      message: "未找到 Codex CLI。可安装：npm i -g @openai/codex，或设置 codingCodexPath。",
+      message:
+        "未找到 Codex CLI。可复制：npm i -g @openai/codex  或在设置填写 codingCodexPath。",
+      fixCommands: ["npm i -g @openai/codex", "codex --version"],
     };
   }
   const probed = runCapture(launch.command, [...launch.argsPrefix, "--version"], {
@@ -119,6 +121,10 @@ function probeCodex(settings = {}) {
     path: launch.label,
     vendorRepo: fs.pathExistsSync(vendor.codexRepo) ? vendor.codexRepo : null,
     message: probed.ok || versionLine ? "就绪" : probed.stderr || probed.error || "探测失败",
+    fixCommands:
+      probed.ok || versionLine
+        ? []
+        : ["npm i -g @openai/codex", "codex --version", "检查 PATH 或设置 codingCodexPath"],
   };
 }
 
@@ -133,7 +139,12 @@ function probeTrae(settings = {}) {
       path: null,
       vendorRepo: fs.pathExistsSync(vendor.traeRepo) ? vendor.traeRepo : null,
       message:
-        "未找到 trae-cli。请在 D:\\Project\\vendor\\trae-agent 执行 uv sync，或设置 codingTraePath。",
+        "未找到 trae-cli。可复制：在 vendor\\trae-agent 执行 uv sync，或设置 codingTraePath。",
+      fixCommands: [
+        "cd /d D:\\Project\\vendor\\trae-agent",
+        "uv sync",
+        "uv run trae-cli --help",
+      ],
     };
   }
   const probed = runCapture(launch.command, [...launch.argsPrefix, "--help"], {
@@ -149,6 +160,13 @@ function probeTrae(settings = {}) {
     path: launch.label,
     vendorRepo: fs.pathExistsSync(vendor.traeRepo) ? vendor.traeRepo : null,
     message: ok ? "就绪" : probed.stderr || probed.error || "探测失败（可能未 uv sync）",
+    fixCommands: ok
+      ? []
+      : [
+          `cd /d ${vendor.traeRepo}`,
+          "uv sync",
+          "uv run trae-cli --help",
+        ],
   };
 }
 

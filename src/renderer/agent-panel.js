@@ -14,9 +14,10 @@ const AgentPanel = (() => {
   let streamBuffer = "";
   let unsubOpenclawTask = null;
   let unsubOpenclawState = null;
-  /** @type {{ prompt: string, engine: string, workspace?: string, moguTaskId?: string }|null} */
+  /** @type {{ prompt: string, engine: string, workspace?: string, moguTaskId?: string, suggestedCommitMessage?: string }|null} */
   let lastCodingRetry = null;
   let brainBannerDismissed = false;
+  let lastCodingReview = null;
 
   const CMD_RE =
     /^(打开|列出|备份|删除|删掉|搜索|搜\s|抓取|出片|开始|同步|运行|启动|关闭|导入|下载|恢复|确认|移动|复制|写入|识别|检测|帮我打开|帮我删|帮我搜|请打开|请删除|请备份)/i;
@@ -108,6 +109,15 @@ const AgentPanel = (() => {
     els.taskCancelBtn = document.getElementById("agent-task-cancel-btn");
     els.codingActions = document.getElementById("agent-coding-actions");
     els.codingRetryOther = document.getElementById("agent-coding-retry-other");
+    els.codingReview = document.getElementById("agent-coding-review");
+    els.codingFiles = document.getElementById("agent-coding-files");
+    els.codingFileCount = document.getElementById("agent-coding-file-count");
+    els.codingDiff = document.getElementById("agent-coding-diff");
+    els.codingCommitMsg = document.getElementById("agent-coding-commit-msg");
+    els.codingCommitBtn = document.getElementById("agent-coding-commit-btn");
+    els.codingVerifyBtn = document.getElementById("agent-coding-verify-btn");
+    els.codingRefreshReview = document.getElementById("agent-coding-refresh-review");
+    els.brainSteps = document.getElementById("agent-brain-steps");
     els.brainBanner = document.getElementById("agent-brain-banner");
     els.brainBannerText = document.getElementById("agent-brain-banner-text");
     els.brainGotoApi = document.getElementById("agent-brain-goto-api");
@@ -137,6 +147,9 @@ const AgentPanel = (() => {
     els.openclawInstallBtn?.addEventListener("click", openOpenclawInstallGuide);
     els.taskCancelBtn?.addEventListener("click", cancelActiveOpenclawTask);
     els.codingRetryOther?.addEventListener("click", retryCodingOtherEngine);
+    els.codingCommitBtn?.addEventListener("click", commitCodingChanges);
+    els.codingVerifyBtn?.addEventListener("click", verifyCodingWorkspace);
+    els.codingRefreshReview?.addEventListener("click", refreshCodingReview);
     els.brainGotoApi?.addEventListener("click", () => openBrainSettings("api"));
     els.brainGotoLocal?.addEventListener("click", () => openBrainSettings("local"));
     els.brainBannerDismiss?.addEventListener("click", () => {
@@ -543,6 +556,84 @@ const AgentPanel = (() => {
     if (partial.status && els.taskStatus) els.taskStatus.textContent = partial.status;
     if (partial.streamText != null && els.taskStream) els.taskStream.textContent = partial.streamText;
     if (partial.error != null && els.taskError) els.taskError.textContent = partial.error || "";
+    if (partial.review) paintCodingReview(partial.review, partial.suggestedCommitMessage);
+  }
+
+  function paintBrainSteps(steps = [], runningTool = null) {
+    if (!els.brainSteps) return;
+    if (!steps.length && !runningTool) {
+      els.brainSteps.classList.add("hidden");
+      els.brainSteps.innerHTML = "";
+      return;
+    }
+    els.brainSteps.classList.remove("hidden");
+    const chips = steps.map((s) => {
+      const label = `${s.tool}.${s.op || "run"}`;
+      const cls = s.ok === false ? "is-fail" : "is-ok";
+      return `<span class="agent-brain-steps__item ${cls}">${escapeHtml(label)}</span>`;
+    });
+    if (runningTool) {
+      chips.push(
+        `<span class="agent-brain-steps__item is-run">调用 ${escapeHtml(runningTool)}…</span>`
+      );
+    }
+    els.brainSteps.innerHTML = chips.join("");
+  }
+
+  function paintCodingReview(review, suggestedMessage = "") {
+    lastCodingReview = review || null;
+    if (!els.codingReview) return;
+    if (!review || (!review.fileCount && !review.files?.length && !review.diff)) {
+      els.codingReview.classList.add("hidden");
+      return;
+    }
+    els.codingReview.classList.remove("hidden");
+    const files = Array.isArray(review.files) ? review.files : [];
+    if (els.codingFileCount) {
+      els.codingFileCount.textContent = review.git === false ? "非 Git" : `${files.length} 文件`;
+    }
+    if (els.codingFiles) {
+      els.codingFiles.textContent =
+        files.length > 0
+          ? files.map((f) => `${f.status || "?"} ${f.path}`).join("\n")
+          : review.summary || "无文件列表";
+    }
+    if (els.codingDiff) {
+      els.codingDiff.textContent = review.diff || review.summary || "（无 diff）";
+    }
+    if (els.codingCommitMsg && suggestedMessage) {
+      els.codingCommitMsg.value = suggestedMessage;
+    }
+    const canCommit = review.canCommit === true;
+    if (els.codingCommitBtn) els.codingCommitBtn.disabled = !canCommit;
+    els.codingActions?.classList.remove("hidden");
+  }
+
+  function applyCodingResultToCard(result) {
+    if (!result) return;
+    const streamParts = [];
+    if (result.review?.summary) streamParts.push(result.review.summary);
+    else if (result.trajectorySummary) streamParts.push(result.trajectorySummary);
+    else if (result.log) streamParts.push(String(result.log).slice(0, 800));
+    if (result.fixText) streamParts.push(`\n安装提示：\n${result.fixText}`);
+    showTaskCard({
+      moguTaskId: result.moguTaskId || "—",
+      status: result.ok === false ? "failed" : "succeeded",
+      streamText: streamParts.join("\n"),
+      error: result.error || "",
+      review: result.review,
+      suggestedCommitMessage: result.suggestedCommitMessage || "",
+    });
+    if (result.workspace || result.canCommit || result.canRetryOtherEngine || result.ok === false || result.review) {
+      els.codingActions?.classList.remove("hidden");
+    }
+    els.codingRetryOther?.classList.toggle(
+      "hidden",
+      !(result.canRetryOtherEngine || result.ok === false)
+    );
+    if (els.codingCommitBtn) {
+      els.codingCommitBtn.disabled = result.canCommit !== true && result.review?.canCommit !== true;
+    }
   }
 
   function onOpenclawTaskEvent(payload) {
@@ -689,28 +780,32 @@ const AgentPanel = (() => {
       replaceTempAssistant(`⛔ ${result.error || result.message || "权限已拒绝"}`);
       return result;
     }
-    if (result?.moguTaskId || mapped.skillId === "mogu.coding") {
+    if (mapped.skillId === "mogu.coding") {
+      applyCodingResultToCard(result);
+      if (mapped.op === "run" || mapped.op === "retry") {
+        lastCodingRetry = {
+          prompt: mapped.args?.prompt || result?.requestText || "",
+          engine: result?.engine || mapped.args?.engine || "codex",
+          workspace: result?.workspace || mapped.args?.workspace,
+          moguTaskId: result?.moguTaskId,
+          suggestedCommitMessage: result?.suggestedCommitMessage || "",
+        };
+      }
+    } else if (result?.moguTaskId) {
       showTaskCard({
         moguTaskId: result.moguTaskId || "—",
-        status: result.ok === false ? "failed" : result.op === "status" ? "idle" : "succeeded",
-        streamText: result.log || result.trajectorySummary || "",
+        status: result.ok === false ? "failed" : "succeeded",
+        streamText: result.log || "",
         error: result.error || "",
       });
-    }
-    if (mapped.skillId === "mogu.coding" && mapped.op === "run") {
-      lastCodingRetry = {
-        prompt: mapped.args?.prompt || "",
-        engine: result?.engine || mapped.args?.engine || "codex",
-        workspace: result?.workspace || mapped.args?.workspace,
-        moguTaskId: result?.moguTaskId,
-      };
-      els.codingActions?.classList.toggle("hidden", !(result?.canRetryOtherEngine || result?.ok === false));
-    } else {
       els.codingActions?.classList.add("hidden");
+      els.codingReview?.classList.add("hidden");
     }
     replaceTempAssistant(
       result?.ok === false
         ? `Skill 失败：${result.error || result.message || JSON.stringify(result.preflight || {})}${
+            result?.fixText ? `\n\n${result.fixText}` : ""
+          }${
             result?.canRetryOtherEngine ? `\n可点任务卡「换引擎重试」改用 ${result.altEngine || "另一引擎"}。` : ""
           }`
         : `Skill 完成（${mapped.skillId}.${mapped.op}）${result.moguTaskId ? `\n任务 ${result.moguTaskId}` : ""}\n${summarizeSkillResult(result)}`
@@ -739,20 +834,96 @@ const AgentPanel = (() => {
       });
       lastCodingRetry.engine = result?.engine || next;
       lastCodingRetry.moguTaskId = result?.moguTaskId;
-      showTaskCard({
-        moguTaskId: result?.moguTaskId || "—",
-        status: result?.ok === false ? "failed" : "succeeded",
-        streamText: result?.log || "",
-        error: result?.error || "",
-      });
-      els.codingActions?.classList.toggle("hidden", !(result?.canRetryOtherEngine || result?.ok === false));
+      lastCodingRetry.workspace = result?.workspace || lastCodingRetry.workspace;
+      applyCodingResultToCard(result);
       replaceTempAssistant(
         result?.ok === false
-          ? `换引擎重试失败：${result.error || ""}`
+          ? `换引擎重试失败：${result.error || ""}${result?.fixText ? `\n\n${result.fixText}` : ""}`
           : `换引擎重试完成（${result?.engine || next}）\n${summarizeSkillResult(result)}`
       );
     } catch (error) {
       replaceTempAssistant(`换引擎重试异常：${error.message}`);
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function refreshCodingReview() {
+    const workspace = lastCodingRetry?.workspace || lastCodingReview?.workspace;
+    if (!workspace) {
+      appendLocal("assistant", "没有工作区可刷新。请先跑一次编程任务或在设置里填默认工作区。");
+      return;
+    }
+    try {
+      const result = await window.modelManager.invokeSkill({
+        skillId: "mogu.coding",
+        op: "review",
+        args: { workspace, prompt: lastCodingRetry?.prompt || "" },
+      });
+      paintCodingReview(result, result?.suggestedCommitMessage || lastCodingRetry?.suggestedCommitMessage);
+      appendLocal("assistant", result?.ok === false ? `刷新失败：${result.error}` : result.summary || "已刷新改动");
+    } catch (error) {
+      appendLocal("assistant", `刷新失败：${error.message}`);
+    }
+  }
+
+  async function commitCodingChanges() {
+    const workspace = lastCodingRetry?.workspace || lastCodingReview?.workspace;
+    if (!workspace) {
+      appendLocal("assistant", "没有可提交的工作区。");
+      return;
+    }
+    const message =
+      els.codingCommitMsg?.value?.trim() ||
+      lastCodingRetry?.suggestedCommitMessage ||
+      "chore: coding agent changes";
+    if (!window.confirm(`确认提交到 Git？\n\n工作区：${workspace}\n说明：${message}`)) {
+      return;
+    }
+    setFormBusy(true);
+    try {
+      const result = await window.modelManager.invokeSkill({
+        skillId: "mogu.coding",
+        op: "commit",
+        args: { workspace, message },
+      });
+      if (result?.ok === false) {
+        appendLocal("assistant", `提交失败：${result.error || ""}`);
+      } else {
+        appendLocal(
+          "assistant",
+          `已提交 ${result.commit || ""}：${result.message || message}`
+        );
+        await refreshCodingReview();
+      }
+    } catch (error) {
+      appendLocal("assistant", `提交异常：${error.message}`);
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function verifyCodingWorkspace() {
+    const workspace = lastCodingRetry?.workspace || lastCodingReview?.workspace;
+    if (!workspace) {
+      appendLocal("assistant", "没有工作区可跑测试。");
+      return;
+    }
+    setFormBusy(true);
+    appendLocal("assistant", "正在跑测试（默认 npm test）…", { temp: true });
+    try {
+      const result = await window.modelManager.invokeSkill({
+        skillId: "mogu.coding",
+        op: "verify",
+        args: { workspace },
+      });
+      replaceTempAssistant(
+        result?.ok
+          ? `测试通过\n${String(result.log || "").slice(0, 1200)}`
+          : `测试失败：${result?.error || ""}\n${String(result?.log || "").slice(0, 1200)}`
+      );
+    } catch (error) {
+      replaceTempAssistant(`测试异常：${error.message}`);
     } finally {
       setFormBusy(false);
     }
@@ -763,11 +934,21 @@ const AgentPanel = (() => {
     if (result.engines) {
       const c = result.engines.codex;
       const t = result.engines.trae;
-      return [
+      const lines = [
         `Codex: ${c?.installed ? "就绪" : "未安装"} ${c?.version || ""}`,
         `trae-agent: ${t?.installed ? "就绪" : "未安装"} ${t?.message || ""}`,
         result.workspace ? `工作区：${result.workspace}` : "工作区：未设置（设置 → 编程双引擎）",
-      ].join("\n");
+      ];
+      if (result.fixText) lines.push("", result.fixText);
+      else if (result.copyCommands?.length) {
+        lines.push("", "可复制命令：", ...result.copyCommands.map((c) => `  ${c}`));
+      }
+      return lines.join("\n");
+    }
+    if (result.review?.summary) {
+      return `${result.review.summary}${
+        result.canCommit ? "\n可在任务卡查看 diff 并确认提交。" : ""
+      }`;
     }
     if (result.catalog) return `工作流条目：${JSON.stringify(result.catalog).slice(0, 400)}`;
     if (result.log) return String(result.log).slice(0, 800);
@@ -869,16 +1050,36 @@ const AgentPanel = (() => {
     history.push({ role: "user", content: text });
     setFormBusy(true);
     appendLocal("assistant", "大脑调度中…", { temp: true });
+    paintBrainSteps([], "memory");
     let unsub = null;
     try {
       if (window.modelManager.onBrainProgress) {
         unsub = window.modelManager.onBrainProgress((p) => {
-          if (p?.phase === "tool") {
-            showTaskCard({
-              moguTaskId: p.tool || "brain",
-              status: "running",
-              streamText: `调用工具 ${p.tool}…`,
-            });
+          if (p?.phase === "memory") {
+            paintBrainSteps(p.steps || [], "memory");
+            return;
+          }
+          if (p?.phase === "tool" || p?.phase === "tool_done") {
+            paintBrainSteps(p.steps || [], p.phase === "tool" ? p.tool : null);
+            if (p.phase === "tool") {
+              showTaskCard({
+                moguTaskId: p.tool || "brain",
+                status: "running",
+                streamText: `调用工具 ${p.tool}…`,
+              });
+            }
+            if (p.step?.review) {
+              paintCodingReview(p.step.review, p.step.suggestedCommitMessage);
+              if (p.step.workspace) {
+                lastCodingRetry = {
+                  prompt: text,
+                  engine: "codex",
+                  workspace: p.step.workspace,
+                  moguTaskId: p.step.moguTaskId,
+                  suggestedCommitMessage: p.step.suggestedCommitMessage || "",
+                };
+              }
+            }
           }
         });
       }
@@ -887,24 +1088,31 @@ const AgentPanel = (() => {
         history: history.slice(0, -1),
       });
       const steps = result?.steps || [];
+      paintBrainSteps(steps);
       if (steps.length) {
         const last = steps[steps.length - 1];
+        const codingStep = [...steps].reverse().find((s) => s.skillId === "mogu.coding");
         showTaskCard({
           moguTaskId: last.moguTaskId || last.tool || "brain",
-          status: steps.every((s) => s.ok) ? "succeeded" : "failed",
+          status: steps.every((s) => s.ok !== false) ? "succeeded" : "failed",
           streamText: steps
-            .map((s) => `${s.tool}.${s.op} → ${s.ok ? "ok" : s.error || "fail"}`)
+            .map((s) => `${s.tool}.${s.op} → ${s.ok !== false ? "ok" : s.error || "fail"}`)
             .join("\n"),
-          error: steps.find((s) => !s.ok)?.error || "",
+          error: steps.find((s) => s.ok === false)?.error || "",
+          review: codingStep?.review,
+          suggestedCommitMessage: codingStep?.suggestedCommitMessage || "",
         });
-        const codingFail = steps.find((s) => s.skillId === "mogu.coding" && !s.ok);
-        if (codingFail) {
+        if (codingStep) {
           lastCodingRetry = {
             prompt: text,
             engine: "codex",
-            moguTaskId: codingFail.moguTaskId,
+            workspace: codingStep.workspace,
+            moguTaskId: codingStep.moguTaskId,
+            suggestedCommitMessage: codingStep.suggestedCommitMessage || "",
           };
-          els.codingActions?.classList.remove("hidden");
+          if (codingStep.ok === false || codingStep.canCommit) {
+            els.codingActions?.classList.remove("hidden");
+          }
         }
       }
       const reply =
@@ -912,15 +1120,19 @@ const AgentPanel = (() => {
         (steps.length
           ? `已调度 ${steps.length} 个工具步骤。`
           : "大脑未返回内容。请检查 API Key / 模型。");
-      const stamped = `【本次由：大脑】\n${reply}`;
+      const meta = [];
+      if (result?.memoryFacts) meta.push(`记忆 ${result.memoryFacts} 条`);
+      if (result?.historyCompressed) meta.push("已压缩更早对话");
+      const stamped = `【本次由：大脑】${meta.length ? `（${meta.join(" · ")}）` : ""}\n${reply}`;
       replaceTempAssistant(stamped);
       history.push({ role: "assistant", content: reply });
-      if (history.length > 20) history = history.slice(-20);
+      if (history.length > 40) history = history.slice(-40);
       paintExecutorPill("brain");
       window.AppCore?.setStatus?.(
         result?.provider === "api" ? "大脑（API）已调度" : "大脑（本机）已调度"
       );
     } catch (error) {
+      paintBrainSteps([]);
       replaceTempAssistant(
         `大脑调度失败：${error.message}\n\n请到设置确认「大脑通道」为联网 API 或本机模型，并已填写密钥。也可先用「编程状态」等精确指令。`
       );

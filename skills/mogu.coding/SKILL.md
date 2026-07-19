@@ -6,16 +6,19 @@
 - 希望编程任务进入 MOGU 任务中心并可取消
 
 ## 操作
-- `status`：探测双引擎是否安装
+- `status`：探测双引擎是否安装（含可复制安装命令）
 - `preflight`：检查引擎 + 工作区
-- `run`：`{ engine: "codex"|"trae", workspace, prompt, model?, provider? }`
+- `run`：`{ engine: "codex"|"trae", workspace, prompt, model?, provider? }` → 附带 `review`（文件列表/diff）
+- `review`：对工作区做 Git 改动审阅
+- `commit`：`{ workspace, message }` 用户确认后提交
+- `verify`：`{ workspace, command? }` 默认 `npm test`
 - `cancel`：按 `moguTaskId` 终止子进程
 - `retry`：失败后换另一引擎重试（不自动双发）
 - `trajectory`：读取 trae-agent 轨迹摘要
 
 ## 权限
-- `status` / `preflight` / `trajectory`：L1
-- `run` / `retry`：默认 L2（写盘/执行命令）
+- `status` / `preflight` / `trajectory` / `review`：L1
+- `run` / `retry` / `verify` / `commit`：默认 L2
 - `cancel`：L2
 
 ## 环境

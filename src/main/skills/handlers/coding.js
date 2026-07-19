@@ -8,6 +8,13 @@ const {
   summarizeTrajectory,
   buildBrainEnv,
 } = require("../coding-engines");
+const {
+  collectGitReview,
+  suggestCommitMessage,
+  commitWorkspace,
+  runVerify,
+  installFixHints,
+} = require("../coding-review");
 
 function resolveWorkspace(settings, args = {}) {
   const ws =
@@ -26,11 +33,15 @@ function otherEngine(engine) {
 
 async function status({ deps }) {
   const probed = probeAll(deps.settings || {});
+  const fix = installFixHints(probed.engines);
   return {
     ok: true,
     ...probed,
     defaultEngine: deps.settings?.codingDefaultEngine || "codex",
     workspace: deps.settings?.codingWorkspace || "",
+    fixHints: fix.hints,
+    copyCommands: fix.copyCommands,
+    fixText: fix.fixText,
   };
 }
 
@@ -40,9 +51,12 @@ async function preflight({ deps, args }) {
   const engKey = engine === "trae" || engine === "trae-agent" ? "trae" : "codex";
   const issues = [];
   if (!probed.engines[engKey]?.installed) {
+    const fix = installFixHints({ [engKey]: probed.engines[engKey] });
     issues.push({
       code: "engine_missing",
       message: probed.engines[engKey]?.message || `${engKey} 未就绪`,
+      fixCommands: probed.engines[engKey]?.fixCommands || fix.copyCommands,
+      fixText: fix.fixText,
     });
   }
   const workspace = resolveWorkspace(deps.settings, args);
@@ -72,11 +86,14 @@ async function run({ deps, args, task }) {
 
   const pf = await preflight({ deps, args: { ...args, prompt, workspace, engine } });
   if (!pf.ok) {
+    const fixText = pf.issues.map((i) => i.fixText || i.message).filter(Boolean).join("\n\n");
     return {
       ok: false,
       code: "preflight_failed",
       error: pf.issues.map((i) => i.message).join("; "),
       issues: pf.issues,
+      fixText,
+      copyCommands: pf.issues.flatMap((i) => i.fixCommands || []),
     };
   }
 
@@ -97,7 +114,6 @@ async function run({ deps, args, task }) {
     });
   }
 
-  // Prefer MOGU brain key (settings → 加密存储); engines are tools, not a second wallet.
   let apiKey = "";
   try {
     if (typeof deps.getAgentApiKey === "function") {
@@ -151,12 +167,30 @@ async function run({ deps, args, task }) {
     if (traj.ok) trajectorySummary = traj.summary;
   }
 
+  const review = collectGitReview(workspace, {
+    log: result.log || "",
+    trajectorySummary: trajectorySummary || "",
+  });
+  const suggestedCommitMessage = suggestCommitMessage({
+    prompt,
+    files: review.files || [],
+  });
+
   if (deps.taskStore && moguTaskId) {
     await deps.taskStore.update(moguTaskId, {
       status: result.ok ? "succeeded" : "failed",
       errorMessage: result.error || null,
       logSummary: (result.log || "").slice(-4000),
       outputPaths: result.trajectoryFile ? [result.trajectoryFile] : [],
+      replay: {
+        kind: "skill.mogu.coding.run",
+        payload: {
+          engine,
+          workspace,
+          prompt: prompt.slice(0, 2000),
+          suggestedCommitMessage,
+        },
+      },
     });
   }
 
@@ -169,6 +203,9 @@ async function run({ deps, args, task }) {
     log: result.log,
     trajectoryFile: result.trajectoryFile,
     trajectorySummary,
+    review,
+    suggestedCommitMessage,
+    canCommit: Boolean(review?.canCommit),
     error: result.error,
     code: result.code,
     altEngine: otherEngine(engine),
@@ -206,10 +243,43 @@ async function retry({ deps, args, task }) {
   });
 }
 
-async function trajectory({ deps, args }) {
+async function trajectory({ args }) {
   const file = args?.trajectoryFile || args?.path;
   const traj = await summarizeTrajectory(file);
   return { ok: traj.ok, summary: traj.summary, stepCount: traj.stepCount, error: traj.error };
+}
+
+async function review({ deps, args }) {
+  const workspace = resolveWorkspace(deps.settings, args);
+  if (!workspace) return { ok: false, error: "缺少工作区", code: "workspace_missing" };
+  const payload = collectGitReview(workspace, {
+    log: args?.log || "",
+    trajectorySummary: args?.trajectorySummary || "",
+  });
+  return {
+    ...payload,
+    suggestedCommitMessage: suggestCommitMessage({
+      prompt: args?.prompt || "",
+      files: payload.files || [],
+    }),
+  };
+}
+
+async function commit({ deps, args }) {
+  const workspace = resolveWorkspace(deps.settings, args);
+  const message =
+    String(args?.message || args?.commitMessage || "").trim() ||
+    suggestCommitMessage({ prompt: args?.prompt || "", files: [] });
+  const result = commitWorkspace(workspace, message, { addAll: args?.addAll !== false });
+  return { ...result, provenance: true };
+}
+
+async function verify({ deps, args }) {
+  const workspace = resolveWorkspace(deps.settings, args);
+  const command =
+    String(args?.command || args?.cmd || deps.settings?.codingVerifyCommand || "").trim() ||
+    "npm test";
+  return runVerify(workspace, command);
 }
 
 module.exports = {
@@ -220,6 +290,9 @@ module.exports = {
   cancel,
   retry,
   trajectory,
+  review,
+  commit,
+  verify,
   resolveWorkspace,
   otherEngine,
 };

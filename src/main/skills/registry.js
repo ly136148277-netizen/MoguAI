@@ -62,9 +62,9 @@ const SKILL_META = Object.freeze({
   "mogu.coding": {
     id: "mogu.coding",
     title: "编程双引擎",
-    summary: "Codex CLI + trae-agent 统一入口、任务追踪与换引擎重试",
+    summary: "Codex CLI + trae-agent 统一入口、Git 审阅/提交、任务追踪与换引擎重试",
     riskDefault: 2,
-    ops: ["status", "preflight", "run", "cancel", "retry", "trajectory"],
+    ops: ["status", "preflight", "run", "cancel", "retry", "trajectory", "review", "commit", "verify"],
     env: [],
     source: "coding",
   },
@@ -173,6 +173,8 @@ function buildBrainToolsFromRegistry() {
       prompt: { type: "string" },
       model: { type: "string" },
       moguTaskId: { type: "string" },
+      message: { type: "string", description: "git commit 说明（commit 操作用）" },
+      command: { type: "string", description: "verify 命令，默认 npm test" },
     },
     "mogu.search": {
       query: { type: "string", description: "搜索关键词" },

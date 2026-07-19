@@ -59,32 +59,24 @@ describe("agent-brain", () => {
     const skillRuntime = {
       invoke: async (skillId, op, args) => {
         calls.push({ skillId, op, args });
+        if (skillId === "mogu.memory") return { ok: true, facts: [] };
         return { ok: true, skillId, op };
       },
     };
-    const ollama = {
-      chat: async () => ({
-        message: {
-          content: JSON.stringify({
-            tool: "mogu_coding",
-            op: "status",
-            args: {},
-          }),
-        },
-      }),
-    };
     // First round tool, second round reply
     let n = 0;
-    ollama.chat = async () => {
-      n += 1;
-      if (n === 1) {
-        return {
-          message: {
-            content: JSON.stringify({ tool: "mogu_coding", op: "status", args: {} }),
-          },
-        };
-      }
-      return { message: { content: JSON.stringify({ reply: "Codex 已探测完成" }) } };
+    const ollama = {
+      chat: async () => {
+        n += 1;
+        if (n === 1) {
+          return {
+            message: {
+              content: JSON.stringify({ tool: "mogu_coding", op: "status", args: {} }),
+            },
+          };
+        }
+        return { message: { content: JSON.stringify({ reply: "Codex 已探测完成" }) } };
+      },
     };
 
     const result = await runBrainAgent({
@@ -95,8 +87,10 @@ describe("agent-brain", () => {
       maxRounds: 3,
     });
     assert.equal(result.ok, true);
-    assert.equal(calls[0].skillId, "mogu.coding");
-    assert.equal(calls[0].op, "status");
+    assert.ok(calls.some((c) => c.skillId === "mogu.memory" && c.op === "recall"));
+    const coding = calls.find((c) => c.skillId === "mogu.coding");
+    assert.ok(coding);
+    assert.equal(coding.op, "status");
     assert.match(result.content, /探测|完成/);
   });
 });

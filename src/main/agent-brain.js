@@ -20,7 +20,7 @@ const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁
 - mogu_studio：创作台出片预检/运行/重试
 - mogu_ollama：本机模型列表/状态/导入
 - mogu_media：视频合成预检/拼接
-- mogu_coding：编程（Codex / trae-agent），需要 workspace 与 prompt
+- mogu_coding：编程（Codex / trae-agent）；改完可用 review 看文件/diff，commit 需用户确认后调用，verify 跑测试
 - mogu_search：联网搜索实时事实
 - mogu_browser：打开网页或抓取页面正文
 - mogu_memory：记住/回忆跨会话偏好与项目事实
@@ -29,10 +29,10 @@ const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁
 规则：
 1. 用户要办事/改代码/出片/查网/记事 → 立刻调用对应工具。
 2. 纯问答/用法 → 直接用自然语言回答，不调用工具。
-3. 删除等危险操作仍由工具侧权限中心二次确认。
+3. 删除等危险操作仍由工具侧权限中心二次确认；git commit 必须先说明改动再调 commit。
 4. 编程任务：若用户未给路径，用设置中的默认工作区参数（可省略 workspace 让工具用默认值）。
 5. 一次可以串行多轮工具；每步根据工具结果决定下一步或最终回复。
-6. 需要长期记住的偏好/项目事实 → mogu_memory.remember；回答前可先 recall。`;
+6. 系统会注入跨会话记忆；仍可用 mogu_memory.remember 写入新事实。`;
 
 const API_PRESETS = {
   deepseek: {
@@ -79,6 +79,55 @@ function mapToolNameToSkill(name) {
   const n = String(name || "").trim();
   if (n.startsWith("mcp__")) return null;
   return TOOL_TO_SKILL[n] || toolNameToSkillId(n);
+}
+
+async function loadMemoryPreamble(skillRuntime, userText) {
+  if (!skillRuntime?.invoke) return { text: "", facts: [] };
+  try {
+    const result = await skillRuntime.invoke(
+      "mogu.memory",
+      "recall",
+      { query: String(userText || "").slice(0, 240), limit: 5 },
+      { skipPermission: true, skipTask: true, channel: "brain" }
+    );
+    const facts = Array.isArray(result?.facts) ? result.facts : [];
+    if (!facts.length) return { text: "", facts: [] };
+    const lines = facts.map((f) => `- ${f.key}: ${f.value}`);
+    return { text: `【跨会话记忆】\n${lines.join("\n")}`, facts };
+  } catch {
+    return { text: "", facts: [] };
+  }
+}
+
+/**
+ * Keep recent turns; compress older ones into a short digest for longer context.
+ */
+function buildHistoryForBrain(history = [], { keepRecent = 6, maxDigestChars = 1500 } = {}) {
+  const msgs = (Array.isArray(history) ? history : [])
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({ role: m.role, content: String(m.content || "") }));
+  if (msgs.length <= keepRecent + 2) {
+    return { messages: msgs.slice(-(keepRecent + 2)), compressed: false };
+  }
+  const older = msgs.slice(0, -keepRecent);
+  const recent = msgs.slice(-keepRecent);
+  const digest = older
+    .map((m) => `${m.role === "user" ? "用户" : "助手"}: ${m.content.replace(/\s+/g, " ").slice(0, 140)}`)
+    .join("\n")
+    .slice(0, maxDigestChars);
+  return {
+    messages: [
+      { role: "user", content: `（更早对话摘要，供上下文）\n${digest}` },
+      { role: "assistant", content: "已了解此前上下文，继续。" },
+      ...recent,
+    ],
+    compressed: true,
+  };
+}
+
+function buildSystemPrompt(memoryText = "") {
+  if (!memoryText) return AGENT_SYSTEM_PROMPT;
+  return `${AGENT_SYSTEM_PROMPT}\n\n${memoryText}`;
 }
 
 async function chatOpenAiCompatible({
@@ -215,14 +264,33 @@ async function runBrainAgent({
   }
 
   const steps = [];
+  onProgress?.({ phase: "memory", executor: "brain" });
+  const memory = await loadMemoryPreamble(skillRuntime, text);
+  const hist = buildHistoryForBrain(history);
   const messages = [
-    { role: "system", content: AGENT_SYSTEM_PROMPT },
-    ...history
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .slice(-8)
-      .map((m) => ({ role: m.role, content: String(m.content || "") })),
+    { role: "system", content: buildSystemPrompt(memory.text) },
+    ...hist.messages,
     { role: "user", content: text },
   ];
+  if (memory.facts?.length) {
+    steps.push({
+      tool: "mogu_memory",
+      skillId: "mogu.memory",
+      op: "recall",
+      ok: true,
+      moguTaskId: null,
+      error: null,
+      meta: { factCount: memory.facts.length },
+    });
+    onProgress?.({
+      phase: "tool",
+      tool: "mogu_memory",
+      args: { op: "recall" },
+      round: 0,
+      executor: "brain",
+      steps,
+    });
+  }
 
   if (channel === "local") {
     return runLocalBrainJson({
@@ -233,6 +301,7 @@ async function runBrainAgent({
       steps,
       maxRounds,
       onProgress,
+      memoryCompressed: hist.compressed,
     });
   }
 
@@ -261,6 +330,8 @@ async function runBrainAgent({
         steps,
         mode: "brain",
         executor: "brain",
+        historyCompressed: hist.compressed,
+        memoryFacts: memory.facts?.length || 0,
       };
     }
 
@@ -278,16 +349,22 @@ async function runBrainAgent({
       } catch {
         args = {};
       }
-      onProgress?.({ phase: "tool", tool: name, args, round, executor: "brain" });
+      onProgress?.({ phase: "tool", tool: name, args, round, executor: "brain", steps });
       const result = await invokeMappedTool(skillRuntime, name, args, "brain", settings);
-      steps.push({
+      const step = {
         tool: name,
         skillId: mapToolNameToSkill(name),
         op: args.op || (String(name).startsWith("mcp__") ? "call" : "run"),
         ok: result?.ok !== false,
         moguTaskId: result?.moguTaskId || null,
         error: result?.error || null,
-      });
+        review: result?.review || null,
+        suggestedCommitMessage: result?.suggestedCommitMessage || null,
+        canCommit: result?.canCommit === true,
+        workspace: result?.workspace || null,
+      };
+      steps.push(step);
+      onProgress?.({ phase: "tool_done", tool: name, step, steps, round, executor: "brain" });
       messages.push({
         role: "tool",
         tool_call_id: call.id || `call_${round}_${name}`,
@@ -307,6 +384,8 @@ async function runBrainAgent({
     mode: "brain",
     executor: "brain",
     truncated: true,
+    historyCompressed: hist.compressed,
+    memoryFacts: memory.facts?.length || 0,
   };
 }
 
@@ -318,6 +397,7 @@ async function runLocalBrainJson({
   steps,
   maxRounds,
   onProgress,
+  memoryCompressed = false,
 }) {
   const modelName = String(settings.agentLocalModel || "").trim();
   if (!modelName) throw new Error("请先在设置里选择本地 Ollama 模型");
@@ -348,6 +428,7 @@ async function runLocalBrainJson({
         steps,
         mode: "brain",
         executor: "brain",
+        historyCompressed: memoryCompressed,
       };
     }
     if (parsed.reply && !parsed.tool) {
@@ -359,6 +440,7 @@ async function runLocalBrainJson({
         steps,
         mode: "brain",
         executor: "brain",
+        historyCompressed: memoryCompressed,
       };
     }
     if (!parsed.tool) {
@@ -370,19 +452,26 @@ async function runLocalBrainJson({
         steps,
         mode: "brain",
         executor: "brain",
+        historyCompressed: memoryCompressed,
       };
     }
     const args = { ...(parsed.args || {}), op: parsed.op || parsed.args?.op || "run" };
-    onProgress?.({ phase: "tool", tool: parsed.tool, args, round, executor: "brain" });
+    onProgress?.({ phase: "tool", tool: parsed.tool, args, round, executor: "brain", steps });
     const toolResult = await invokeMappedTool(skillRuntime, parsed.tool, args, "brain", settings);
-    steps.push({
+    const step = {
       tool: parsed.tool,
       skillId: mapToolNameToSkill(parsed.tool),
       op: args.op,
       ok: toolResult?.ok !== false,
       moguTaskId: toolResult?.moguTaskId || null,
       error: toolResult?.error || null,
-    });
+      review: toolResult?.review || null,
+      suggestedCommitMessage: toolResult?.suggestedCommitMessage || null,
+      canCommit: toolResult?.canCommit === true,
+      workspace: toolResult?.workspace || null,
+    };
+    steps.push(step);
+    onProgress?.({ phase: "tool_done", tool: parsed.tool, step, steps, round, executor: "brain" });
     messages.push({ role: "assistant", content });
     messages.push({
       role: "user",
@@ -399,6 +488,7 @@ async function runLocalBrainJson({
     mode: "brain",
     executor: "brain",
     truncated: true,
+    historyCompressed: memoryCompressed,
   };
 }
 
@@ -482,6 +572,9 @@ module.exports = {
   mapToolNameToSkill,
   invokeMappedTool,
   resolveBrainTools,
+  loadMemoryPreamble,
+  buildHistoryForBrain,
+  buildSystemPrompt,
   testBrain,
   normalizeBaseUrl,
   extractJsonObject,
