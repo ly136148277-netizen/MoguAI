@@ -43,6 +43,27 @@
       "version": "2.1.0",
       "bundled": true,
       "description": "Codex CLI + trae-agent 统一编程入口"
+    },
+    {
+      "id": "mogu.search",
+      "title": "联网搜索",
+      "version": "2.1.0",
+      "bundled": true,
+      "description": "DuckDuckGo 搜索（无需单独 Key）"
+    },
+    {
+      "id": "mogu.browser",
+      "title": "浏览器",
+      "version": "2.1.0",
+      "bundled": true,
+      "description": "打开网页 / 抓取正文 / 可选 Playwright"
+    },
+    {
+      "id": "mogu.memory",
+      "title": "长期记忆",
+      "version": "2.1.0",
+      "bundled": true,
+      "description": "跨会话本地记忆（偏好与事实）"
     }
   ]
 }

@@ -270,10 +270,11 @@
               <span id="agent-status-text">打字即可办事或提问</span>
             </div>
             <div class="agent-runtime" id="agent-runtime-bar">
-              <label class="agent-runtime__label">运行时</label>
-              <select id="agent-runtime-mode" class="agent-runtime__select" title="Agent 运行时">
-                <option value="openclaw">OpenClaw（主推）</option>
-                <option value="pai">PAI（兼容）</option>
+              <span id="agent-executor-pill" class="agent-executor-pill" title="下一条消息由谁执行">本次由：—</span>
+              <label class="agent-runtime__label">兜底通道</label>
+              <select id="agent-runtime-mode" class="agent-runtime__select" title="大脑未就绪时的兜底：OpenClaw 或 PAI">
+                <option value="openclaw">OpenClaw（渠道/兜底）</option>
+                <option value="pai">PAI（兼容兜底）</option>
               </select>
               <span id="agent-openclaw-state" class="agent-runtime__state">OpenClaw: —</span>
               <button type="button" class="btn btn--ghost btn--tiny" id="agent-openclaw-connect-btn">连接</button>
@@ -1292,16 +1293,26 @@
             <input id="setting-openclaw-fallback" name="openclawFallbackToPai" type="checkbox" />
             Gateway 未接受请求前可降级 PAI（已接受后禁止重发）
           </label>
-          <label>Agent 默认运行时
+          <label>兜底通道（大脑未配置时）
             <select id="setting-agent-runtime" name="agentRuntimeMode">
-              <option value="openclaw">OpenClaw（主推）</option>
-              <option value="pai">PAI（兼容）</option>
+              <option value="openclaw">OpenClaw（渠道/兜底）</option>
+              <option value="pai">PAI（兼容兜底）</option>
             </select>
           </label>
+          <p class="settings-section-hint">已配置大脑（API/本机）时，对话优先由大脑调度 Skills；OpenClaw/PAI 仅作兜底与外部渠道。</p>
           <label>Gateway Token（仅主进程安全存储）
             <input id="setting-openclaw-token" name="openclawGatewayToken" type="password" autocomplete="off" placeholder="留空则保持不变" />
           </label>
           <p id="setting-openclaw-token-hint" class="settings-section-hint"></p>
+          <h3 class="settings-section-title">MCP 工具（给大脑用）</h3>
+          <p class="settings-section-hint">
+            填写 JSON 数组。每项：id / label / command / args / enabled。大脑会暴露为 <code>mcp__{id}__{tool}</code>。
+            示例：<code>[{"id":"time","label":"Time","command":"npx","args":["-y","@modelcontextprotocol/server-everything"],"enabled":false}]</code>
+          </p>
+          <label>MCP servers（JSON）
+            <textarea id="setting-mcp-servers" name="mcpServersJson" rows="5" spellcheck="false" placeholder="[]"></textarea>
+          </label>
+          <p id="setting-mcp-hint" class="settings-section-hint"></p>
           <h3 class="settings-section-title">编程工具（Codex + trae-agent）</h3>
           <p class="settings-section-hint">
             只是工具：复用上方大脑 API Key / Base URL，无需再填密钥。在此设置工作区与默认引擎即可。对话：`编程状态` / `编程: …`。详见 docs/CODING_BRIDGE.md。

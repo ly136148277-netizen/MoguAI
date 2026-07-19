@@ -69,6 +69,8 @@ const settingCodingCodexPathEl = document.getElementById("setting-coding-codex-p
 const settingCodingTraePathEl = document.getElementById("setting-coding-trae-path");
 const settingCodingModelEl = document.getElementById("setting-coding-model");
 const settingCodingProviderEl = document.getElementById("setting-coding-provider");
+const settingMcpServersEl = document.getElementById("setting-mcp-servers");
+const settingMcpHintEl = document.getElementById("setting-mcp-hint");
 
 const AGENT_API_PRESETS = {
   deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
@@ -386,6 +388,17 @@ async function loadSettingsForm() {
   }
   if (settingCodingProviderEl) {
     settingCodingProviderEl.value = settings.codingProvider || "";
+  }
+  if (settingMcpServersEl) {
+    try {
+      settingMcpServersEl.value = JSON.stringify(settings.mcpServers || [], null, 2);
+      if (settingMcpHintEl) {
+        const n = Array.isArray(settings.mcpServers) ? settings.mcpServers.length : 0;
+        settingMcpHintEl.textContent = n ? `已配置 ${n} 个 MCP server` : "尚未配置 MCP server";
+      }
+    } catch {
+      settingMcpServersEl.value = "[]";
+    }
   }
   if (settingAgentChannelEl) {
     settingAgentChannelEl.value = settings.agentBrainChannel || "builtin";
@@ -929,6 +942,16 @@ settingsFormEl.addEventListener("submit", async (event) => {
     codingModel: settingCodingModelEl?.value?.trim() || "",
     codingProvider: settingCodingProviderEl?.value?.trim() || "",
   };
+  if (settingMcpServersEl) {
+    try {
+      const parsed = JSON.parse(settingMcpServersEl.value || "[]");
+      if (!Array.isArray(parsed)) throw new Error("MCP servers 必须是 JSON 数组");
+      settingsPayload.mcpServers = parsed;
+    } catch (error) {
+      setStatus(`MCP JSON 无效：${error.message}`);
+      return;
+    }
+  }
   const apiKeyInput = settingAgentApiKeyEl?.value?.trim() || "";
   if (apiKeyInput) {
     settingsPayload.agentApiKey = apiKeyInput;

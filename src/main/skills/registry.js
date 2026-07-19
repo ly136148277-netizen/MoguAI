@@ -8,6 +8,9 @@ const SKILL_IDS = Object.freeze([
   "mogu.pc",
   "mogu.media",
   "mogu.coding",
+  "mogu.search",
+  "mogu.browser",
+  "mogu.memory",
 ]);
 
 const SKILL_META = Object.freeze({
@@ -65,6 +68,33 @@ const SKILL_META = Object.freeze({
     env: [],
     source: "coding",
   },
+  "mogu.search": {
+    id: "mogu.search",
+    title: "联网搜索",
+    summary: "DuckDuckGo 即时答案与相关结果（无需单独 Key）",
+    riskDefault: 1,
+    ops: ["status", "preflight", "query", "run"],
+    env: ["network"],
+    source: "search",
+  },
+  "mogu.browser": {
+    id: "mogu.browser",
+    title: "浏览器",
+    summary: "打开网页、抓取正文；可选本机 Playwright",
+    riskDefault: 2,
+    ops: ["status", "preflight", "open", "fetch", "run"],
+    env: [],
+    source: "browser",
+  },
+  "mogu.memory": {
+    id: "mogu.memory",
+    title: "长期记忆",
+    summary: "跨会话记住偏好与项目事实（本地 JSON）",
+    riskDefault: 1,
+    ops: ["status", "preflight", "remember", "recall", "list", "forget"],
+    env: [],
+    source: "memory",
+  },
 });
 
 function resolveSkillsRoot() {
@@ -114,6 +144,83 @@ function getSkillDef(skillId) {
   return SKILL_META[skillId] || null;
 }
 
+function skillIdToToolName(skillId) {
+  return String(skillId || "").replace(/\./g, "_");
+}
+
+function toolNameToSkillId(toolName) {
+  const name = String(toolName || "").trim();
+  if (name.startsWith("mcp__")) return null;
+  return name.replace(/_/g, ".");
+}
+
+/** OpenAI tool schemas aligned with registry ops (+ skill-specific args). */
+function buildBrainToolsFromRegistry() {
+  const extraProps = {
+    "mogu.pc": {
+      command: { type: "string", description: "完整中文命令" },
+      app: { type: "string" },
+      query: { type: "string" },
+    },
+    "mogu.comfy": {
+      command: { type: "string" },
+      workflowId: { type: "string" },
+      promptId: { type: "string" },
+    },
+    "mogu.coding": {
+      engine: { type: "string", enum: ["codex", "trae"] },
+      workspace: { type: "string" },
+      prompt: { type: "string" },
+      model: { type: "string" },
+      moguTaskId: { type: "string" },
+    },
+    "mogu.search": {
+      query: { type: "string", description: "搜索关键词" },
+      limit: { type: "number" },
+    },
+    "mogu.browser": {
+      url: { type: "string" },
+      engine: { type: "string", enum: ["fetch", "open", "playwright"] },
+      maxChars: { type: "number" },
+    },
+    "mogu.memory": {
+      key: { type: "string" },
+      value: { type: "string" },
+      query: { type: "string" },
+      id: { type: "string" },
+      tags: { type: "string" },
+      limit: { type: "number" },
+    },
+    "mogu.ollama": {
+      modelPath: { type: "string" },
+      name: { type: "string" },
+    },
+    "mogu.media": {
+      inputs: { type: "array", items: { type: "string" } },
+      output: { type: "string" },
+    },
+  };
+
+  return SKILL_IDS.map((id) => {
+    const def = SKILL_META[id];
+    return {
+      type: "function",
+      function: {
+        name: skillIdToToolName(id),
+        description: `${def.title}：${def.summary}。ops=${def.ops.join("|")}`,
+        parameters: {
+          type: "object",
+          properties: {
+            op: { type: "string", enum: [...def.ops] },
+            ...(extraProps[id] || {}),
+          },
+          required: ["op"],
+        },
+      },
+    };
+  });
+}
+
 module.exports = {
   SKILL_IDS,
   SKILL_META,
@@ -123,4 +230,7 @@ module.exports = {
   mergeEnabled,
   listSkillDefs,
   getSkillDef,
+  skillIdToToolName,
+  toolNameToSkillId,
+  buildBrainToolsFromRegistry,
 };

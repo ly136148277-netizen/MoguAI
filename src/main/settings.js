@@ -45,6 +45,9 @@ const DEFAULT_SETTINGS = {
     "mogu.pc": true,
     "mogu.media": true,
     "mogu.coding": true,
+    "mogu.search": true,
+    "mogu.browser": true,
+    "mogu.memory": true,
   },
   /** Coding bridge (Codex CLI + trae-agent) */
   codingDefaultEngine: "codex",
@@ -55,6 +58,13 @@ const DEFAULT_SETTINGS = {
   codingModel: "",
   codingProvider: "",
   codingSandbox: "",
+  /** Optional Playwright package root for mogu.browser */
+  browserPlaywrightPath: "",
+  /**
+   * MCP stdio servers exposed to the brain as mcp__{id}__{tool} tools.
+   * Example: [{ id: "fs", label: "Filesystem", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "D:\\\\"], enabled: true }]
+   */
+  mcpServers: [],
 };
 
 class SettingsStore {

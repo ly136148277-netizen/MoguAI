@@ -34,7 +34,10 @@ describe("agent-brain", () => {
   it("maps tool names to skills and exposes brain tools", () => {
     assert.equal(mapToolNameToSkill("mogu_coding"), "mogu.coding");
     assert.equal(mapToolNameToSkill("mogu_pc"), "mogu.pc");
-    assert.ok(BRAIN_TOOLS.length >= 5);
+    assert.equal(mapToolNameToSkill("mogu_search"), "mogu.search");
+    assert.ok(BRAIN_TOOLS.length >= 9);
+    const comfy = BRAIN_TOOLS.find((t) => t.function.name === "mogu_comfy");
+    assert.ok(comfy.function.parameters.properties.op.enum.includes("cancel"));
   });
 
   it("extractJsonObject parses fenced planner output", () => {

@@ -18,10 +18,38 @@ const handlers = {
   "mogu.pc": require("./handlers/pc"),
   "mogu.media": require("./handlers/media"),
   "mogu.coding": require("./handlers/coding"),
+  "mogu.search": require("./handlers/search"),
+  "mogu.browser": require("./handlers/browser"),
+  "mogu.memory": require("./handlers/memory"),
 };
 
-const READ_OPS = new Set(["list", "status", "preflight", "ensure", "trajectory"]);
-const SKIP_TASK_OPS = new Set(["list", "status", "preflight", "ensure", "trajectory", "cancel"]);
+const READ_OPS = new Set([
+  "list",
+  "status",
+  "preflight",
+  "ensure",
+  "trajectory",
+  "query",
+  "recall",
+  "fetch",
+  "open",
+  "remember",
+  "forget",
+]);
+const SKIP_TASK_OPS = new Set([
+  "list",
+  "status",
+  "preflight",
+  "ensure",
+  "trajectory",
+  "cancel",
+  "query",
+  "recall",
+  "fetch",
+  "open",
+  "remember",
+  "forget",
+]);
 
 class SkillRuntime {
   /**

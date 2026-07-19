@@ -397,6 +397,7 @@ function initServices() {
     getSettings: () => settingsStore.load(),
     updateSettings: (partial) => settingsStore.update(partial),
     getAgentApiKey: async () => (secretStore ? secretStore.get("agentApiKey") : ""),
+    openExternal: (url) => shell.openExternal(url),
     emitProgress: (payload) => sendToRenderer("skill-progress", payload),
   });
   downloader = new DownloadEngine(storage, settingsStore, {
@@ -735,6 +736,18 @@ function registerIpcHandlers() {
   ipcMain.handle("agent:brain-test", async () => {
     const settings = await loadSettingsInternal();
     return testBrain({ settings, ollama });
+  });
+
+  ipcMain.handle("mcp:status", async () => {
+    const settings = await loadSettingsInternal();
+    const { mcpManager } = require("./mcp-client");
+    return mcpManager.status(settings);
+  });
+
+  ipcMain.handle("mcp:list-tools", async () => {
+    const settings = await loadSettingsInternal();
+    const { mcpManager } = require("./mcp-client");
+    return mcpManager.listAllTools(settings);
   });
 
   ipcMain.handle("storage:get-path", async () => {

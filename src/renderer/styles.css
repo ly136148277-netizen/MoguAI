@@ -588,6 +588,34 @@ body {
   opacity: 0.85;
 }
 
+.agent-executor-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--primary-border);
+  background: rgba(79, 111, 156, 0.22);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agent-executor-pill--brain {
+  border-color: #6a9b6a;
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.agent-executor-pill--openclaw {
+  border-color: var(--primary-border);
+  background: rgba(79, 111, 156, 0.22);
+}
+
+.agent-executor-pill--pai {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.14);
+}
+
 .agent-task-card {
   margin: 0.35rem 0 0.65rem;
   padding: 0.55rem 0.7rem;

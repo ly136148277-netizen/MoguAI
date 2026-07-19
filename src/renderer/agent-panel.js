@@ -96,6 +96,7 @@ const AgentPanel = (() => {
     els.chatPicker = document.getElementById("chat-picker");
     els.chatWorkspace = document.getElementById("chat-workspace");
     els.runtimeMode = document.getElementById("agent-runtime-mode");
+    els.executorPill = document.getElementById("agent-executor-pill");
     els.openclawState = document.getElementById("agent-openclaw-state");
     els.openclawConnectBtn = document.getElementById("agent-openclaw-connect-btn");
     els.openclawInstallBtn = document.getElementById("agent-openclaw-install-btn");
@@ -287,15 +288,39 @@ const AgentPanel = (() => {
     appendLocal("assistant", "已切换为 PAI（兼容）模式。需要 OpenClaw 时可随时在运行时下拉改回。");
   }
 
-  function updateOcBanner(oc) {
+  function updateOcBanner(oc, brainReady = false) {
     if (!els.ocBanner) return;
+    // 大脑已就绪时优先大脑调度，不再用 OpenClaw 未连接横幅打断
     const show =
-      runtimeMode === "openclaw" && !(oc && (oc.connected === true || oc.state === "ready"));
+      !brainReady &&
+      runtimeMode === "openclaw" &&
+      !(oc && (oc.connected === true || oc.state === "ready"));
     els.ocBanner.classList.toggle("hidden", !show);
     if (els.ocBannerText && show) {
       const state = oc?.state || oc?.lifecycle || "未连接";
-      els.ocBannerText.textContent = `尚未连接 OpenClaw Gateway（${state}）。连接后办事走 OpenClaw；也可改用 PAI 兼容。`;
+      els.ocBannerText.textContent = `尚未连接 OpenClaw Gateway（${state}）。大脑未配置时连接后走 OpenClaw；也可改用 PAI 兼容。`;
     }
+  }
+
+  function paintExecutorPill(executor) {
+    if (!els.executorPill) return;
+    const map = {
+      brain: "本次由：大脑",
+      openclaw: "本次由：OpenClaw",
+      pai: "本次由：PAI",
+    };
+    els.executorPill.textContent = map[executor] || "本次由：—";
+    els.executorPill.classList.remove(
+      "agent-executor-pill--brain",
+      "agent-executor-pill--openclaw",
+      "agent-executor-pill--pai"
+    );
+    if (executor) els.executorPill.classList.add(`agent-executor-pill--${executor}`);
+  }
+
+  function resolveExecutor(brainReady) {
+    if (brainReady) return "brain";
+    return runtimeMode === "openclaw" ? "openclaw" : "pai";
   }
 
   async function refreshSessions() {
@@ -887,9 +912,11 @@ const AgentPanel = (() => {
         (steps.length
           ? `已调度 ${steps.length} 个工具步骤。`
           : "大脑未返回内容。请检查 API Key / 模型。");
-      replaceTempAssistant(reply);
+      const stamped = `【本次由：大脑】\n${reply}`;
+      replaceTempAssistant(stamped);
       history.push({ role: "assistant", content: reply });
       if (history.length > 20) history = history.slice(-20);
+      paintExecutorPill("brain");
       window.AppCore?.setStatus?.(
         result?.provider === "api" ? "大脑（API）已调度" : "大脑（本机）已调度"
       );
@@ -1071,7 +1098,6 @@ const AgentPanel = (() => {
 
       const oc = settings.openclaw || (await window.modelManager.getOpenclawStatus?.());
       paintOpenclawState(oc);
-      updateOcBanner(oc);
 
       const brain =
         settings.agentBrainChannel === "api"
@@ -1084,10 +1110,19 @@ const AgentPanel = (() => {
       const brainLabel = brainSetup.ready
         ? brain
         : "大脑未配置（请先设 API 或本机模型）";
+      const executor = resolveExecutor(brainSetup.ready);
+      paintExecutorPill(executor);
+      updateOcBanner(oc, brainSetup.ready);
+
+      if (brainSetup.ready) {
+        setStatus("online", `大脑优先 · ${brainLabel}（兜底：${runtimeMode === "openclaw" ? "OpenClaw" : "PAI"}）`);
+        await refreshBrainBanner();
+        return;
+      }
 
       if (runtimeMode === "openclaw") {
         if (oc?.connected) {
-          setStatus(brainSetup.ready ? "online" : "stopped", `OpenClaw 就绪 · ${brainLabel}`);
+          setStatus("online", `OpenClaw 就绪 · ${brainLabel}`);
         } else {
           setStatus("stopped", `OpenClaw ${oc?.state || "未连接"} · ${brainLabel}`);
         }
@@ -1099,7 +1134,7 @@ const AgentPanel = (() => {
       if (!status.installed) {
         setStatus("offline", `${brainLabel} · PAI 未就绪`);
       } else if (status.running) {
-        setStatus(brainSetup.ready ? "online" : "stopped", `PAI 就绪 · ${brainLabel}`);
+        setStatus("online", `PAI 就绪 · ${brainLabel}`);
       } else {
         setStatus("stopped", `${brainLabel} · PAI 未运行`);
       }

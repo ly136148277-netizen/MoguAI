@@ -1,6 +1,14 @@
 /**
- * MOGU 「大脑」：API / 本地模型负责理解与调度；Skills 等为工具。
+ * MOGU 「大脑」：API / 本地模型负责理解与调度；Skills / MCP 等为工具。
  */
+
+const {
+  SKILL_META,
+  buildBrainToolsFromRegistry,
+  skillIdToToolName,
+  toolNameToSkillId,
+} = require("./skills/registry");
+const { mcpManager } = require("./mcp-client");
 
 const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁中文沟通。
 
@@ -8,18 +16,23 @@ const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁
 
 可用工具（必须通过 function call 调用，不要只口述命令让用户自己去点）：
 - mogu_pc：打开应用、搜索文件、备份 PAI、执行本机命令
-- mogu_comfy：列出/运行 ComfyUI 工作流
-- mogu_studio：创作台出片预检/运行
-- mogu_ollama：本机模型列表/状态
-- mogu_media：视频合成预检
+- mogu_comfy：列出/运行/取消 ComfyUI 工作流
+- mogu_studio：创作台出片预检/运行/重试
+- mogu_ollama：本机模型列表/状态/导入
+- mogu_media：视频合成预检/拼接
 - mogu_coding：编程（Codex / trae-agent），需要 workspace 与 prompt
+- mogu_search：联网搜索实时事实
+- mogu_browser：打开网页或抓取页面正文
+- mogu_memory：记住/回忆跨会话偏好与项目事实
+- mcp__*：设置里配置的 MCP 服务器工具（若有）
 
 规则：
-1. 用户要办事/改代码/出片 → 立刻调用对应工具。
+1. 用户要办事/改代码/出片/查网/记事 → 立刻调用对应工具。
 2. 纯问答/用法 → 直接用自然语言回答，不调用工具。
 3. 删除等危险操作仍由工具侧权限中心二次确认。
 4. 编程任务：若用户未给路径，用设置中的默认工作区参数（可省略 workspace 让工具用默认值）。
-5. 一次可以串行多轮工具；每步根据工具结果决定下一步或最终回复。`;
+5. 一次可以串行多轮工具；每步根据工具结果决定下一步或最终回复。
+6. 需要长期记住的偏好/项目事实 → mogu_memory.remember；回答前可先 recall。`;
 
 const API_PRESETS = {
   deepseek: {
@@ -49,109 +62,12 @@ const API_PRESETS = {
   },
 };
 
-const BRAIN_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "mogu_pc",
-      description: "本机助手：打开应用、搜索、备份、执行命令",
-      parameters: {
-        type: "object",
-        properties: {
-          op: { type: "string", enum: ["open", "search", "backup", "run"] },
-          command: { type: "string", description: "完整中文命令，如 打开 ComfyUI" },
-          app: { type: "string" },
-          query: { type: "string" },
-        },
-        required: ["op"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "mogu_comfy",
-      description: "ComfyUI 工作流列表或出片命令",
-      parameters: {
-        type: "object",
-        properties: {
-          op: { type: "string", enum: ["list", "run", "status", "preflight"] },
-          command: { type: "string" },
-        },
-        required: ["op"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "mogu_studio",
-      description: "创作台出片预检或运行",
-      parameters: {
-        type: "object",
-        properties: {
-          op: { type: "string", enum: ["preflight", "run", "retry"] },
-        },
-        required: ["op"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "mogu_ollama",
-      description: "Ollama 模型状态或列表",
-      parameters: {
-        type: "object",
-        properties: {
-          op: { type: "string", enum: ["status", "list", "preflight"] },
-        },
-        required: ["op"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "mogu_media",
-      description: "视频合成预检",
-      parameters: {
-        type: "object",
-        properties: {
-          op: { type: "string", enum: ["preflight", "ensure", "concat"] },
-        },
-        required: ["op"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "mogu_coding",
-      description: "编程双引擎：探测状态或在工作区改代码",
-      parameters: {
-        type: "object",
-        properties: {
-          op: { type: "string", enum: ["status", "run", "cancel", "retry"] },
-          engine: { type: "string", enum: ["codex", "trae"] },
-          workspace: { type: "string", description: "本地仓库路径，可省略用默认工作区" },
-          prompt: { type: "string", description: "编程任务说明" },
-          model: { type: "string" },
-        },
-        required: ["op"],
-      },
-    },
-  },
-];
+/** Built from registry so ops stay aligned with SkillRuntime. */
+const BRAIN_TOOLS = buildBrainToolsFromRegistry();
 
-const TOOL_TO_SKILL = {
-  mogu_pc: "mogu.pc",
-  mogu_comfy: "mogu.comfy",
-  mogu_studio: "mogu.studio",
-  mogu_ollama: "mogu.ollama",
-  mogu_media: "mogu.media",
-  mogu_coding: "mogu.coding",
-};
+const TOOL_TO_SKILL = Object.fromEntries(
+  Object.keys(SKILL_META).map((id) => [skillIdToToolName(id), id])
+);
 
 function normalizeBaseUrl(url) {
   return String(url || "")
@@ -160,7 +76,9 @@ function normalizeBaseUrl(url) {
 }
 
 function mapToolNameToSkill(name) {
-  return TOOL_TO_SKILL[String(name || "").trim()] || null;
+  const n = String(name || "").trim();
+  if (n.startsWith("mcp__")) return null;
+  return TOOL_TO_SKILL[n] || toolNameToSkillId(n);
 }
 
 async function chatOpenAiCompatible({
@@ -240,8 +158,31 @@ function scrubToolResult(result) {
   return json.length > 6000 ? `${json.slice(0, 6000)}…` : json;
 }
 
-async function invokeMappedTool(skillRuntime, toolName, args = {}, channel = "brain") {
-  const skillId = mapToolNameToSkill(toolName);
+async function resolveBrainTools(settings) {
+  const base = BRAIN_TOOLS.map((t) => ({
+    type: t.type,
+    function: t.function,
+  }));
+  if (!settings?.mcpServers?.length) return base;
+  try {
+    const { tools } = await mcpManager.listAllTools(settings);
+    return base.concat(
+      tools.map((t) => ({
+        type: t.type,
+        function: t.function,
+      }))
+    );
+  } catch {
+    return base;
+  }
+}
+
+async function invokeMappedTool(skillRuntime, toolName, args = {}, channel = "brain", settings = null) {
+  const name = String(toolName || "").trim();
+  if (name.startsWith("mcp__")) {
+    return mcpManager.call(settings || {}, name, args);
+  }
+  const skillId = mapToolNameToSkill(name);
   if (!skillId) {
     return { ok: false, error: `未知工具：${toolName}` };
   }
@@ -299,14 +240,16 @@ async function runBrainAgent({
     throw new Error(`未知 Agent 通道：${channel}`);
   }
 
+  const tools = await resolveBrainTools(settings);
+
   for (let round = 0; round < maxRounds; round += 1) {
-    onProgress?.({ phase: "thinking", round });
+    onProgress?.({ phase: "thinking", round, executor: "brain" });
     const reply = await chatOpenAiCompatible({
       baseUrl: settings.agentApiBaseUrl,
       apiKey: settings.agentApiKey,
       model: settings.agentApiModel,
       messages,
-      tools: BRAIN_TOOLS,
+      tools,
     });
 
     if (!reply.toolCalls.length) {
@@ -317,6 +260,7 @@ async function runBrainAgent({
         model: reply.model,
         steps,
         mode: "brain",
+        executor: "brain",
       };
     }
 
@@ -334,12 +278,12 @@ async function runBrainAgent({
       } catch {
         args = {};
       }
-      onProgress?.({ phase: "tool", tool: name, args, round });
-      const result = await invokeMappedTool(skillRuntime, name, args, "brain");
+      onProgress?.({ phase: "tool", tool: name, args, round, executor: "brain" });
+      const result = await invokeMappedTool(skillRuntime, name, args, "brain", settings);
       steps.push({
         tool: name,
         skillId: mapToolNameToSkill(name),
-        op: args.op || "run",
+        op: args.op || (String(name).startsWith("mcp__") ? "call" : "run"),
         ok: result?.ok !== false,
         moguTaskId: result?.moguTaskId || null,
         error: result?.error || null,
@@ -361,6 +305,7 @@ async function runBrainAgent({
     model: settings.agentApiModel,
     steps,
     mode: "brain",
+    executor: "brain",
     truncated: true,
   };
 }
@@ -385,7 +330,7 @@ async function runLocalBrainJson({
   };
 
   for (let round = 0; round < maxRounds; round += 1) {
-    onProgress?.({ phase: "thinking", round });
+    onProgress?.({ phase: "thinking", round, executor: "brain" });
     const result = await ollama.chat(
       modelName,
       [...messages.slice(0, 1), plannerExtra, ...messages.slice(1)],
@@ -395,7 +340,15 @@ async function runLocalBrainJson({
     const content = String(result.message?.content || "").trim();
     const parsed = extractJsonObject(content);
     if (!parsed) {
-      return { ok: true, content, provider: "local", model: modelName, steps, mode: "brain" };
+      return {
+        ok: true,
+        content,
+        provider: "local",
+        model: modelName,
+        steps,
+        mode: "brain",
+        executor: "brain",
+      };
     }
     if (parsed.reply && !parsed.tool) {
       return {
@@ -405,14 +358,23 @@ async function runLocalBrainJson({
         model: modelName,
         steps,
         mode: "brain",
+        executor: "brain",
       };
     }
     if (!parsed.tool) {
-      return { ok: true, content, provider: "local", model: modelName, steps, mode: "brain" };
+      return {
+        ok: true,
+        content,
+        provider: "local",
+        model: modelName,
+        steps,
+        mode: "brain",
+        executor: "brain",
+      };
     }
     const args = { ...(parsed.args || {}), op: parsed.op || parsed.args?.op || "run" };
-    onProgress?.({ phase: "tool", tool: parsed.tool, args, round });
-    const toolResult = await invokeMappedTool(skillRuntime, parsed.tool, args, "brain");
+    onProgress?.({ phase: "tool", tool: parsed.tool, args, round, executor: "brain" });
+    const toolResult = await invokeMappedTool(skillRuntime, parsed.tool, args, "brain", settings);
     steps.push({
       tool: parsed.tool,
       skillId: mapToolNameToSkill(parsed.tool),
@@ -435,6 +397,7 @@ async function runLocalBrainJson({
     model: modelName,
     steps,
     mode: "brain",
+    executor: "brain",
     truncated: true,
   };
 }
@@ -518,6 +481,7 @@ module.exports = {
   runBrainAgent,
   mapToolNameToSkill,
   invokeMappedTool,
+  resolveBrainTools,
   testBrain,
   normalizeBaseUrl,
   extractJsonObject,

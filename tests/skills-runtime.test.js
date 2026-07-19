@@ -59,11 +59,14 @@ async function makeRuntime(extra = {}) {
   return { runtime, taskStore, dir, settings, permissionProxy };
 }
 
-test("registry lists six mogu skills including coding", () => {
+test("registry lists nine mogu skills including coding/search/browser/memory", () => {
   const defs = listSkillDefs();
-  assert.equal(defs.length, 6);
+  assert.equal(defs.length, 9);
   assert.ok(getSkillDef("mogu.comfy"));
   assert.ok(getSkillDef("mogu.coding"));
+  assert.ok(getSkillDef("mogu.search"));
+  assert.ok(getSkillDef("mogu.browser"));
+  assert.ok(getSkillDef("mogu.memory"));
   assert.deepEqual(SKILL_IDS[0], "mogu.comfy");
 });
 
@@ -77,7 +80,7 @@ test("skills:list returns env and enabled flags", async () => {
   const { runtime } = await makeRuntime();
   const listed = await runtime.list();
   assert.equal(listed.ok, true);
-  assert.equal(listed.skills.length, 6);
+  assert.equal(listed.skills.length, 9);
   assert.equal(listed.skills.every((s) => s.enabled), true);
 });
 

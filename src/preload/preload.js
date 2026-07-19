@@ -140,6 +140,8 @@ contextBridge.exposeInMainWorld("modelManager", {
   agentBrainAct: (payload) => ipcRenderer.invoke("agent:brain-act", payload || {}),
   onBrainProgress: (callback) => subscribe("brain-progress", callback),
   testAgentBrain: () => ipcRenderer.invoke("agent:brain-test"),
+  mcpStatus: () => ipcRenderer.invoke("mcp:status"),
+  mcpListTools: () => ipcRenderer.invoke("mcp:list-tools"),
   getShutdownStatus: () => ipcRenderer.invoke("power:shutdown-status"),
   scheduleShutdown: (payload) => ipcRenderer.invoke("power:shutdown-schedule", payload),
   cancelShutdown: () => ipcRenderer.invoke("power:shutdown-cancel"),
