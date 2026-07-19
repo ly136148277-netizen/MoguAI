@@ -1,50 +1,17 @@
 /**
- * mogu.browser — 打开网页；HTTP 抓取正文；可选本机 Playwright（外置，不打进安装包）
+ * mogu.browser — 打开网页、HTTP 抓取、Playwright 点击/填表/提取（外置引擎）
  */
 
 const { spawnSync } = require("child_process");
-const fs = require("fs-extra");
-const os = require("os");
-const path = require("path");
+const {
+  resolvePlaywrightHint,
+  normalizeUrl,
+  normalizeSteps,
+  runPlaywrightActions,
+} = require("../browser-engine");
 
 function pickUrl(args = {}) {
   return String(args.url || args.href || args.target || args.query || "").trim();
-}
-
-function normalizeUrl(url) {
-  const raw = String(url || "").trim();
-  if (!raw) return "";
-  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-}
-
-function resolvePlaywrightHint(settings = {}) {
-  const custom = String(settings.browserPlaywrightPath || "").trim();
-  if (custom && fs.pathExistsSync(custom)) {
-    return { kind: "path", path: custom, installed: true };
-  }
-  const vendorRoot = String(settings.codingVendorRoot || process.env.MOGU_VENDOR_ROOT || "").trim();
-  if (vendorRoot) {
-    const vendor = path.join(vendorRoot, "playwright");
-    if (fs.pathExistsSync(path.join(vendor, "package.json"))) {
-      return { kind: "vendor", path: vendor, installed: true };
-    }
-  }
-  const which = spawnSync(process.platform === "win32" ? "where" : "which", ["npx"], {
-    encoding: "utf8",
-    windowsHide: true,
-  });
-  if (which.status === 0) {
-    return {
-      kind: "npx",
-      installed: true,
-      message: "可用 npx；fetch/open 不依赖 Playwright",
-    };
-  }
-  return {
-    kind: "none",
-    installed: false,
-    message: "Playwright 未配置；open / fetch 仍可用",
-  };
 }
 
 async function openExternalUrl(deps, url) {
@@ -68,25 +35,42 @@ async function openExternalUrl(deps, url) {
   }
 }
 
+function fixPayload(probe) {
+  const fixCommands = probe?.fixCommands || [];
+  return {
+    fixCommands,
+    fixText: fixCommands.length
+      ? [`${probe.message || "Playwright 未就绪"}`, "", "可复制命令：", ...fixCommands.map((c) => `  ${c}`)].join(
+          "\n"
+        )
+      : probe?.message || "",
+  };
+}
+
 async function status({ deps }) {
+  const playwright = resolvePlaywrightHint(deps.settings || {});
   return {
     ok: true,
     openExternal: true,
-    playwright: resolvePlaywrightHint(deps.settings || {}),
+    playwright,
+    ...fixPayload(playwright),
   };
 }
 
 async function preflight({ deps, args }) {
   const issues = [];
+  const needsPw = ["act", "click", "fill", "extract", "run"].includes(String(args?.op || "")) &&
+    (args?.engine === "playwright" || args?.op === "act" || args?.op === "click" || args?.op === "fill");
   const url = pickUrl(args);
-  if ((args?.op === "fetch" || args?.op === "run" || args?.engine === "playwright") && !url) {
-    issues.push({ code: "url_missing", message: "缺少 url" });
+  if ((args?.op === "fetch" || args?.engine === "playwright") && !url && !args?.steps?.length) {
+    issues.push({ code: "url_missing", message: "缺少 url 或 steps" });
   }
   const probe = resolvePlaywrightHint(deps.settings || {});
-  if (args?.engine === "playwright" && !probe.installed) {
+  if (needsPw && !probe.installed) {
     issues.push({
       code: "playwright_missing",
       message: probe.message || "Playwright 未就绪",
+      ...fixPayload(probe),
     });
   }
   return { ok: issues.length === 0, issues, playwright: probe, url };
@@ -147,74 +131,52 @@ function stripHtml(html) {
     .trim();
 }
 
-async function runPlaywright({ deps, args }) {
-  const url = normalizeUrl(pickUrl(args));
-  if (!url) return { ok: false, error: "缺少 url", code: "url_missing" };
-  const probe = resolvePlaywrightHint(deps.settings || {});
-  if (!probe.installed) {
-    return {
-      ok: false,
-      code: "playwright_missing",
-      error: probe.message || "Playwright 未安装",
-      hint: "可改用 op=fetch 或 op=open",
-    };
+async function act({ deps, args }) {
+  const steps = normalizeSteps({ ...args, op: args?.op || "act" });
+  if (!steps.length) {
+    return { ok: false, error: "缺少 steps / url / selector", code: "steps_empty" };
   }
+  const result = await runPlaywrightActions({
+    settings: deps.settings || {},
+    steps,
+    headless: args?.headless !== false,
+    timeoutMs: Number(args?.timeoutMs) || 120000,
+  });
+  return result;
+}
 
-  const script = `
-const { chromium } = require("playwright");
-(async () => {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-  await page.goto(process.env.MOGU_BROWSER_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
-  const title = await page.title();
-  const text = await page.innerText("body");
-  process.stdout.write(JSON.stringify({ ok: true, title, text: String(text || "").slice(0, 8000) }));
-  await browser.close();
-})().catch((e) => {
-  process.stdout.write(JSON.stringify({ ok: false, error: String(e && e.message || e) }));
-  process.exitCode = 1;
-});
-`;
-  const tmp = path.join(os.tmpdir(), `mogu-browser-${Date.now()}.js`);
-  await fs.writeFile(tmp, script, "utf8");
-  const env = { ...process.env, MOGU_BROWSER_URL: url };
-  if (probe.kind === "vendor" || probe.kind === "path") {
-    env.NODE_PATH = [path.join(probe.path, "node_modules"), env.NODE_PATH].filter(Boolean).join(path.delimiter);
-  }
-  try {
-    const nodeRun = spawnSync("node", [tmp], {
-      encoding: "utf8",
-      env,
-      windowsHide: true,
-      timeout: 90000,
+async function click(ctx) {
+  return act({
+    deps: ctx.deps,
+    args: { ...ctx.args, op: "click", steps: normalizeSteps({ ...ctx.args, op: "click" }) },
+  });
+}
+
+async function fill(ctx) {
+  return act({
+    deps: ctx.deps,
+    args: { ...ctx.args, op: "fill", steps: normalizeSteps({ ...ctx.args, op: "fill" }) },
+  });
+}
+
+async function extract(ctx) {
+  const args = ctx.args || {};
+  const engine = String(args.engine || "fetch").toLowerCase();
+  if (engine === "playwright" || args.usePlaywright) {
+    return act({
+      deps: ctx.deps,
+      args: { ...args, op: "extract", steps: normalizeSteps({ ...args, op: "extract" }) },
     });
-    const line = String(nodeRun.stdout || "")
-      .trim()
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .pop();
-    if (line) {
-      try {
-        return { ...JSON.parse(line), url, mode: "playwright" };
-      } catch {
-        /* fall through */
-      }
-    }
-    return {
-      ok: false,
-      error: (nodeRun.stderr || nodeRun.stdout || "Playwright 执行失败").slice(0, 500),
-      url,
-      mode: "playwright",
-    };
-  } finally {
-    await fs.remove(tmp).catch(() => {});
   }
+  return fetchPage({ args });
 }
 
 async function run({ deps, args }) {
   const engine = String(args?.engine || args?.mode || "fetch").toLowerCase();
   if (engine === "open") return open({ deps, args });
-  if (engine === "playwright") return runPlaywright({ deps, args });
+  if (engine === "playwright" || engine === "act" || Array.isArray(args?.steps)) {
+    return act({ deps, args });
+  }
   return fetchPage({ args });
 }
 
@@ -224,6 +186,10 @@ module.exports = {
   preflight,
   open,
   fetch: fetchPage,
+  act,
+  click,
+  fill,
+  extract,
   run,
   pickUrl,
   resolvePlaywrightHint,

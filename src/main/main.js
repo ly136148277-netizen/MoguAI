@@ -750,6 +750,20 @@ function registerIpcHandlers() {
     return mcpManager.listAllTools(settings);
   });
 
+  ipcMain.handle("mcp:presets", async () => {
+    const { listMcpPresets } = require("./mcp-presets");
+    return { ok: true, presets: listMcpPresets() };
+  });
+
+  ipcMain.handle("mcp:add-preset", async (_event, payload = {}) => {
+    const settings = await loadSettingsInternal();
+    const { mergePresetIntoServers } = require("./mcp-presets");
+    const merged = mergePresetIntoServers(settings.mcpServers || [], payload.presetId);
+    if (!merged.ok) return merged;
+    await settingsStore.update({ mcpServers: merged.servers });
+    return { ok: true, servers: merged.servers, added: merged.added };
+  });
+
   ipcMain.handle("storage:get-path", async () => {
     await storage.ensureStorageDir();
     return storage.storageDir;
@@ -1025,6 +1039,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("app:check-update", async () => appUpdater.checkForUpdates({ manual: true }));
+  ipcMain.handle("app:update-status", async () => appUpdater.getStatus());
 
   ipcMain.handle("app:download-update", async () => appUpdater.downloadUpdate());
 
@@ -2376,6 +2391,7 @@ app.whenReady().then(async () => {
     sendToRenderer,
     getSettings: () => settingsStore.load(),
     appPath: app.getAppPath(),
+    getAppVersion: () => app.getVersion(),
   });
   await appUpdater.configureFeed();
 

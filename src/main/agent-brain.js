@@ -22,8 +22,8 @@ const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁
 - mogu_media：视频合成预检/拼接
 - mogu_coding：编程（Codex / trae-agent）；改完可用 review 看文件/diff，commit 需用户确认后调用，verify 跑测试
 - mogu_search：联网搜索实时事实
-- mogu_browser：打开网页或抓取页面正文
-- mogu_memory：记住/回忆跨会话偏好与项目事实
+- mogu_browser：打开网页、抓取正文；复杂办事用 act/click/fill（需本机 Playwright）
+- mogu_memory：分层记忆 preference/project/session；记住/回忆
 - mcp__*：设置里配置的 MCP 服务器工具（若有）
 
 规则：
@@ -32,7 +32,8 @@ const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁
 3. 删除等危险操作仍由工具侧权限中心二次确认；git commit 必须先说明改动再调 commit。
 4. 编程任务：若用户未给路径，用设置中的默认工作区参数（可省略 workspace 让工具用默认值）。
 5. 一次可以串行多轮工具；每步根据工具结果决定下一步或最终回复。
-6. 系统会注入跨会话记忆；仍可用 mogu_memory.remember 写入新事实。`;
+6. 系统会注入并自动沉淀高价值记忆；用户说「记住…」务必调用 mogu_memory.remember。
+7. 网页填表/点击：用 mogu_browser.act 传 steps，或 click/fill；不要假装已操作。`;
 
 const API_PRESETS = {
   deepseek: {
@@ -87,16 +88,41 @@ async function loadMemoryPreamble(skillRuntime, userText) {
     const result = await skillRuntime.invoke(
       "mogu.memory",
       "recall",
-      { query: String(userText || "").slice(0, 240), limit: 5 },
+      { query: String(userText || "").slice(0, 240), limit: 6 },
       { skipPermission: true, skipTask: true, channel: "brain" }
     );
     const facts = Array.isArray(result?.facts) ? result.facts : [];
     if (!facts.length) return { text: "", facts: [] };
-    const lines = facts.map((f) => `- ${f.key}: ${f.value}`);
+    const lines = facts.map((f) => `- [${f.layer || "project"}] ${f.key}: ${f.value}`);
     return { text: `【跨会话记忆】\n${lines.join("\n")}`, facts };
   } catch {
     return { text: "", facts: [] };
   }
+}
+
+async function autoPersistMemory(skillRuntime, userText, steps, settings) {
+  if (!skillRuntime?.invoke) return [];
+  let extractHighValueFacts;
+  try {
+    ({ extractHighValueFacts } = require("./skills/handlers/memory"));
+  } catch {
+    return [];
+  }
+  const candidates = extractHighValueFacts(userText, steps, settings || {});
+  const saved = [];
+  for (const fact of candidates) {
+    try {
+      const result = await skillRuntime.invoke("mogu.memory", "remember", fact, {
+        skipPermission: true,
+        skipTask: true,
+        channel: "brain",
+      });
+      if (result?.ok !== false) saved.push(fact);
+    } catch {
+      /* ignore single write failure */
+    }
+  }
+  return saved;
 }
 
 /**
@@ -302,6 +328,7 @@ async function runBrainAgent({
       maxRounds,
       onProgress,
       memoryCompressed: hist.compressed,
+      userText: text,
     });
   }
 
@@ -322,6 +349,7 @@ async function runBrainAgent({
     });
 
     if (!reply.toolCalls.length) {
+      const remembered = await autoPersistMemory(skillRuntime, text, steps, settings);
       return {
         ok: true,
         content: reply.content || "（无回复）",
@@ -332,6 +360,7 @@ async function runBrainAgent({
         executor: "brain",
         historyCompressed: hist.compressed,
         memoryFacts: memory.facts?.length || 0,
+        remembered: remembered.length,
       };
     }
 
@@ -373,6 +402,7 @@ async function runBrainAgent({
     }
   }
 
+  const remembered = await autoPersistMemory(skillRuntime, text, steps, settings);
   return {
     ok: true,
     content: steps.length
@@ -386,6 +416,7 @@ async function runBrainAgent({
     truncated: true,
     historyCompressed: hist.compressed,
     memoryFacts: memory.facts?.length || 0,
+    remembered: remembered.length,
   };
 }
 
@@ -398,6 +429,7 @@ async function runLocalBrainJson({
   maxRounds,
   onProgress,
   memoryCompressed = false,
+  userText = "",
 }) {
   const modelName = String(settings.agentLocalModel || "").trim();
   if (!modelName) throw new Error("请先在设置里选择本地 Ollama 模型");
@@ -420,6 +452,7 @@ async function runLocalBrainJson({
     const content = String(result.message?.content || "").trim();
     const parsed = extractJsonObject(content);
     if (!parsed) {
+      const remembered = await autoPersistMemory(skillRuntime, userText, steps, settings);
       return {
         ok: true,
         content,
@@ -429,9 +462,11 @@ async function runLocalBrainJson({
         mode: "brain",
         executor: "brain",
         historyCompressed: memoryCompressed,
+        remembered: remembered.length,
       };
     }
     if (parsed.reply && !parsed.tool) {
+      const remembered = await autoPersistMemory(skillRuntime, userText, steps, settings);
       return {
         ok: true,
         content: String(parsed.reply),
@@ -441,9 +476,11 @@ async function runLocalBrainJson({
         mode: "brain",
         executor: "brain",
         historyCompressed: memoryCompressed,
+        remembered: remembered.length,
       };
     }
     if (!parsed.tool) {
+      const remembered = await autoPersistMemory(skillRuntime, userText, steps, settings);
       return {
         ok: true,
         content,
@@ -453,6 +490,7 @@ async function runLocalBrainJson({
         mode: "brain",
         executor: "brain",
         historyCompressed: memoryCompressed,
+        remembered: remembered.length,
       };
     }
     const args = { ...(parsed.args || {}), op: parsed.op || parsed.args?.op || "run" };
@@ -573,6 +611,7 @@ module.exports = {
   invokeMappedTool,
   resolveBrainTools,
   loadMemoryPreamble,
+  autoPersistMemory,
   buildHistoryForBrain,
   buildSystemPrompt,
   testBrain,

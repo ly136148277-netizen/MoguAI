@@ -1121,7 +1121,8 @@ const AgentPanel = (() => {
           ? `已调度 ${steps.length} 个工具步骤。`
           : "大脑未返回内容。请检查 API Key / 模型。");
       const meta = [];
-      if (result?.memoryFacts) meta.push(`记忆 ${result.memoryFacts} 条`);
+      if (result?.memoryFacts) meta.push(`召回 ${result.memoryFacts} 条`);
+      if (result?.remembered) meta.push(`新记 ${result.remembered} 条`);
       if (result?.historyCompressed) meta.push("已压缩更早对话");
       const stamped = `【本次由：大脑】${meta.length ? `（${meta.join(" · ")}）` : ""}\n${reply}`;
       replaceTempAssistant(stamped);

@@ -1262,8 +1262,11 @@
           </label>
           <div class="settings-inline-actions">
             <button id="setting-check-update-btn" class="btn btn--primary" type="button">检查软件更新</button>
+            <button id="setting-refresh-update-info-btn" class="btn btn--ghost" type="button">刷新更新信息</button>
             <span id="setting-update-status" class="settings-inline-status"></span>
           </div>
+          <p id="setting-update-feed" class="settings-section-hint"></p>
+          <p id="setting-update-signing" class="settings-section-hint"></p>
           <p id="setting-catalog-info" class="settings-section-hint"></p>
           <label class="checkbox-row">
             <input id="setting-auto-ollama" name="autoStartOllama" type="checkbox" />
@@ -1325,13 +1328,21 @@
           <p id="setting-openclaw-token-hint" class="settings-section-hint"></p>
           <h3 class="settings-section-title">MCP 工具（给大脑用）</h3>
           <p class="settings-section-hint">
-            填写 JSON 数组。每项：id / label / command / args / enabled。大脑会暴露为 <code>mcp__{id}__{tool}</code>。
-            示例：<code>[{"id":"time","label":"Time","command":"npx","args":["-y","@modelcontextprotocol/server-everything"],"enabled":false}]</code>
+            启用后大脑可调用 <code>mcp__{id}__{tool}</code>。先点推荐添加，再按需改路径/参数。需本机已装 Node/npx。
           </p>
-          <label>MCP servers（JSON）
-            <textarea id="setting-mcp-servers" name="mcpServersJson" rows="5" spellcheck="false" placeholder="[]"></textarea>
-          </label>
-          <p id="setting-mcp-hint" class="settings-section-hint"></p>
+          <div id="setting-mcp-presets" class="mcp-presets"></div>
+          <div id="setting-mcp-list" class="mcp-server-list"></div>
+          <div class="settings-inline-actions">
+            <button id="setting-mcp-add-btn" class="btn btn--ghost btn--tiny" type="button">添加空白项</button>
+            <button id="setting-mcp-test-btn" class="btn btn--primary btn--tiny" type="button">测连通（列工具）</button>
+            <span id="setting-mcp-hint" class="settings-inline-status"></span>
+          </div>
+          <details class="mcp-advanced">
+            <summary>高级：直接编辑 JSON</summary>
+            <label>MCP servers（JSON）
+              <textarea id="setting-mcp-servers" name="mcpServersJson" rows="5" spellcheck="false" placeholder="[]"></textarea>
+            </label>
+          </details>
           <h3 class="settings-section-title">编程工具（Codex + trae-agent）</h3>
           <p class="settings-section-hint">
             只是工具：复用上方大脑 API Key / Base URL，无需再填密钥。在此设置工作区与默认引擎即可。对话：`编程状态` / `编程: …`。详见 docs/CODING_BRIDGE.md。

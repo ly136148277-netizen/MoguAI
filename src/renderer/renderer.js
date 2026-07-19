@@ -30,7 +30,10 @@ const settingCustomUrlEl = document.getElementById("setting-custom-url");
 const settingAutoSyncEl = document.getElementById("setting-auto-sync");
 const settingAutoUpdateEl = document.getElementById("setting-auto-update");
 const settingCheckUpdateBtn = document.getElementById("setting-check-update-btn");
+const settingRefreshUpdateInfoBtn = document.getElementById("setting-refresh-update-info-btn");
 const settingUpdateStatusEl = document.getElementById("setting-update-status");
+const settingUpdateFeedEl = document.getElementById("setting-update-feed");
+const settingUpdateSigningEl = document.getElementById("setting-update-signing");
 const settingCatalogInfoEl = document.getElementById("setting-catalog-info");
 const appUpdateBarEl = document.getElementById("app-update-bar");
 const appUpdateTextEl = document.getElementById("app-update-text");
@@ -71,6 +74,14 @@ const settingCodingModelEl = document.getElementById("setting-coding-model");
 const settingCodingProviderEl = document.getElementById("setting-coding-provider");
 const settingMcpServersEl = document.getElementById("setting-mcp-servers");
 const settingMcpHintEl = document.getElementById("setting-mcp-hint");
+const settingMcpPresetsEl = document.getElementById("setting-mcp-presets");
+const settingMcpListEl = document.getElementById("setting-mcp-list");
+const settingMcpAddBtn = document.getElementById("setting-mcp-add-btn");
+const settingMcpTestBtn = document.getElementById("setting-mcp-test-btn");
+
+/** @type {Array<{id:string,label:string,command:string,args:string[],enabled:boolean}>} */
+let mcpServersDraft = [];
+let mcpPresetsCache = [];
 
 const AGENT_API_PRESETS = {
   deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
@@ -389,17 +400,19 @@ async function loadSettingsForm() {
   if (settingCodingProviderEl) {
     settingCodingProviderEl.value = settings.codingProvider || "";
   }
-  if (settingMcpServersEl) {
-    try {
-      settingMcpServersEl.value = JSON.stringify(settings.mcpServers || [], null, 2);
-      if (settingMcpHintEl) {
-        const n = Array.isArray(settings.mcpServers) ? settings.mcpServers.length : 0;
-        settingMcpHintEl.textContent = n ? `已配置 ${n} 个 MCP server` : "尚未配置 MCP server";
-      }
-    } catch {
-      settingMcpServersEl.value = "[]";
-    }
-  }
+  mcpServersDraft = Array.isArray(settings.mcpServers)
+    ? settings.mcpServers.map((s) => ({
+        id: String(s.id || ""),
+        label: String(s.label || s.id || ""),
+        command: String(s.command || ""),
+        args: Array.isArray(s.args) ? s.args.map(String) : [],
+        enabled: s.enabled !== false,
+      }))
+    : [];
+  syncMcpDraftToTextarea();
+  renderMcpServerList();
+  await renderMcpPresets();
+  refreshUpdateInfoPanel();
   if (settingAgentChannelEl) {
     settingAgentChannelEl.value = settings.agentBrainChannel || "builtin";
   }
@@ -942,15 +955,11 @@ settingsFormEl.addEventListener("submit", async (event) => {
     codingModel: settingCodingModelEl?.value?.trim() || "",
     codingProvider: settingCodingProviderEl?.value?.trim() || "",
   };
-  if (settingMcpServersEl) {
-    try {
-      const parsed = JSON.parse(settingMcpServersEl.value || "[]");
-      if (!Array.isArray(parsed)) throw new Error("MCP servers 必须是 JSON 数组");
-      settingsPayload.mcpServers = parsed;
-    } catch (error) {
-      setStatus(`MCP JSON 无效：${error.message}`);
-      return;
-    }
+  try {
+    settingsPayload.mcpServers = collectMcpServersFromForm();
+  } catch (error) {
+    setStatus(`MCP 配置无效：${error.message}`);
+    return;
   }
   const apiKeyInput = settingAgentApiKeyEl?.value?.trim() || "";
   if (apiKeyInput) {
@@ -1070,6 +1079,196 @@ function hideUpdateBar() {
   appUpdateBarEl?.classList.add("hidden");
 }
 
+function escapeHtmlAttr(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+function syncMcpDraftToTextarea() {
+  if (settingMcpServersEl) {
+    settingMcpServersEl.value = JSON.stringify(mcpServersDraft, null, 2);
+  }
+  if (settingMcpHintEl) {
+    const n = mcpServersDraft.length;
+    const on = mcpServersDraft.filter((s) => s.enabled !== false).length;
+    settingMcpHintEl.textContent = n ? `已配置 ${n} 个（启用 ${on}）` : "尚未配置 MCP server";
+  }
+}
+
+function collectMcpServersFromForm() {
+  if (settingMcpListEl?.querySelectorAll(".mcp-server-row").length) {
+    const rows = [...settingMcpListEl.querySelectorAll(".mcp-server-row")];
+    mcpServersDraft = rows.map((row) => {
+      const argsRaw = row.querySelector("[data-field=args]")?.value || "";
+      const args = argsRaw
+        .split(/\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return {
+        id: String(row.querySelector("[data-field=id]")?.value || "").trim(),
+        label: String(row.querySelector("[data-field=label]")?.value || "").trim(),
+        command: String(row.querySelector("[data-field=command]")?.value || "").trim(),
+        args,
+        enabled: row.querySelector("[data-field=enabled]")?.checked !== false,
+      };
+    }).filter((s) => s.id && s.command);
+    syncMcpDraftToTextarea();
+    return mcpServersDraft;
+  }
+  const parsed = JSON.parse(settingMcpServersEl?.value || "[]");
+  if (!Array.isArray(parsed)) throw new Error("MCP servers 必须是 JSON 数组");
+  mcpServersDraft = parsed;
+  return mcpServersDraft;
+}
+
+function renderMcpServerList() {
+  if (!settingMcpListEl) return;
+  if (!mcpServersDraft.length) {
+    settingMcpListEl.innerHTML = `<p class="settings-section-hint">还没有 MCP。点上方推荐「添加」，或「添加空白项」。</p>`;
+    return;
+  }
+  settingMcpListEl.innerHTML = mcpServersDraft
+    .map((s, index) => {
+      const args = Array.isArray(s.args) ? s.args.join(" ") : "";
+      return `<div class="mcp-server-row" data-index="${index}">
+        <label class="checkbox-row mcp-server-row__en"><input type="checkbox" data-field="enabled" ${
+          s.enabled !== false ? "checked" : ""
+        }/>启用</label>
+        <input data-field="id" type="text" value="${escapeHtmlAttr(s.id)}" placeholder="id" />
+        <input data-field="label" type="text" value="${escapeHtmlAttr(s.label)}" placeholder="名称" />
+        <input data-field="command" type="text" value="${escapeHtmlAttr(s.command)}" placeholder="command" />
+        <input data-field="args" type="text" value="${escapeHtmlAttr(args)}" placeholder="args 空格分隔" />
+        <button type="button" class="btn btn--ghost btn--tiny" data-mcp-remove="${index}">删除</button>
+      </div>`;
+    })
+    .join("");
+  settingMcpListEl.querySelectorAll("[data-mcp-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      collectMcpServersFromForm();
+      const idx = Number(btn.getAttribute("data-mcp-remove"));
+      mcpServersDraft.splice(idx, 1);
+      syncMcpDraftToTextarea();
+      renderMcpServerList();
+    });
+  });
+  settingMcpListEl.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("change", () => {
+      collectMcpServersFromForm();
+    });
+  });
+}
+
+async function renderMcpPresets() {
+  if (!settingMcpPresetsEl || !window.modelManager.mcpPresets) return;
+  try {
+    if (!mcpPresetsCache.length) {
+      const result = await window.modelManager.mcpPresets();
+      mcpPresetsCache = result?.presets || [];
+    }
+    settingMcpPresetsEl.innerHTML = mcpPresetsCache
+      .map(
+        (p) => `<div class="mcp-preset-card">
+          <strong>${escapeHtmlAttr(p.label)}</strong>
+          <span>${escapeHtmlAttr(p.description || "")}</span>
+          <button type="button" class="btn btn--primary btn--tiny" data-mcp-preset="${escapeHtmlAttr(
+            p.id
+          )}">添加</button>
+        </div>`
+      )
+      .join("");
+    settingMcpPresetsEl.querySelectorAll("[data-mcp-preset]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const presetId = btn.getAttribute("data-mcp-preset");
+        try {
+          collectMcpServersFromForm();
+          const result = await window.modelManager.mcpAddPreset({ presetId });
+          if (result?.ok === false) {
+            settingMcpHintEl.textContent = result.error || "添加失败";
+            return;
+          }
+          mcpServersDraft = result.servers || [];
+          syncMcpDraftToTextarea();
+          renderMcpServerList();
+          settingMcpHintEl.textContent = `已添加推荐：${presetId}（记得点保存设置）`;
+        } catch (error) {
+          settingMcpHintEl.textContent = error.message;
+        }
+      });
+    });
+  } catch (error) {
+    settingMcpPresetsEl.innerHTML = `<p class="settings-section-hint">推荐列表加载失败：${escapeHtmlAttr(
+      error.message
+    )}</p>`;
+  }
+}
+
+async function refreshUpdateInfoPanel() {
+  if (!window.modelManager.getAppUpdateStatus) return;
+  try {
+    const st = await window.modelManager.getAppUpdateStatus();
+    if (settingUpdateFeedEl) {
+      if (st.feedConfigured && st.feed) {
+        const loc = st.feed.url || `${st.feed.owner}/${st.feed.repo}`;
+        settingUpdateFeedEl.textContent = `更新源：${st.feed.provider} · ${loc} · 当前 v${st.currentVersion}`;
+      } else {
+        settingUpdateFeedEl.textContent = `更新源未配置 · 当前 v${st.currentVersion || "—"}（见 docs/RELEASE.md）`;
+      }
+    }
+    if (settingUpdateSigningEl && st.codeSigning) {
+      settingUpdateSigningEl.textContent = `代码签名：${st.codeSigning.enabled ? "已启用" : "未启用"} — ${
+        st.codeSigning.message
+      }`;
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+settingMcpAddBtn?.addEventListener("click", () => {
+  collectMcpServersFromForm();
+  mcpServersDraft.push({
+    id: `mcp${mcpServersDraft.length + 1}`,
+    label: "自定义",
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-everything"],
+    enabled: true,
+  });
+  syncMcpDraftToTextarea();
+  renderMcpServerList();
+});
+
+settingMcpTestBtn?.addEventListener("click", async () => {
+  try {
+    collectMcpServersFromForm();
+    await window.modelManager.updateSettings({ mcpServers: mcpServersDraft });
+    settingMcpHintEl.textContent = "探测中…";
+    const result = await window.modelManager.mcpListTools();
+    const n = result?.tools?.length || 0;
+    const errs = (result?.errors || []).map((e) => `${e.serverId}:${e.error}`).join("; ");
+    settingMcpHintEl.textContent = errs
+      ? `工具 ${n} 个；部分失败：${errs}`
+      : `连通成功，暴露 ${n} 个工具给大脑`;
+  } catch (error) {
+    settingMcpHintEl.textContent = error.message;
+  }
+});
+
+settingMcpServersEl?.addEventListener("change", () => {
+  try {
+    const parsed = JSON.parse(settingMcpServersEl.value || "[]");
+    if (Array.isArray(parsed)) {
+      mcpServersDraft = parsed;
+      renderMcpServerList();
+    }
+  } catch {
+    /* ignore while typing */
+  }
+});
+
+settingRefreshUpdateInfoBtn?.addEventListener("click", () => refreshUpdateInfoPanel());
+
 window.modelManager.onAppUpdateAvailable((payload) => {
   pendingUpdateVersion = payload.version;
   showUpdateBar(`发现新版本 v${payload.version}，是否下载？`);
@@ -1122,10 +1321,11 @@ settingCheckUpdateBtn?.addEventListener("click", async () => {
   }
   try {
     const result = await window.modelManager.checkAppUpdate();
+    await refreshUpdateInfoPanel();
     if (result.skipped) {
       settingUpdateStatusEl.textContent = result.reason || "已跳过";
     } else if (!pendingUpdateVersion) {
-      settingUpdateStatusEl.textContent = "当前已是最新版本";
+      settingUpdateStatusEl.textContent = "当前已是最新版本（或等待更新事件）";
     }
   } catch (error) {
     settingUpdateStatusEl.textContent = error.message;

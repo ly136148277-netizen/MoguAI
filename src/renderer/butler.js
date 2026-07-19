@@ -131,14 +131,19 @@ const ButlerUI = (() => {
     window.modelManager.onPermissionRequest(async (req) => {
       if (!req?.requestId) return;
       const riskLevel = Number(req.riskLevel) || 2;
+      const actionText = `${req.tool || ""} ${req.action || ""}`.trim();
       const assessment = {
         risk:
-          (window.ButlerRisk?.describeRisk?.(riskLevel, req.action || req.tool || "") || null) || {
-            title: req.title || (riskLevel >= 3 ? "L3 危险操作确认" : "L2 操作确认"),
-            message: "主进程权限代理请求确认。未确认将拒绝执行。",
+          (window.ButlerRisk?.describeRisk?.(riskLevel, req.action || actionText) || null) || {
+            title: req.title || (riskLevel >= 3 ? "危险操作，需确认" : "需要你确认后继续"),
+            message:
+              riskLevel >= 3
+                ? "此操作可能删除或严重改动文件。点确认才会执行；点取消则什么都不做。"
+                : "此操作会改动本机文件或调用外置引擎。点确认才会执行；点取消则什么都不做。",
             detail: `${req.tool || ""}\n${req.action || ""}`.trim(),
-            confirmLabel: riskLevel >= 3 ? "确认执行（L3）" : "确认执行（L2）",
+            confirmLabel: riskLevel >= 3 ? "确认执行（危险）" : "确认执行",
             severity: riskLevel >= 3 ? "high" : "medium",
+            nextHint: "不确定就取消，改用只读查询或到任务中心查看历史。",
           },
       };
       const approved = await showConfirmModal(assessment);
@@ -165,7 +170,9 @@ const ButlerUI = (() => {
       const { risk } = assessment;
       els.confirmTitle.textContent = risk.title || "确认执行";
       els.confirmMessage.textContent = risk.message || "确认继续执行该指令？";
-      els.confirmDetail.textContent = risk.detail || "";
+      const detailBits = [risk.detail || ""];
+      if (risk.nextHint) detailBits.push(`下一步建议：${risk.nextHint}`);
+      els.confirmDetail.textContent = detailBits.filter(Boolean).join("\n\n");
       els.confirmOk.textContent = risk.confirmLabel || "确认执行";
       els.confirmOk.classList.toggle("btn--danger", risk.severity === "high");
       els.confirmOk.classList.toggle("btn--primary", risk.severity !== "high");

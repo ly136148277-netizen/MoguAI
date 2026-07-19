@@ -716,6 +716,70 @@ body {
   width: 100%;
 }
 
+.mcp-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.55rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.mcp-preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.08);
+  font-size: 0.82rem;
+}
+
+.mcp-preset-card span {
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.mcp-server-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.mcp-server-row {
+  display: grid;
+  grid-template-columns: auto 5rem 6rem 5rem 1fr auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.mcp-server-row input[type="text"] {
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.mcp-server-row__en {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.mcp-advanced {
+  margin-top: 0.5rem;
+}
+
+.mcp-advanced summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+@media (max-width: 900px) {
+  .mcp-server-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .agent-task-card__row {
   display: flex;
   flex-wrap: wrap;

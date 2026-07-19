@@ -80,16 +80,16 @@ const SKILL_META = Object.freeze({
   "mogu.browser": {
     id: "mogu.browser",
     title: "浏览器",
-    summary: "打开网页、抓取正文；可选本机 Playwright",
+    summary: "打开网页、抓取正文；Playwright 点击/填表/提取（外置）",
     riskDefault: 2,
-    ops: ["status", "preflight", "open", "fetch", "run"],
+    ops: ["status", "preflight", "open", "fetch", "act", "click", "fill", "extract", "run"],
     env: [],
     source: "browser",
   },
   "mogu.memory": {
     id: "mogu.memory",
     title: "长期记忆",
-    summary: "跨会话记住偏好与项目事实（本地 JSON）",
+    summary: "分层记忆 preference/project/session（本地 JSON）",
     riskDefault: 1,
     ops: ["status", "preflight", "remember", "recall", "list", "forget"],
     env: [],
@@ -183,6 +183,14 @@ function buildBrainToolsFromRegistry() {
     "mogu.browser": {
       url: { type: "string" },
       engine: { type: "string", enum: ["fetch", "open", "playwright"] },
+      selector: { type: "string", description: "CSS 选择器（click/fill/extract）" },
+      value: { type: "string", description: "填表内容" },
+      steps: {
+        type: "array",
+        description: "Playwright 步骤：goto/click/fill/extract/wait/press",
+        items: { type: "object" },
+      },
+      headless: { type: "boolean" },
       maxChars: { type: "number" },
     },
     "mogu.memory": {
@@ -191,6 +199,7 @@ function buildBrainToolsFromRegistry() {
       query: { type: "string" },
       id: { type: "string" },
       tags: { type: "string" },
+      layer: { type: "string", enum: ["preference", "project", "session"] },
       limit: { type: "number" },
     },
     "mogu.ollama": {

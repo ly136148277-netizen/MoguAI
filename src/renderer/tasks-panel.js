@@ -121,6 +121,7 @@ const TasksPanel = (() => {
     els.cancelBtn && (els.cancelBtn.disabled = terminal);
     els.retryBtn && (els.retryBtn.disabled = !terminal || !task.replay);
     const outputs = (task.outputPaths || []).map((p) => `<li><code>${escapeHtml(p)}</code></li>`).join("") || "<li>—</li>";
+    const next = suggestNextStep(task);
     els.detail.innerHTML = `
       <h3>${escapeHtml(task.name || "任务详情")}</h3>
       <dl class="tasks-detail__grid">
@@ -134,11 +135,40 @@ const TasksPanel = (() => {
         <dt>更新时间</dt><dd>${escapeHtml(task.updatedAt || "—")}</dd>
         <dt>错误</dt><dd>${escapeHtml(task.errorMessage || "—")}</dd>
       </dl>
+      <h4>下一步建议</h4>
+      <p class="tasks-detail__next">${escapeHtml(next)}</p>
       <h4>日志摘要</h4>
       <pre class="tasks-detail__log">${escapeHtml(task.logSummary || "—")}</pre>
       <h4>输出路径</h4>
       <ul>${outputs}</ul>
     `;
+  }
+
+  function suggestNextStep(task) {
+    const status = String(task?.status || "");
+    const source = String(task?.source || "");
+    const err = String(task?.errorMessage || "");
+    if (status === "running" || status === "queued") {
+      return "任务进行中。可点「精确取消」中止；不要重复提交同一请求。";
+    }
+    if (status === "succeeded") {
+      if (source === "coding") return "可到对话页任务卡查看 diff，确认后提交；或点「跑测试」。";
+      if (source === "comfy" || source === "studio") return "到创作台/输出目录查看成品；需要可同参重试。";
+      return "已成功。可在对话里继续下一指令，或导出诊断备份。";
+    }
+    if (status === "cancelled") return "已取消。若需重做，用原指令重试即可（不会自动重发已接受的 Gateway 任务）。";
+    if (status === "timed_out") {
+      return "等待超时。若 Gateway 已接受，请查会话/重连，不要降级重发；否则可改用 PAI 兼容。";
+    }
+    if (status === "failed") {
+      if (/playwright|引擎|engine|未安装|ENOENT/i.test(err)) {
+        return "引擎未就绪：到对话跑「编程状态」或看安装可复制命令；浏览器可用 open/fetch 降级。";
+      }
+      if (/权限|permission|denied/i.test(err)) return "权限被拒：重新执行时在弹窗点确认，或到权限页查看授权。";
+      if (task.replay) return "可点「失败重试」；编程任务也可在对话卡「换引擎重试」。";
+      return "查看上方错误与日志；修好环境后用相同指令重试。";
+    }
+    return "选择操作：取消进行中的任务，或对失败任务重试。";
   }
 
   async function cancelSelected() {
