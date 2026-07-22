@@ -1,0 +1,150 @@
+{
+  "date": "20260722",
+  "branch": "N/A",
+  "rows": [
+    {
+      "instance": "sympy__sympy-13177",
+      "role": "class-A",
+      "runs": [
+        {
+          "i": 1,
+          "runId": "probe-cap-sympy13177-c1-20260722",
+          "missing": false,
+          "engineOk": true,
+          "verifyOk": null,
+          "verifySkipped": true,
+          "failToPassOk": null,
+          "stages": [],
+          "stackAnchorUsed": false,
+          "findRefsUsed": false,
+          "agentSteps": 9,
+          "runTests": 1,
+          "setPlan": 1,
+          "apply": 1,
+          "planAfterFirstRunTests": false,
+          "applyAfterFirstRunTests": false,
+          "secondRunTests": false,
+          "tools": "grep>grep>read>set_plan>apply_patch>read>grep>run_tests",
+          "noVerifyLikely": true
+        },
+        {
+          "i": 2,
+          "runId": "probe-cap-sympy13177-c2-20260722",
+          "missing": false,
+          "engineOk": true,
+          "verifyOk": null,
+          "verifySkipped": true,
+          "failToPassOk": null,
+          "stages": [],
+          "stackAnchorUsed": false,
+          "findRefsUsed": false,
+          "agentSteps": 8,
+          "runTests": 1,
+          "setPlan": 1,
+          "apply": 1,
+          "planAfterFirstRunTests": false,
+          "applyAfterFirstRunTests": false,
+          "secondRunTests": false,
+          "tools": "grep>grep>read>set_plan>apply_patch>git_diff>run_tests",
+          "noVerifyLikely": true
+        },
+        {
+          "i": 3,
+          "runId": "probe-cap-sympy13177-c3-20260722",
+          "missing": false,
+          "engineOk": true,
+          "verifyOk": null,
+          "verifySkipped": true,
+          "failToPassOk": null,
+          "stages": [],
+          "stackAnchorUsed": false,
+          "findRefsUsed": false,
+          "agentSteps": 8,
+          "runTests": 1,
+          "setPlan": 1,
+          "apply": 1,
+          "planAfterFirstRunTests": false,
+          "applyAfterFirstRunTests": false,
+          "secondRunTests": false,
+          "tools": "grep>grep>set_plan>read>apply_patch>git_diff>run_tests",
+          "noVerifyLikely": true
+        }
+      ]
+    },
+    {
+      "instance": "django__django-15781",
+      "role": "class-C",
+      "runs": [
+        {
+          "i": 1,
+          "runId": "probe-cap-django15781-c1-20260722",
+          "missing": false,
+          "engineOk": false,
+          "verifyOk": false,
+          "verifySkipped": null,
+          "failToPassOk": false,
+          "stages": [
+            "FAIL_TO_PASS"
+          ],
+          "stackAnchorUsed": true,
+          "findRefsUsed": true,
+          "agentSteps": 24,
+          "runTests": 2,
+          "setPlan": 1,
+          "apply": 1,
+          "planAfterFirstRunTests": false,
+          "applyAfterFirstRunTests": false,
+          "secondRunTests": true,
+          "tools": "grep>set_plan>read>apply_patch>run_tests>git_diff>grep>read>run_tests",
+          "noVerifyLikely": false
+        },
+        {
+          "i": 2,
+          "runId": "probe-cap-django15781-c2-20260722",
+          "missing": false,
+          "engineOk": false,
+          "verifyOk": false,
+          "verifySkipped": null,
+          "failToPassOk": false,
+          "stages": [
+            "FAIL_TO_PASS"
+          ],
+          "stackAnchorUsed": true,
+          "findRefsUsed": true,
+          "agentSteps": 24,
+          "runTests": 4,
+          "setPlan": 2,
+          "apply": 1,
+          "planAfterFirstRunTests": true,
+          "applyAfterFirstRunTests": false,
+          "secondRunTests": true,
+          "tools": "grep>read>set_plan>apply_patch>run_tests>grep>run_tests>set_plan>read>run_tests>grep>run_tests>grep>read>git_diff",
+          "noVerifyLikely": false
+        },
+        {
+          "i": 3,
+          "runId": "probe-cap-django15781-c3-20260722",
+          "missing": false,
+          "engineOk": false,
+          "verifyOk": false,
+          "verifySkipped": null,
+          "failToPassOk": false,
+          "stages": [
+            "FAIL_TO_PASS"
+          ],
+          "stackAnchorUsed": true,
+          "findRefsUsed": true,
+          "agentSteps": 24,
+          "runTests": 4,
+          "setPlan": 1,
+          "apply": 1,
+          "planAfterFirstRunTests": false,
+          "applyAfterFirstRunTests": false,
+          "secondRunTests": true,
+          "tools": "set_plan>grep>read>apply_patch>run_tests>run_tests>git_diff>grep>read>run_tests>grep>run_tests",
+          "noVerifyLikely": false
+        }
+      ]
+    }
+  ]
+}
