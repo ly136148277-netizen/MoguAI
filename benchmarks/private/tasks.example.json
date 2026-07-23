@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "name": "mogu-private-selftest",
+  "note": "复制为 tasks.json 后填入你们自己的仓库与任务。勿放入第三方未公开题库。",
+  "tasks": [
+    {
+      "instance_id": "demo-readme-typo",
+      "prompt": "Fix an obvious typo in README.md if present; otherwise add a one-line note under a Testing section that private bench ran. Keep the change minimal.",
+      "workspace": ".",
+      "allowPaths": ["README.md", "docs/MOGUAI_CODING.md"],
+      "success": {
+        "command": "node -e \"process.exit(0)\"",
+        "expectExitCode": 0
+      },
+      "tags": ["smoke", "docs"]
+    }
+  ]
+}

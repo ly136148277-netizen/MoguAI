@@ -164,6 +164,133 @@ function commitWorkspace(workspace, message, { addAll = true } = {}) {
   };
 }
 
+function normalizeRelPath(filePath) {
+  return String(filePath || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "");
+}
+
+function resolveSafePath(workspace, relPath) {
+  const rel = normalizeRelPath(relPath);
+  if (!rel || rel.includes("..")) return null;
+  const abs = path.resolve(workspace, rel);
+  const root = path.resolve(workspace);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return null;
+  return { abs, rel };
+}
+
+/**
+ * Reject worker changes: restore tracked files / delete untracked.
+ * Empty paths → discard all local changes in the repo.
+ */
+function discardWorkspaceChanges(workspace, { paths = [] } = {}) {
+  const ws = String(workspace || "").trim();
+  if (!ws || !fs.pathExistsSync(ws)) {
+    return { ok: false, error: "工作区不存在", code: "workspace_missing" };
+  }
+  if (!isGitRepo(ws)) {
+    return { ok: false, error: "不是 Git 仓库，无法按文件拒绝改动", code: "not_a_git_repo" };
+  }
+
+  const status = runGit(ws, ["status", "--porcelain"]);
+  const all = parsePorcelain(status.stdout);
+  const wanted = (Array.isArray(paths) ? paths : []).map(normalizeRelPath).filter(Boolean);
+  const targets = wanted.length
+    ? all.filter((f) => wanted.includes(normalizeRelPath(f.path)))
+    : all;
+
+  if (!targets.length) {
+    return {
+      ok: true,
+      discarded: [],
+      message: "没有可拒绝的改动",
+      review: collectGitReview(ws),
+    };
+  }
+
+  const discarded = [];
+  const errors = [];
+  for (const file of targets) {
+    const safe = resolveSafePath(ws, file.path);
+    if (!safe) {
+      errors.push(`路径非法：${file.path}`);
+      continue;
+    }
+    const st = String(file.status || "");
+    // untracked (??) — delete file
+    if (/\?/.test(st)) {
+      try {
+        if (fs.pathExistsSync(safe.abs)) fs.removeSync(safe.abs);
+        discarded.push(safe.rel);
+      } catch (error) {
+        errors.push(`${safe.rel}: ${error.message}`);
+      }
+      continue;
+    }
+    // unstage if needed then restore worktree
+    runGit(ws, ["restore", "--staged", "--", safe.rel]);
+    const restored = runGit(ws, ["restore", "--worktree", "--", safe.rel]);
+    if (!restored.ok) {
+      const fallback = runGit(ws, ["checkout", "--", safe.rel]);
+      if (!fallback.ok) {
+        errors.push(`${safe.rel}: ${restored.stderr || fallback.stderr || "restore 失败"}`);
+        continue;
+      }
+    }
+    discarded.push(safe.rel);
+  }
+
+  return {
+    ok: errors.length === 0,
+    discarded,
+    errors,
+    message:
+      errors.length === 0
+        ? `已拒绝 ${discarded.length} 个文件的改动`
+        : `拒绝完成 ${discarded.length} 个，失败 ${errors.length} 个`,
+    review: collectGitReview(ws),
+    error: errors.length ? errors.slice(0, 5).join("; ") : null,
+  };
+}
+
+/**
+ * Accept = stage selected files (or all) for commit.
+ */
+function acceptWorkspaceChanges(workspace, { paths = [] } = {}) {
+  const ws = String(workspace || "").trim();
+  if (!ws || !fs.pathExistsSync(ws)) {
+    return { ok: false, error: "工作区不存在", code: "workspace_missing" };
+  }
+  if (!isGitRepo(ws)) {
+    return { ok: false, error: "不是 Git 仓库，无法暂存接受", code: "not_a_git_repo" };
+  }
+
+  const wanted = (Array.isArray(paths) ? paths : []).map(normalizeRelPath).filter(Boolean);
+  let add;
+  if (wanted.length) {
+    for (const rel of wanted) {
+      if (!resolveSafePath(ws, rel)) {
+        return { ok: false, error: `路径非法：${rel}`, code: "path_escape" };
+      }
+    }
+    add = runGit(ws, ["add", "--", ...wanted]);
+  } else {
+    add = runGit(ws, ["add", "-A"]);
+  }
+  if (!add.ok) {
+    return { ok: false, error: add.stderr || add.error || "git add 失败", code: "git_add_failed" };
+  }
+  const review = collectGitReview(ws);
+  return {
+    ok: true,
+    accepted: wanted.length ? wanted : (review.files || []).map((f) => f.path),
+    message: wanted.length ? `已接受并暂存 ${wanted.length} 个文件` : "已接受并暂存全部改动",
+    review,
+    canCommit: Boolean(review.canCommit),
+  };
+}
+
 function runVerify(workspace, command) {
   const ws = String(workspace || "").trim();
   const cmd = String(command || "").trim();
@@ -194,34 +321,38 @@ function runVerify(workspace, command) {
 function installFixHints(engineProbe = {}) {
   const hints = [];
   const copyCommands = [];
-  const codex = engineProbe.codex || engineProbe;
-  const trae = engineProbe.trae;
+  const engineA = engineProbe.moguai_a || engineProbe.engine_a || engineProbe;
+  const engineB = engineProbe.moguai_b || engineProbe.engine_b;
+  let canInstallRuntime = false;
+  let upgradeEngine = null;
 
-  if (codex && codex.installed === false) {
-    hints.push(codex.message || "Codex 未就绪");
-    copyCommands.push("npm i -g @openai/codex");
-    copyCommands.push("codex --version");
-    if (codex.vendorRepo) {
-      hints.push(`已检测到源码旁路：${codex.vendorRepo}（可设置 codingCodexPath 指向其 CLI）`);
-    }
-  } else if (codex?.installed && codex.message && codex.message !== "就绪") {
-    hints.push(`Codex：${codex.message}`);
+  if (engineA && engineA.installed === false) {
+    canInstallRuntime = true;
+    upgradeEngine = "moguai_a";
+    hints.push(engineA.message || "引擎 A 未就绪");
+  } else if (engineA?.installed && engineA.message && engineA.message !== "就绪") {
+    hints.push(`引擎 A：${engineA.message}`);
   }
 
-  if (trae && trae.installed === false) {
-    hints.push(trae.message || "trae-agent 未就绪");
-    const vendor = trae.vendorRepo || path.join("D:", "Project", "vendor", "trae-agent");
-    copyCommands.push(`cd /d ${vendor}`);
-    copyCommands.push("uv sync");
-    copyCommands.push("uv run trae-cli --help");
-  } else if (trae?.installed && trae.message && trae.message !== "就绪") {
-    hints.push(`trae：${trae.message}`);
+  if (engineB && engineB.installed === false) {
+    canInstallRuntime = true;
+    upgradeEngine = upgradeEngine ? "all" : "moguai_b";
+    hints.push(engineB.message || "引擎 B 未就绪");
+  } else if (engineB?.installed && engineB.message && engineB.message !== "就绪") {
+    hints.push(`引擎 B：${engineB.message}`);
+  }
+
+  if (canInstallRuntime) {
+    hints.unshift("点「安装编程引擎」一键拉取应用已适配的官方版（设置里也可装）");
+    copyCommands.push("设置 → MOGU AI 编程 → 安装/升级");
   }
 
   return {
     hints,
     copyCommands: [...new Set(copyCommands)],
-    fixText: [...hints, "", "可复制命令：", ...copyCommands.map((c) => `  ${c}`)].join("\n").trim(),
+    canInstallRuntime,
+    upgradeEngine: upgradeEngine || "all",
+    fixText: hints.join("\n").trim(),
   };
 }
 
@@ -233,6 +364,8 @@ module.exports = {
   collectGitReview,
   suggestCommitMessage,
   commitWorkspace,
+  discardWorkspaceChanges,
+  acceptWorkspaceChanges,
   runVerify,
   installFixHints,
 };

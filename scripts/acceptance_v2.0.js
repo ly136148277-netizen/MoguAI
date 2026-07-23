@@ -22,8 +22,8 @@ function fail(id, detail) {
 function main() {
   console.log(`MOGU AI acceptance v2.0 — ${pkg.version}\n`);
 
-  if (!String(pkg.version).startsWith("2.0.0")) {
-    fail("version", `expected 2.0.0*, got ${pkg.version}`);
+  if (!/^2\.0\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(String(pkg.version))) {
+    fail("version", `expected 2.0.x SemVer, got ${pkg.version}`);
   } else {
     pass("version", pkg.version);
   }

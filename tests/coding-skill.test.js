@@ -4,30 +4,44 @@ const fs = require("fs-extra");
 const os = require("os");
 const path = require("path");
 const {
-  buildCodexArgs,
-  buildTraeArgs,
+  buildEngineAArgs,
+  buildEngineBArgs,
   buildBrainEnv,
   probeAll,
   summarizeTrajectory,
-  resolveVendorRoots,
-} = require("../src/main/skills/coding-engines");
+  resolveRuntimeRoots,
+  ENGINE_A,
+  ENGINE_B,
+} = require("../src/main/moguai/coding");
 const coding = require("../src/main/skills/handlers/coding");
 const { getSkillDef, SKILL_IDS } = require("../src/main/skills/registry");
 const { TaskStore } = require("../src/main/task-store");
 
 test("buildBrainEnv reuses one MOGU key for tool subprocesses", () => {
-  const { env, hasKey, providerHint } = buildBrainEnv(
-    {
-      agentApiPreset: "deepseek",
-      agentApiBaseUrl: "https://api.deepseek.com/v1",
-    },
-    "sk-test-brain"
-  );
-  assert.equal(hasKey, true);
-  assert.equal(env.OPENAI_API_KEY, "sk-test-brain");
-  assert.equal(env.OPENAI_BASE_URL, "https://api.deepseek.com/v1");
-  assert.equal(providerHint, "openai");
-  assert.equal(buildBrainEnv({}, "").hasKey, false);
+  const prevKey = process.env.OPENAI_API_KEY;
+  const prevAllow = process.env.MOGU_ALLOW_HOST_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.MOGU_ALLOW_HOST_API_KEY;
+  try {
+    const { env, hasKey, providerHint } = buildBrainEnv(
+      {
+        agentApiPreset: "deepseek",
+        agentApiBaseUrl: "https://api.deepseek.com/v1",
+      },
+      "sk-test-brain"
+    );
+    assert.equal(hasKey, true);
+    assert.equal(env.OPENAI_API_KEY, "sk-test-brain");
+    assert.equal(env.OPENAI_BASE_URL, "https://api.deepseek.com/v1");
+    assert.equal(providerHint, "openai");
+    // Empty MOGU settings must not inherit a host shell key by default
+    assert.equal(buildBrainEnv({}, "").hasKey, false);
+  } finally {
+    if (prevKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prevKey;
+    if (prevAllow === undefined) delete process.env.MOGU_ALLOW_HOST_API_KEY;
+    else process.env.MOGU_ALLOW_HOST_API_KEY = prevAllow;
+  }
 });
 
 test("mogu.coding is registered with coding source", () => {
@@ -38,8 +52,8 @@ test("mogu.coding is registered with coding source", () => {
   assert.ok(def.ops.includes("retry"));
 });
 
-test("buildCodexArgs includes workspace and prompt", () => {
-  const args = buildCodexArgs({
+test("buildEngineAArgs includes workspace and prompt", () => {
+  const args = buildEngineAArgs({
     workspace: "D:\\proj",
     prompt: "add tests",
     model: "gpt-4o",
@@ -51,8 +65,8 @@ test("buildCodexArgs includes workspace and prompt", () => {
   assert.ok(args.includes("-m"));
 });
 
-test("buildTraeArgs includes working-dir and trajectory", () => {
-  const args = buildTraeArgs({
+test("buildEngineBArgs includes working-dir and trajectory", () => {
+  const args = buildEngineBArgs({
     workspace: "/tmp/ws",
     prompt: "fix bug",
     provider: "openai",
@@ -65,41 +79,56 @@ test("buildTraeArgs includes working-dir and trajectory", () => {
   assert.ok(args.includes("--trajectory-file"));
 });
 
-test("probeAll reports vendor roots without throwing", () => {
-  const probed = probeAll({ codingVendorRoot: "D:\\Project\\vendor" });
+test("probeAll reports moguai runtime roots without throwing", () => {
+  const probed = probeAll({ moguaiRuntimeRoot: "D:\\Project\\vendor" });
   assert.equal(probed.ok, true);
-  assert.ok(probed.engines.codex);
-  assert.ok(probed.engines.trae);
-  const roots = resolveVendorRoots({ codingVendorRoot: "D:\\Project\\vendor" });
-  assert.match(roots.codexRepo, /openai-codex$/);
-  assert.match(roots.traeRepo, /trae-agent$/);
+  assert.ok(probed.engines[ENGINE_A]);
+  assert.ok(probed.engines[ENGINE_B]);
+  const roots = resolveRuntimeRoots({ moguaiRuntimeRoot: "D:\\Project\\vendor" });
+  assert.match(roots.engineARepo, /moguai-runtime-a$/);
+  assert.match(roots.engineBRepo, /moguai-runtime-b$/);
+});
+
+test("ensureRuntimeLayout creates per-user folders under userData", async () => {
+  const { ensureRuntimeLayout, resolveRuntimeRoot } = require("../src/main/moguai/coding");
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moguai-ud-"));
+  const settings = { userDataPath: dir };
+  assert.match(resolveRuntimeRoot(settings), /moguai-runtimes$/);
+  const layout = ensureRuntimeLayout(settings);
+  assert.equal(await fs.pathExists(layout.engineARepo), true);
+  assert.equal(await fs.pathExists(layout.engineBRepo), true);
+  assert.equal(await fs.pathExists(layout.readmePath), true);
+  const probed = probeAll(settings);
+  assert.equal(probed.layoutReady, true);
+  assert.equal(probed.engines[ENGINE_A].installed, false);
+  assert.match(probed.engines[ENGINE_A].message, /不受影响|尚未安装/);
 });
 
 test("coding status op returns engines", async () => {
   const result = await coding.status({
-    deps: { settings: { codingDefaultEngine: "codex", codingWorkspace: "" } },
+    deps: { settings: { codingDefaultEngine: ENGINE_A, codingWorkspace: "" } },
   });
   assert.equal(result.ok, true);
-  assert.ok(result.engines.codex);
+  assert.ok(result.engines[ENGINE_A]);
 });
 
 test("coding preflight fails without workspace when prompt set", async () => {
   const result = await coding.preflight({
     deps: {
       settings: {
-        codingDefaultEngine: "codex",
+        codingDefaultEngine: ENGINE_A,
         codingWorkspace: "",
-        codingCodexPath: process.execPath,
+        codingEngineAPath: process.execPath,
       },
     },
-    args: { prompt: "x", engine: "codex" },
+    args: { prompt: "x", engine: ENGINE_A },
   });
   assert.equal(result.ok, false);
   assert.ok(result.issues.some((i) => i.code === "workspace_missing"));
 });
 
 test("coding run creates coding-source task and can cancel missing job", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mogu-coding-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moguai-coding-"));
   const taskStore = new TaskStore(path.join(dir, "tasks.json"));
   const cancelled = await coding.cancel({
     deps: { taskStore, settings: {} },
@@ -119,13 +148,13 @@ test("coding run creates coding-source task and can cancel missing job", async (
   assert.match(traj.summary, /bash/);
 });
 
-test("otherEngine flips codex/trae", () => {
-  assert.equal(coding.otherEngine("codex"), "trae");
-  assert.equal(coding.otherEngine("trae"), "codex");
+test("otherEngine flips moguai_a/moguai_b", () => {
+  assert.equal(coding.otherEngine(ENGINE_A), ENGINE_B);
+  assert.equal(coding.otherEngine(ENGINE_B), ENGINE_A);
 });
 
 test("task store accepts coding source", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mogu-coding-src-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moguai-coding-src-"));
   const store = new TaskStore(path.join(dir, "tasks.json"));
   const task = await store.create({
     source: "coding",

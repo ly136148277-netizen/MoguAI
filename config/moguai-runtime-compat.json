@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "engines": {
+    "moguai_a": {
+      "adaptedVersion": "0.144.6",
+      "fetch": {
+        "type": "npm",
+        "package": "@openai/codex",
+        "registry": "https://registry.npmjs.org"
+      },
+      "entry": {
+        "cliName": "moguai-coding-a",
+        "kind": "node",
+        "script": "node_modules/@openai/codex/bin/codex.js"
+      }
+    },
+    "moguai_b": {
+      "adaptedVersion": "0.1.0",
+      "fetch": {
+        "type": "github_zip",
+        "owner": "bytedance",
+        "repo": "trae-agent",
+        "ref": "e839e55",
+        "versionSource": {
+          "type": "raw_pyproject",
+          "path": "pyproject.toml"
+        }
+      },
+      "entry": {
+        "cliName": "moguai-coding-b",
+        "kind": "uv",
+        "command": "trae-cli"
+      }
+    }
+  }
+}

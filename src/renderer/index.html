@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' mogu-media: data: blob:; media-src 'self' mogu-media: blob:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; worker-src 'self' blob:; img-src 'self' mogu-media: data: blob:; media-src 'self' mogu-media: blob:;" />
   <title>MOGU AI</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="../../node_modules/monaco-editor/min/vs/editor/editor.main.css" />
 </head>
 <body>
   <div class="titlebar-drag">
@@ -30,6 +31,7 @@
         <button type="button" class="nav-item is-active" data-nav="chat" data-nav-group="agent">对话</button>
         <button type="button" class="nav-item" data-nav="home" data-nav-group="home">概览</button>
         <button type="button" class="nav-item" data-nav="tasks" data-nav-group="tasks">任务</button>
+        <button type="button" class="nav-item" data-nav="factory" data-nav-group="factory">精密工厂</button>
         <button type="button" class="nav-item" data-nav="studio" data-nav-group="create">创作</button>
         <button type="button" class="nav-item" data-nav="models" data-nav-group="models">模型</button>
         <button type="button" class="nav-item" data-nav="setup" data-nav-group="env">环境与数据</button>
@@ -306,7 +308,12 @@
                 </label>
               </div>
               <div class="agent-task-card__row agent-task-card__coding hidden" id="agent-coding-actions">
+                <button type="button" class="btn btn--primary btn--tiny hidden" id="agent-coding-install-btn">安装编程引擎</button>
+                <button type="button" class="btn btn--primary btn--tiny" id="agent-open-factory-btn">在精密工厂打开</button>
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-coding-redispatch-btn">再派工</button>
                 <button type="button" class="btn btn--ghost btn--tiny" id="agent-coding-refresh-review">刷新改动</button>
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-coding-accept-btn">全部接受</button>
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-coding-discard-btn">全部拒绝</button>
                 <button type="button" class="btn btn--primary btn--tiny" id="agent-coding-commit-btn">确认提交</button>
                 <button type="button" class="btn btn--ghost btn--tiny" id="agent-coding-verify-btn">跑测试</button>
                 <button type="button" class="btn btn--primary btn--tiny" id="agent-coding-retry-other">换引擎重试</button>
@@ -322,6 +329,7 @@
                 <button type="button" class="btn btn--ghost btn--tiny" data-agent-cmd="怎么用MOGU AI">怎么用</button>
               </div>
               <div class="agent-toolbar__aside">
+                <button type="button" class="btn btn--ghost btn--tiny" id="agent-goto-factory-btn">精密工厂</button>
                 <button type="button" class="btn btn--ghost btn--tiny" id="agent-goto-studio-btn">去创作台</button>
                 <button type="button" class="btn btn--primary btn--tiny" id="agent-goto-models-btn">去添加模型</button>
               </div>
@@ -565,9 +573,24 @@
         <div class="setup-workspace panel">
           <div class="setup-head">
             <h2>一键环境</h2>
-            <p>1. 请把下面工具全部都安装好之后再使用。<br />2. 所有工具作者已辛苦帮你整合了，别怕学，懂得越多越是免费。</p>
+            <p>1. 先选好 AI 执行方，再按需安装下方工具。<br />2. 所有工具作者已辛苦帮你整合了，别怕学，懂得越多越是免费。</p>
           </div>
           <div id="setup-cards" class="setup-cards">
+            <article class="setup-card setup-card--executor" data-setup="executor">
+              <div class="setup-card__head">
+                <h3>AI 执行方</h3>
+                <span id="setup-executor-badge" class="badge">检测中…</span>
+              </div>
+              <p id="setup-executor-text" class="setup-card__text">
+                选择对话由谁执行。默认 OpenClaw；不可用时请手动改选，不会静默降级。
+              </p>
+              <div class="setup-card__actions">
+                <button id="setup-executor-openclaw-btn" class="btn btn--primary btn--tiny" type="button">用 OpenClaw</button>
+                <button id="setup-executor-pai-btn" class="btn btn--ghost btn--tiny" type="button">用 PAI</button>
+                <button id="setup-executor-brain-btn" class="btn btn--ghost btn--tiny" type="button">去配置大脑</button>
+                <button id="setup-executor-goto-agent-btn" class="btn btn--ghost btn--tiny" type="button">去对话试一条</button>
+              </div>
+            </article>
             <article class="setup-card" data-setup="ollama">
               <div class="setup-card__head">
                 <h3>Ollama</h3>
@@ -962,6 +985,111 @@
       </section>
 
       <!-- 任务中心 -->
+      <section id="view-factory" class="view">
+        <div class="factory-shell panel">
+          <header class="factory-toolbar">
+            <div class="factory-toolbar__left">
+              <strong>MOGU AI 精密工厂</strong>
+              <span id="factory-workspace-label" class="factory-workspace-label">工作区未设置</span>
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-pick-workspace">选择工作区</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-refresh-tree">刷新</button>
+            </div>
+            <div class="factory-toolbar__right">
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-suggest-btn" title="Ctrl+Space">补全</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-goto-btn" title="F12">跳转定义</button>
+              <button type="button" class="btn btn--primary btn--tiny" id="factory-save-btn" disabled>保存</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-refresh-review">刷新改动</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-accept-all-btn">全部接受</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-discard-all-btn">全部拒绝</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="factory-verify-btn">跑测试</button>
+              <button type="button" class="btn btn--primary btn--tiny" id="factory-commit-btn" disabled>确认提交</button>
+            </div>
+          </header>
+          <div class="factory-dispatch">
+            <input id="factory-prompt" type="text" spellcheck="false" placeholder="派工：描述要改什么…" />
+            <button type="button" class="btn btn--primary btn--tiny" id="factory-run-btn">派工人</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="factory-compare-btn" title="A/B 各跑一遍，按测试与改动量取优">双引擎对比</button>
+            <label class="factory-check" title="有 test 脚本时改完自动测，红了再修">
+              <input type="checkbox" id="factory-auto-verify" checked /> 自动验修
+            </label>
+            <label class="factory-check" title="推断或声明文件集；越界改动自动回滚">
+              <input type="checkbox" id="factory-scope-enforce" checked /> 越界拦截
+            </label>
+            <input
+              id="factory-scope-paths"
+              class="factory-scope-paths"
+              type="text"
+              spellcheck="false"
+              placeholder="锁定文件（可选，逗号分隔）"
+              title="留空则从派工说明自动推断"
+            />
+            <button type="button" class="btn btn--ghost btn--tiny hidden" id="factory-cancel-btn">取消派工</button>
+            <button type="button" class="btn btn--primary btn--tiny hidden" id="factory-install-engine-btn">安装引擎</button>
+            <span id="factory-status" class="factory-status" aria-live="polite"></span>
+          </div>
+          <div class="factory-debug-bar">
+            <strong>调试</strong>
+            <button type="button" class="btn btn--primary btn--tiny" id="factory-debug-start">开始调试</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="factory-debug-continue">继续</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="factory-debug-stepover">单步跳过</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="factory-debug-stepinto">单步进入</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="factory-debug-stepout">单步跳出</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="factory-debug-stop">停止</button>
+            <span class="factory-status">行号旁槽点击设断点 · 仅 JS</span>
+          </div>
+          <div class="factory-body">
+            <aside class="factory-sidebar">
+              <div class="factory-sidebar__section">
+                <h4>搜索</h4>
+                <div class="factory-search-row">
+                  <input id="factory-search-input" type="search" spellcheck="false" placeholder="文件名或符号…" />
+                  <button type="button" class="btn btn--ghost btn--tiny" id="factory-search-btn">搜</button>
+                </div>
+                <ul id="factory-search-hits" class="factory-tree factory-tree--hits"></ul>
+              </div>
+              <div class="factory-sidebar__section">
+                <h4>文件</h4>
+                <ul id="factory-file-tree" class="factory-tree"></ul>
+              </div>
+              <div class="factory-sidebar__section">
+                <h4>改动</h4>
+                <ul id="factory-changed-files" class="factory-tree factory-tree--changed"></ul>
+                <h4>Hunk</h4>
+                <ul id="factory-hunks" class="factory-tree factory-tree--changed"></ul>
+                <label class="factory-commit-msg">
+                  提交说明
+                  <input id="factory-commit-msg" type="text" spellcheck="false" placeholder="chore: …" />
+                </label>
+              </div>
+              <div class="factory-sidebar__section factory-sidebar__section--debug">
+                <h4>调用栈</h4>
+                <ul id="factory-debug-stack" class="factory-tree factory-debug-stack"></ul>
+                <h4>变量</h4>
+                <div id="factory-debug-vars" class="factory-debug-vars"></div>
+                <label class="factory-commit-msg">
+                  断点条件（下一处断点 / Alt+点槽）
+                  <input id="factory-bp-condition" type="text" spellcheck="false" placeholder="例如 i === 3" />
+                </label>
+                <h4>调试输出</h4>
+                <pre id="factory-debug-log" class="factory-debug-log"></pre>
+              </div>
+            </aside>
+            <div class="factory-main">
+              <div id="factory-editor-path" class="factory-editor-path">未打开文件 · Ctrl+Space 补全 · F12 跳转</div>
+              <div id="factory-monaco" class="factory-monaco"></div>
+              <details class="factory-diff-panel" open>
+                <summary>工作区 diff</summary>
+                <pre id="factory-diff" class="factory-diff"></pre>
+              </details>
+              <details class="factory-diff-panel" id="factory-output-panel" open>
+                <summary>运行 / 测试输出</summary>
+                <pre id="factory-output" class="factory-diff factory-output"></pre>
+              </details>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="view-tasks" class="view">
         <div class="view-head view-head--compact">
           <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
@@ -1276,7 +1404,7 @@
           <h3 class="settings-section-title">AI 管家（PAI）</h3>
           <p class="settings-section-hint">连接本机 PAI，用于开软件、ComfyUI 工作流、文件操作等。</p>
           <label>PAI 安装路径
-            <input id="setting-pai-root" name="paiRoot" type="text" spellcheck="false" placeholder="E:\projects\PAI" />
+            <input id="setting-pai-root" name="paiRoot" type="text" spellcheck="false" placeholder="留空则使用用户目录下 pai（或由环境扫描填写）" />
           </label>
           <label>PAI API 地址
             <input id="setting-pai-api" name="paiApiUrl" type="text" spellcheck="false" placeholder="http://127.0.0.1:8765" />
@@ -1343,29 +1471,38 @@
               <textarea id="setting-mcp-servers" name="mcpServersJson" rows="5" spellcheck="false" placeholder="[]"></textarea>
             </label>
           </details>
-          <h3 class="settings-section-title">编程工具（Codex + trae-agent）</h3>
+          <h3 class="settings-section-title">MOGU AI 编程</h3>
           <p class="settings-section-hint">
-            只是工具：复用上方大脑 API Key / Base URL，无需再填密钥。在此设置工作区与默认引擎即可。对话：`编程状态` / `编程: …`。详见 docs/CODING_BRIDGE.md。
+            MOGU AI 自有编程能力（双引擎可切换）。复用上方大脑 API Key。可从官方拉取应用已适配的版本；官方更新未适配时只提示版本，不盲升。对话：`编程状态` / `编程: …`。
           </p>
+          <div class="coding-runtime-box">
+            <div id="coding-runtime-status" class="settings-section-hint">尚未检查引擎版本</div>
+            <div class="coding-runtime-actions">
+              <button type="button" class="btn btn--ghost btn--tiny" id="coding-runtime-check-btn">检查更新</button>
+              <button type="button" class="btn btn--primary btn--tiny" id="coding-runtime-upgrade-btn">安装/升级</button>
+              <button type="button" class="btn btn--ghost btn--tiny" id="coding-runtime-retry-deps-btn">重试引擎B依赖</button>
+            </div>
+            <div id="coding-runtime-progress" class="settings-section-hint" aria-live="polite"></div>
+          </div>
           <label>默认引擎
             <select id="setting-coding-engine" name="codingDefaultEngine">
-              <option value="codex">Codex CLI</option>
-              <option value="trae">trae-agent</option>
+              <option value="moguai_a">MOGU AI 编程 · 引擎 A（主）</option>
+              <option value="moguai_b">MOGU AI 编程 · 引擎 B（备）</option>
             </select>
           </label>
           <label>默认工作区
             <input id="setting-coding-workspace" name="codingWorkspace" type="text" placeholder="例如 D:\Project\ai-model-manager" />
           </label>
-          <label>Codex 路径（可选，空则 PATH / npx）
-            <input id="setting-coding-codex-path" name="codingCodexPath" type="text" placeholder="codex 可执行文件或留空" />
+          <label>引擎 A 路径（可选）
+            <input id="setting-coding-engine-a-path" name="codingEngineAPath" type="text" placeholder="留空则自动探测 moguai-coding-a" />
           </label>
-          <label>trae-cli 路径（可选）
-            <input id="setting-coding-trae-path" name="codingTraePath" type="text" placeholder="trae-cli 或留空用 vendor+uv" />
+          <label>引擎 B 路径（可选）
+            <input id="setting-coding-engine-b-path" name="codingEngineBPath" type="text" placeholder="留空则自动探测 moguai-coding-b" />
           </label>
           <label>模型（可选，传给引擎）
             <input id="setting-coding-model" name="codingModel" type="text" placeholder="如 gpt-5.6 / gpt-4o" />
           </label>
-          <label>trae provider（可选）
+          <label>引擎 B 供应商（可选）
             <input id="setting-coding-provider" name="codingProvider" type="text" placeholder="openai / anthropic / ollama…" />
           </label>
           <label>界面主题
@@ -1471,6 +1608,8 @@
 
   <script src="i18n.js"></script>
   <script src="../shared/butler-risk.js"></script>
+  <script src="../shared/agent-routing.js"></script>
+  <script src="../shared/moguai-coding.js"></script>
   <script src="../shared/pai-catalog.js"></script>
   <script src="app.js"></script>
   <script src="models-hub.js"></script>
@@ -1480,6 +1619,7 @@
   <script src="chat.js"></script>
   <script src="butler.js"></script>
   <script src="agent-panel.js"></script>
+  <script src="factory-panel.js"></script>
   <script src="comfyui-panel.js"></script>
   <script src="setup-panel.js"></script>
   <script src="studio-panel.js"></script>

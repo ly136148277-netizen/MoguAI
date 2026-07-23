@@ -103,7 +103,7 @@ const ComfyUiPanel = (() => {
     }
     try {
       const settings = await window.modelManager.getSettings();
-      const paiRoot = (settings.paiRoot || "E:\\projects\\PAI").replace(/\//g, "\\");
+      const paiRoot = (settings.paiRoot || "").replace(/\//g, "\\");
       let comfyPath = "";
       try {
         const status = await window.modelManager.getComfyUiStatus();
@@ -111,7 +111,7 @@ const ComfyUiPanel = (() => {
       } catch {
         // ignore
       }
-      const paiWorkflows = `${paiRoot}\\workflows`;
+      const paiWorkflows = paiRoot ? `${paiRoot}\\workflows` : "设置 → PAI 根目录";
       const comfyWorkflows = comfyPath
         ? `${comfyPath.replace(/\//g, "\\")}\\ComfyUI\\user\\default\\workflows`
         : "ComfyUI\\user\\default\\workflows";

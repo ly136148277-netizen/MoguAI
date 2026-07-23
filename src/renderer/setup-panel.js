@@ -11,6 +11,8 @@ const SetupPanel = (() => {
     els.comfyText = document.getElementById("setup-comfy-text");
     els.ffmpegBadge = document.getElementById("setup-ffmpeg-badge");
     els.ffmpegText = document.getElementById("setup-ffmpeg-text");
+    els.executorBadge = document.getElementById("setup-executor-badge");
+    els.executorText = document.getElementById("setup-executor-text");
     els.log = document.getElementById("setup-log");
     els.ollamaInstall = document.getElementById("setup-ollama-install-btn");
     els.ollamaStart = document.getElementById("setup-ollama-start-btn");
@@ -22,6 +24,10 @@ const SetupPanel = (() => {
     els.ffmpegInstall = document.getElementById("setup-ffmpeg-install-btn");
     els.refresh = document.getElementById("setup-refresh-btn");
     els.gotoStudio = document.getElementById("setup-goto-studio-btn");
+    els.executorOpenclaw = document.getElementById("setup-executor-openclaw-btn");
+    els.executorPai = document.getElementById("setup-executor-pai-btn");
+    els.executorBrain = document.getElementById("setup-executor-brain-btn");
+    els.executorGotoAgent = document.getElementById("setup-executor-goto-agent-btn");
 
     els.ollamaInstall?.addEventListener("click", () => runAction("ollama-install"));
     els.ollamaStart?.addEventListener("click", () => runAction("ollama-start"));
@@ -33,6 +39,16 @@ const SetupPanel = (() => {
     els.ffmpegInstall?.addEventListener("click", () => runAction("ffmpeg-install"));
     els.refresh?.addEventListener("click", () => refresh());
     els.gotoStudio?.addEventListener("click", () => window.AppRouter.navigate("studio"));
+    els.executorOpenclaw?.addEventListener("click", () => setExecutor("openclaw"));
+    els.executorPai?.addEventListener("click", () => setExecutor("pai"));
+    els.executorBrain?.addEventListener("click", () => {
+      window.AppRouter.navigate("settings");
+      appendLog("请在设置中选择联网 API 或本机模型，保存后回对话。");
+    });
+    els.executorGotoAgent?.addEventListener("click", () => {
+      window.AppRouter.navigate("agent");
+      appendLog("已打开对话：可先说「怎么用创作台」做安全试用。");
+    });
 
     if (window.modelManager?.onSetupProgress) {
       unsubProgress = window.modelManager.onSetupProgress((payload) => {
@@ -42,6 +58,24 @@ const SetupPanel = (() => {
 
     window.AppRouter.onPage("setup", () => refresh());
     maybeShowWizard();
+  }
+
+  async function setExecutor(mode) {
+    try {
+      const next =
+        mode === "pai"
+          ? { agentRuntimeMode: "pai", openclawEnabled: false }
+          : { agentRuntimeMode: "openclaw", openclawEnabled: true };
+      await window.modelManager.updateSettings(next);
+      appendLog(
+        mode === "pai"
+          ? "已选择 PAI。请确保下方 PAI 引擎已安装并启动，再到对话发送指令。"
+          : "已选择 OpenClaw。请连接 Gateway 后再到对话发送指令；不会因大脑未配置而拦死。"
+      );
+      await refresh();
+    } catch (error) {
+      appendLog(`切换执行方失败：${error.message || error}`);
+    }
   }
 
   async function maybeShowWizard() {
@@ -88,6 +122,31 @@ const SetupPanel = (() => {
       const p = status.pai || {};
       const c = status.comfyui || {};
       const f = status.ffmpeg || {};
+
+      try {
+        const settings = await window.modelManager.getSettings();
+        const mode = settings.agentRuntimeMode === "pai" ? "pai" : "openclaw";
+        const brain = settings.agentBrainChannel || "builtin";
+        const oc = settings.openclaw || (await window.modelManager.getOpenclawStatus?.());
+        const ocOk = Boolean(oc && (oc.connected === true || oc.state === "ready"));
+        if (mode === "openclaw") {
+          setBadge(els.executorBadge, ocOk, ocOk ? "OpenClaw 已连" : "OpenClaw 未连");
+          if (els.executorText) {
+            els.executorText.textContent = ocOk
+              ? `当前执行方：OpenClaw（大脑通道：${brain}）。可直接去对话发指令。`
+              : `当前执行方：OpenClaw（未连接）。请连接 Gateway，或改选 PAI / 配置大脑——不会静默切换。`;
+          }
+        } else {
+          setBadge(els.executorBadge, Boolean(p.running), p.running ? "PAI 就绪" : "PAI 未就绪");
+          if (els.executorText) {
+            els.executorText.textContent = p.running
+              ? `当前执行方：PAI（大脑通道：${brain}）。可去对话发指令。`
+              : `当前执行方：PAI。请先安装并启动下方 PAI 引擎。`;
+          }
+        }
+      } catch {
+        setBadge(els.executorBadge, false, "未知");
+      }
 
       setBadge(els.ollamaBadge, o.running, o.running ? "运行中" : o.installed ? "已装未运行" : "未安装");
       if (els.ollamaText) {
@@ -196,6 +255,10 @@ const SetupPanel = (() => {
       els.comfyGuide,
       els.comfyScan,
       els.ffmpegInstall,
+      els.executorOpenclaw,
+      els.executorPai,
+      els.executorBrain,
+      els.executorGotoAgent,
       els.refresh,
     ].forEach((btn) => {
       if (btn) btn.disabled = busy;

@@ -484,7 +484,9 @@ function buildEpbGateUserMessage(state) {
   const needSuper = state.applyCountAfterFail > 0;
   return [
     "[Evidence-to-Patch Binding gate]",
-    "Before apply_patch: call record_patch_binding with:",
+    "Verify failed and an Evidence Object is OPEN. Do not stop on git_diff alone.",
+    "Required next: (1) record_patch_binding (2) apply_patch with a revised repair.",
+    "record_patch_binding fields:",
     `- evidence_id=${ev.evidence_id}`,
     `- failed_stage=${ev.failed_stage || "-"} (must match)`,
     `- error_class=${ev.error_class || "-"} (must match)`,

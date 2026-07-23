@@ -17,7 +17,8 @@ const DEFAULT_SETTINGS = {
   paiApiUrl: "http://127.0.0.1:8765",
   paiRuntimeUrl: "",
   comfyUiDownloadUrl: "",
-  autoStartPai: true,
+  /** Public clean profile: never auto-start a discovered private PAI runtime */
+  autoStartPai: false,
   paiDefaultLevel: 2,
   comfyUiPollIntervalMs: 2500,
   showSetupWizard: true,
@@ -36,7 +37,8 @@ const DEFAULT_SETTINGS = {
   agentRuntimeMode: "openclaw",
   openclawEnabled: true,
   openclawGatewayUrl: "ws://127.0.0.1:18789",
-  openclawFallbackToPai: true,
+  /** Public Release: no silent PAI fallback unless the user opts in */
+  openclawFallbackToPai: false,
   /** Skill enable map: { "mogu.comfy": true, ... } */
   skillsEnabled: {
     "mogu.comfy": true,
@@ -49,12 +51,13 @@ const DEFAULT_SETTINGS = {
     "mogu.browser": true,
     "mogu.memory": true,
   },
-  /** Coding bridge (Codex CLI + trae-agent) */
-  codingDefaultEngine: "codex",
+  /** MOGU AI coding engines: moguai_a | moguai_b */
+  codingDefaultEngine: "moguai_a",
   codingWorkspace: "",
-  codingCodexPath: "",
-  codingTraePath: "",
+  codingEngineAPath: "",
+  codingEngineBPath: "",
   codingVendorRoot: "",
+  moguaiRuntimeRoot: "",
   codingModel: "",
   codingProvider: "",
   codingSandbox: "",
@@ -62,7 +65,7 @@ const DEFAULT_SETTINGS = {
   browserPlaywrightPath: "",
   /**
    * MCP stdio servers exposed to the brain as mcp__{id}__{tool} tools.
-   * Example: [{ id: "fs", label: "Filesystem", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "D:\\\\"], enabled: true }]
+   * Example: [{ id: "fs", label: "Filesystem", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "REPLACE_WITH_SAFE_FOLDER"], enabled: true }]
    */
   mcpServers: [],
 };

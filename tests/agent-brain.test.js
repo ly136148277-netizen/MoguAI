@@ -75,7 +75,7 @@ describe("agent-brain", () => {
             },
           };
         }
-        return { message: { content: JSON.stringify({ reply: "Codex 已探测完成" }) } };
+        return { message: { content: JSON.stringify({ reply: "引擎 A 已探测完成" }) } };
       },
     };
 

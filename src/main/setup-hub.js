@@ -183,9 +183,7 @@ function resolveDefaultPaiRoot(userDataPath) {
 
 async function findExistingPaiRoots() {
   const candidates = [
-    "E:\\projects\\PAI",
-    "D:\\projects\\PAI",
-    "C:\\projects\\PAI",
+    process.env.PAI_ROOT || "",
     path.join(process.env.USERPROFILE || "", "projects", "PAI"),
     path.join(process.env.LOCALAPPDATA || "", "ai-model-manager", "pai"),
     path.join(process.env.LOCALAPPDATA || "", "MoguAI", "pai"),

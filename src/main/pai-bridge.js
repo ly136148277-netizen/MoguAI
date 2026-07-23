@@ -3,13 +3,13 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs-extra");
 
-const DEFAULT_PAI_ROOT = "E:\\projects\\PAI";
 const DEFAULT_API_URL = "http://127.0.0.1:8765";
 
 class PaiBridge {
-  constructor() {
+  constructor({ userDataPath = "" } = {}) {
     this._process = null;
     this._startedByApp = false;
+    this.userDataPath = String(userDataPath || "").trim();
   }
 
   resolvePaiRoot(settings) {
@@ -19,18 +19,12 @@ class PaiBridge {
     if (process.env.PAI_ROOT) {
       return process.env.PAI_ROOT;
     }
-    const local = path.join(process.env.LOCALAPPDATA || "", "ai-model-manager", "pai");
-    try {
-      if (fs.pathExistsSync(path.join(local, ".venv", "Scripts", "python.exe"))) {
-        return local;
-      }
-      if (fs.pathExistsSync(path.join(DEFAULT_PAI_ROOT, ".venv", "Scripts", "python.exe"))) {
-        return DEFAULT_PAI_ROOT;
-      }
-    } catch {
-      // fall through
+    // Clean public default: runtime belongs to this app profile. Existing users
+    // keep their explicit settings.paiRoot; developers may opt in with PAI_ROOT.
+    if (this.userDataPath) {
+      return path.join(this.userDataPath, "pai");
     }
-    return DEFAULT_PAI_ROOT;
+    return path.join(process.env.LOCALAPPDATA || process.cwd(), "ai-model-manager", "pai");
   }
 
   resolveApiUrl(settings) {
@@ -203,4 +197,4 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-module.exports = { PaiBridge, DEFAULT_PAI_ROOT, DEFAULT_API_URL };
+module.exports = { PaiBridge, DEFAULT_API_URL };

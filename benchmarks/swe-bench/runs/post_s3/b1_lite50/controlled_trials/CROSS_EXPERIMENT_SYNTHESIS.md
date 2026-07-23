@@ -65,9 +65,9 @@ Resolved ≠ intervention worked
 
 因此当前**不建议**继续堆：
 
-- 更多 retry  
-- 更多 diversity  alone  
-- 更多 presentation polish  
+- 更多 retry
+- 更多 diversity  alone
+- 更多 presentation polish
 - 在同一熟脸三题上再加一层「强制读」而不先验样本外推
 
 ---
@@ -82,7 +82,7 @@ Resolved ≠ intervention worked
 | 门闩深触发仍败 | 11019（FC C3/C4 常见，0/3） |
 | Familiar-face | FC 已 Option F 降级声明 |
 
-**曾开放（Co）：** 熟脸是否只是「能力边界内死题」？  
+**曾开放（Co）：** 熟脸是否只是「能力边界内死题」？
 → **探针已答（§5）：** 新 Class-C `django-15781` baseline 上再 apply 仍 0/3，更偏广谱缺口，非仅熟脸天花板。
 
 ---
@@ -96,9 +96,9 @@ Resolved ≠ intervention worked
 | A | `sympy-13177` | Class A：3/3 `NO_VERIFY`；利用问题 **N/A** |
 | C | `django-15781`（未进前四轮 CT） | 失败后续环 3/3；再 `set_plan` 1/3；**再 `apply_patch` 0/3** |
 
-**Fork 落点：** 更接近「广谱：失败信息不转化为新定位/新 patch」，而非「仅熟脸死题」。  
-→ **EPB Spec Draft 已开**（`EVIDENCE_TO_PATCH_BINDING_SPEC.md`；窄变量 Evidence→Patch Binding）。  
-→ **不**再在熟脸三题上堆 packaging / consume / retry；**不**把「失败后必须再 apply」并进本 Spec。  
+**Fork 落点：** 更接近「广谱：失败信息不转化为新定位/新 patch」，而非「仅熟脸死题」。
+→ **EPB Spec Draft 已开**（`EVIDENCE_TO_PATCH_BINDING_SPEC.md`；窄变量 Evidence→Patch Binding）。
+→ **不**再在熟脸三题上堆 packaging / consume / retry；**不**把「失败后必须再 apply」并进本 Spec。
 → Caveat：Class-C 仅 n=1；扩池 / D1 仍必要；**Sample Gate 未关**。
 
 **禁止：** 无 Spec Review / Sample Gate 就实现或开 CT；Branch 字母不得默认开 flag。
@@ -107,7 +107,7 @@ Resolved ≠ intervention worked
 
 ## 6. 与产品化
 
-策略轨与产品化轨继续分列。  
+策略轨与产品化轨继续分列。
 本综合报告 **不**授权默认开启 D2 / diversity / pack / consume。
 
 ---
@@ -123,9 +123,9 @@ Capability-boundary probe → Complete
   Slot C: post-fail second apply = 0/3 → broad pattern
 
 Next gate:
-  Evidence-to-Patch Binding (EPB) — Spec Review PASS
-  → Implementation (code landed) → Smoke → Sample Gate close (n=5) → CT
-  Entry: EVIDENCE_TO_PATCH_BINDING_SPEC.md
-  Full:  b2_evidence_to_patch/EXPERIMENT.md
-  Gate:  b2_evidence_to_patch/SAMPLE_GATE.md (OPEN)
+  EPB — Smoke PASS (2026-07-23) · Sample Gate SHORTFALL (qualified_n5=0)
+  → Exit B frozen · CT blocked
+  → need D1 Class-C Fail pool (or Spec re-n) before Gate CLOSED → CT
+  Freeze: b2_evidence_to_patch/SHORTFALL.md
+  Gate:   b2_evidence_to_patch/SAMPLE_GATE.md (OPEN)
 ```

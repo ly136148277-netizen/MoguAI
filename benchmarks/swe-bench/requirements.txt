@@ -1,0 +1,3 @@
+# Official public evaluation harness only (optional, for bench:swe:eval)
+swebench>=2.1.0
+datasets>=2.14.0

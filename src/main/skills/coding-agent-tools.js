@@ -98,7 +98,7 @@ const TOOL_DEFS = [
     function: {
       name: "record_patch_binding",
       description:
-        "REQUIRED after a verify failure when Evidence-to-Patch Binding (EPB) is on, BEFORE apply_patch. Explicit BINDING token: bind this patch to a system Evidence Object (evidence_id). No free-text substitute; missing binding blocks apply.",
+        "REQUIRED after a verify failure when Evidence-to-Patch Binding (EPB) is on, BEFORE the next apply_patch. Call this then apply_patch; do not end the turn on git_diff alone. Explicit BINDING token to the open Evidence Object (evidence_id). Missing binding blocks apply.",
       parameters: {
         type: "object",
         properties: {

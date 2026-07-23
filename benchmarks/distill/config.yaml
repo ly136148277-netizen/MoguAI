@@ -1,0 +1,18 @@
+seed_dataset: humaneval
+teacher_model: gpt-4o
+student_model: sshleifer/tiny-gpt2
+output_dir: ./runs/distill_out
+epochs: 1
+batch_size: 1
+lr: 5.0e-5
+max_length: 512
+teacher_temperature: 2.0
+loss_weights:
+  hard: 1.0
+  soft: 0.5
+  feature_mmd: 0.1
+  adversarial: 0.1
+grl_alpha: 0.1
+cache_path: ./teacher_cache.json
+mock_logits_path: ./mock_teacher_logits.pt
+device: cpu

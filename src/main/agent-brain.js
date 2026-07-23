@@ -20,7 +20,7 @@ const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁
 - mogu_studio：创作台出片预检/运行/重试
 - mogu_ollama：本机模型列表/状态/导入
 - mogu_media：视频合成预检/拼接
-- mogu_coding：编程（Codex / trae-agent）；改完可用 review 看文件/diff，commit 需用户确认后调用，verify 跑测试
+- mogu_coding：MOGU AI 编程（引擎 A/B 可切换）；改完可用 review 看文件/diff，commit 需用户确认后调用，verify 跑测试
 - mogu_search：联网搜索实时事实
 - mogu_browser：打开网页、抓取正文；复杂办事用 act/click/fill（需本机 Playwright）
 - mogu_memory：分层记忆 preference/project/session；记住/回忆
@@ -233,6 +233,38 @@ function scrubToolResult(result) {
   return json.length > 6000 ? `${json.slice(0, 6000)}…` : json;
 }
 
+function codingStepFields(result = {}) {
+  return {
+    review: result.review || null,
+    suggestedCommitMessage: result.suggestedCommitMessage || null,
+    canCommit: result.canCommit === true,
+    workspace: result.workspace || null,
+    engine: result.engine || null,
+    canInstallRuntime: Boolean(result.canInstallRuntime),
+    upgradeEngine: result.upgradeEngine || null,
+    ctaMessage: result.ctaMessage || null,
+    code: result.code || null,
+  };
+}
+
+/** Append coding review summary so chat/task stream see work results. */
+function buildBrainContent(steps = [], fallback = "") {
+  const base = steps.length
+    ? `已执行 ${steps.length} 步工具。${steps.map((s) => `${s.tool}.${s.op}:${s.ok ? "ok" : "fail"}`).join("；")}`
+    : fallback || "（无步骤）";
+  const coding = [...steps]
+    .reverse()
+    .find((s) => s?.review?.summary || (s?.tool === "mogu_coding" && s?.review));
+  if (!coding?.review) return base;
+  const summary = String(coding.review.summary || "").trim();
+  const n = coding.review.fileCount || coding.review.files?.length || 0;
+  const bits = [base];
+  if (summary) bits.push(summary);
+  if (n) bits.push(`改动文件 ${n} 个`);
+  if (coding.canCommit) bits.push("可在任务卡确认提交，或打开精密工厂继续改。");
+  return bits.join("\n");
+}
+
 async function resolveBrainTools(settings) {
   const base = BRAIN_TOOLS.map((t) => ({
     type: t.type,
@@ -350,9 +382,13 @@ async function runBrainAgent({
 
     if (!reply.toolCalls.length) {
       const remembered = await autoPersistMemory(skillRuntime, text, steps, settings);
+      const replyText = reply.content || "（无回复）";
+      const withReview = steps.some((s) => s?.review?.summary)
+        ? `${replyText}\n${buildBrainContent(steps, "").split("\n").slice(1).join("\n")}`.trim()
+        : replyText;
       return {
         ok: true,
-        content: reply.content || "（无回复）",
+        content: withReview,
         provider: "api",
         model: reply.model,
         steps,
@@ -387,10 +423,7 @@ async function runBrainAgent({
         ok: result?.ok !== false,
         moguTaskId: result?.moguTaskId || null,
         error: result?.error || null,
-        review: result?.review || null,
-        suggestedCommitMessage: result?.suggestedCommitMessage || null,
-        canCommit: result?.canCommit === true,
-        workspace: result?.workspace || null,
+        ...codingStepFields(result),
       };
       steps.push(step);
       onProgress?.({ phase: "tool_done", tool: name, step, steps, round, executor: "brain" });
@@ -405,9 +438,7 @@ async function runBrainAgent({
   const remembered = await autoPersistMemory(skillRuntime, text, steps, settings);
   return {
     ok: true,
-    content: steps.length
-      ? `已执行 ${steps.length} 步工具。${steps.map((s) => `${s.tool}.${s.op}:${s.ok ? "ok" : "fail"}`).join("；")}`
-      : "已达最大工具轮次。",
+    content: buildBrainContent(steps, "已达最大工具轮次。"),
     provider: "api",
     model: settings.agentApiModel,
     steps,
@@ -503,10 +534,7 @@ async function runLocalBrainJson({
       ok: toolResult?.ok !== false,
       moguTaskId: toolResult?.moguTaskId || null,
       error: toolResult?.error || null,
-      review: toolResult?.review || null,
-      suggestedCommitMessage: toolResult?.suggestedCommitMessage || null,
-      canCommit: toolResult?.canCommit === true,
-      workspace: toolResult?.workspace || null,
+      ...codingStepFields(toolResult),
     };
     steps.push(step);
     onProgress?.({ phase: "tool_done", tool: parsed.tool, step, steps, round, executor: "brain" });
@@ -519,7 +547,7 @@ async function runLocalBrainJson({
 
   return {
     ok: true,
-    content: `已执行工具：${steps.map((s) => s.tool).join(", ")}`,
+    content: buildBrainContent(steps, `已执行工具：${steps.map((s) => s.tool).join(", ")}`),
     provider: "local",
     model: modelName,
     steps,
@@ -604,6 +632,7 @@ module.exports = {
   API_PRESETS,
   BRAIN_TOOLS,
   TOOL_TO_SKILL,
+  buildBrainContent,
   chatWithBrain,
   chatOpenAiCompatible,
   runBrainAgent,

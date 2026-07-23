@@ -70,11 +70,11 @@ describe("memory layers + auto persist", () => {
 
   it("extractHighValueFacts picks explicit remember and paths", () => {
     const facts = memory.extractHighValueFacts(
-      "请记住：默认用 Codex。项目在 E:\\projects\\PAI",
+      "请记住：默认用引擎 A。项目在 E:\\projects\\PAI",
       [],
       {}
     );
-    assert.ok(facts.some((f) => f.layer === "preference" || /Codex|PAI/.test(f.value)));
+    assert.ok(facts.some((f) => f.layer === "preference" || /引擎 A|PAI/.test(f.value)));
     assert.ok(facts.some((f) => /E:\\\\projects\\\\PAI|E:\\projects\\PAI/.test(f.value) || f.key === "project_path"));
   });
 

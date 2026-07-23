@@ -4,6 +4,7 @@ node_modules/
 
 # Electron build output
 dist/
+dist-*/
 out/
 release/
 
@@ -79,3 +80,7 @@ scripts/setup_scheduled_tasks*
 scripts/setup_wechat_domain.ps1
 scripts/test_feeds.py
 scripts/tasks/
+scripts/_tmp_*
+
+# Generated benchmark worktrees and local evaluator sandboxes
+benchmarks/swe-bench/work-*/

@@ -930,7 +930,8 @@ async function runCodingAgentLoop({
                 tool_call_id: call.id || `call_${steps}_${name}`,
                 content: out,
               });
-              const gateExtra = d2.active ? `\n\n${gateUserText()}` : "";
+              const gTxt = gateUserText();
+              const gateExtra = gTxt ? `\n\n${gTxt}` : "";
               messages.push({
                 role: "user",
                 content: truncateUser(
@@ -954,6 +955,22 @@ async function runCodingAgentLoop({
             content: truncateUser(gateUserText()),
           });
           trace.push(`step${steps}: ${name}`);
+          continue;
+        }
+
+        // EPB: after Evidence opens, inject gate so post-fail apply can be measured
+        // (no forced apply — model still chooses tools; Spec forbids forced-second-apply).
+        if (epb.enabled && epb.pending && !lastVerify.ok) {
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id || `call_${steps}_${name}`,
+            content: out.slice(0, 8000),
+          });
+          messages.push({
+            role: "user",
+            content: truncateUser(buildEpbGateUserMessage(epb)),
+          });
+          trace.push(`step${steps}: epb_gate_inject`);
           continue;
         }
       }

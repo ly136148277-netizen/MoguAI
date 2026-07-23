@@ -1,14 +1,14 @@
 # Post-S3 研究课题 Backlog
 
-> 与 [`S3_4_HANDOFF_CLOSEOUT.md`](./S3_4_HANDOFF_CLOSEOUT.md) **分文件存放**。  
-> S3.4 已 Pass；本清单可增删，**不**回写结案结论。  
+> 与 [`S3_4_HANDOFF_CLOSEOUT.md`](./S3_4_HANDOFF_CLOSEOUT.md) **分文件存放**。
+> S3.4 已 Pass；本清单可增删，**不**回写结案结论。
 > 更新：2026-07-21 · 目标定义 + 踩坑注脚 + P1/P2/P3；A0 已完成
 
 ---
 
 ## 目标（绑定「统一条件」）
 
-> MOGU：**工具平台**，不是最强模型。在**统一条件**下，持续提升模型完成真实工程任务的能力。  
+> MOGU：**工具平台**，不是最强模型。在**统一条件**下，持续提升模型完成真实工程任务的能力。
 > 详述与排期边界见 [`PROJECT_AUTONOMY_ROADMAP.md`](./PROJECT_AUTONOMY_ROADMAP.md)。
 
 **「统一条件」踩坑注脚（勿退化成空话）：**
@@ -23,8 +23,8 @@
 
 ## 原则
 
-- 不阻塞 S3.4；实例级归因；BoN ≠ R_reg；禁混模凑 k=N。  
-- 措辞不超过证据（用「未复现 / 证据不足」，不用「噪声/丢弃/已证明等价」）。  
+- 不阻塞 S3.4；实例级归因；BoN ≠ R_reg；禁混模凑 k=N。
+- 措辞不超过证据（用「未复现 / 证据不足」，不用「噪声/丢弃/已证明等价」）。
 - **排期 ≠ 能力预测**；**300 题 = 证据升级，≠「最强工具」证明**。
 
 ## Post-S3 工作流
@@ -74,9 +74,9 @@
 | **Feedback-Consumption** | 强制消费门闩 | 信息是否进决策 | Branch **B** (1/3, F)；13265 R 皆 first-shot → util Not Confirmed | **Archived** |
 | **Cross-synthesis** | 排除链收束 | 瓶颈在 decision grounding | `controlled_trials/CROSS_EXPERIMENT_SYNTHESIS.md` | **Complete** |
 | **Capability probe** | baseline 新题 k=3 | 熟脸 vs 广谱 | `capability_boundary_probe/RESULTS.md`：Slot C 再 apply=0/3 → 广谱侧 | **Complete** |
-| **EPB / Decision Binding** | Evidence→Patch Binding | 补丁是否绑定失败证据 | Spec Review PASS；`MOGU_EVIDENCE_PATCH_BIND`；DB0–DB4；n=5 Gate OPEN；CT blocked until Gate close | **Impl / Smoke next** |
+| **EPB / Decision Binding** | Evidence→Patch Binding | 补丁是否绑定失败证据 | Smoke **PASS**；机制≠效果；**D1 one-shot expansion**（50/+50/cap100）；见 `D1_EXPANSION_PROTOCOL.md`。**产品主线已切换为 Public Release FINAL FREEZE**（`docs/PUBLIC_RELEASE_FINAL_FREEZE.md`）；本轨 Default-Off · 不阻塞发行 | **D1 parallel · non-blocking** |
 | D3 | 反馈质量（广义） | 与 Feedback-B 合流 | — | Deferred |
-| D1 | 非 django 补 verify | 基建扩池（非 CT） | `D1_VERIFY_COVERAGE_INFRA.md`；不与策略 CT 混跑 | Candidate |
+| D1 | 非 django 补 verify / EPB 扩样 | 基建扩池（非策略 CT） | 真·verify-coverage 仍见 `D1_VERIFY_COVERAGE_INFRA.md`；EPB 用 django Class-C 帧扩样见 `D1_EXPANSION_PROTOCOL.md` | **EPB D1 ACTIVE** |
 | D3 | 反馈质量（广义） | 与 Feedback-B / 原则文档合流 | Feedback-B 冻结后并入 | Deferred |
 | B-ext | 官方模型公开协议对标 | 真·外部同台 | 需官方 Claude/GPT key + 协议对齐；与 B1/B2 **分规划、分跑批** | 待办 / 未立项 |
 
@@ -96,32 +96,32 @@
 
 **不**用「谁更接近公开榜」选 sol vs 5.5——中转代号与榜上 Claude/GPT **不是同一回事**；可比性取决于**协议 + 官方模型身份**，不取决于中转别名。
 
-B1/B2 选模看：**(1) 稳定性（sol 易 503）(2) 成本** → 当前优先 **`gpt-5.5`**。  
+B1/B2 选模看：**(1) 稳定性（sol 易 503）(2) 成本** → 当前优先 **`gpt-5.5`**。
 真·公开同台 → 单开 **B-ext**。
 
 ---
 
 ## 建议下一刀（已拍板）
 
-**选 A（先规模化），执行顺序：B1（50）→ B2（300）**；P1 工具并行设计、不混进 B1 变量。  
+**选 A（先规模化），执行顺序：B1（50）→ B2（300）**；P1 工具并行设计、不混进 B1 变量。
 理由：一次只变规模；避免「新工具 bug」与「300 基建坑」纠缠。
 
-1. **CT integrity_v1 / B2-D2** — Archived · Branch C（不变）  
-2. **开源原则** — Done（P1–P7）  
-3. **B2-D2′ Archived** — 计数 Branch B；机制 inconclusive（`DIAGNOSIS_BRANCH_B.md`）  
-   - 已排除：单纯 retry、单纯禁重复；P7 未证实  
-4. **Next：Feedback-B Spec Review** — `b2_feedback_b/EXPERIMENT.md` / `FEEDBACK_B_EXPERIMENT.md`  
-   - Review PASS 前：禁止实现 / 冒烟 / CT  
-   - n=3 Branch 映射已预注册；第 4 题搜寻失败已记录  
-5. **D1 / 产品化** — 单列  
-6. B1 / Error / 分桶 / integrity / audit 均 Archived，不动  
+1. **CT integrity_v1 / B2-D2** — Archived · Branch C（不变）
+2. **开源原则** — Done（P1–P7）
+3. **B2-D2′ Archived** — 计数 Branch B；机制 inconclusive（`DIAGNOSIS_BRANCH_B.md`）
+   - 已排除：单纯 retry、单纯禁重复；P7 未证实
+4. **Next：Feedback-B Spec Review** — `b2_feedback_b/EXPERIMENT.md` / `FEEDBACK_B_EXPERIMENT.md`
+   - Review PASS 前：禁止实现 / 冒烟 / CT
+   - n=3 Branch 映射已预注册；第 4 题搜寻失败已记录
+5. **D1 / 产品化** — 单列
+6. B1 / Error / 分桶 / integrity / audit 均 Archived，不动
 
 ---
 
 ## 参考路径
 
-- 结案：`docs/S3_4_HANDOFF_CLOSEOUT.md`  
-- 策略：`docs/POST_S3_EXPERIMENT_POLICY.md`  
-- R1/R1b/R2：`benchmarks/swe-bench/runs/post_s3/`  
-- 结案基线：`runs/lite8-phaseX-regression-20260720/`  
-- 历史硬锚：`runs/lite8-phase1-anchor-20260720/`  
+- 结案：`docs/S3_4_HANDOFF_CLOSEOUT.md`
+- 策略：`docs/POST_S3_EXPERIMENT_POLICY.md`
+- R1/R1b/R2：`benchmarks/swe-bench/runs/post_s3/`
+- 结案基线：`runs/lite8-phaseX-regression-20260720/`
+- 历史硬锚：`runs/lite8-phase1-anchor-20260720/`

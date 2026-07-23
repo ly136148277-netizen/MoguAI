@@ -91,8 +91,8 @@ function humanizeSkillAction(command) {
       next: "若只想查看改动，可先取消，在任务卡点「刷新改动」。",
     },
     "mogu.coding.run": {
-      title: "确认运行编程引擎",
-      message: "编程引擎将在本地工作区改文件/跑命令（Codex 或 trae-agent）。",
+      title: "确认运行 MOGU AI 编程",
+      message: "MOGU AI 编程将在本地工作区改文件/跑命令（引擎 A 或 B）。",
       next: "完成后可在任务卡查看 diff，再决定是否提交。",
     },
     "mogu.coding.verify": {

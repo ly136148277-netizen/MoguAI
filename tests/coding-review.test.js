@@ -54,20 +54,66 @@ describe("coding-review", () => {
     assert.equal(clean.canCommit, false);
   });
 
-  it("installFixHints exposes copyable commands", () => {
+  it("installFixHints prefers one-click install CTA", () => {
     const fix = installFixHints({
-      codex: { installed: false, message: "missing", vendorRepo: null },
-      trae: { installed: false, message: "missing", vendorRepo: "D:\\Project\\vendor\\trae-agent" },
+      moguai_a: {
+        installed: false,
+        message: "missing",
+        vendorRepo: null,
+        fixCommands: ["moguai-coding-a --version"],
+      },
+      moguai_b: {
+        installed: false,
+        message: "missing",
+        vendorRepo: "D:\\Project\\vendor\\moguai-runtime-b",
+        fixCommands: ["部署：D:\\Project\\vendor\\moguai-runtime-b", "入口：moguai-coding-b"],
+      },
     });
-    assert.ok(fix.copyCommands.some((c) => c.includes("npm i -g")));
-    assert.ok(fix.copyCommands.some((c) => c.includes("uv sync")));
+    assert.equal(fix.canInstallRuntime, true);
+    assert.equal(fix.upgradeEngine, "all");
+    assert.ok(fix.fixText.includes("一键"));
+    assert.ok(fix.copyCommands.some((c) => c.includes("安装/升级")));
   });
 
-  it("coding registry includes review/commit/verify", () => {
+  it("coding registry includes review/commit/verify/accept/discard", () => {
     const def = getSkillDef("mogu.coding");
     assert.ok(def.ops.includes("review"));
     assert.ok(def.ops.includes("commit"));
     assert.ok(def.ops.includes("verify"));
+    assert.ok(def.ops.includes("accept"));
+    assert.ok(def.ops.includes("discard"));
+  });
+
+  it("accept and discard round-trip in temp git repo", async () => {
+    const {
+      acceptWorkspaceChanges,
+      discardWorkspaceChanges,
+      collectGitReview,
+    } = require("../src/main/skills/coding-review");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moguai-accept-"));
+    try {
+      spawnSync("git", ["init"], { cwd: dir, encoding: "utf8", windowsHide: true });
+      spawnSync("git", ["config", "user.email", "t@t.t"], { cwd: dir, windowsHide: true });
+      spawnSync("git", ["config", "user.name", "t"], { cwd: dir, windowsHide: true });
+      await fs.writeFile(path.join(dir, "a.js"), "console.log(1)\n", "utf8");
+      spawnSync("git", ["add", "."], { cwd: dir, windowsHide: true });
+      spawnSync("git", ["commit", "-m", "init"], { cwd: dir, windowsHide: true });
+      await fs.writeFile(path.join(dir, "a.js"), "console.log(2)\n", "utf8");
+      await fs.writeFile(path.join(dir, "b.js"), "console.log('new')\n", "utf8");
+      const before = collectGitReview(dir);
+      assert.ok(before.fileCount >= 2);
+      const accepted = acceptWorkspaceChanges(dir, { paths: ["a.js"] });
+      assert.equal(accepted.ok, true);
+      const discarded = discardWorkspaceChanges(dir, { paths: ["b.js"] });
+      assert.equal(discarded.ok, true);
+      assert.ok(!fs.pathExistsSync(path.join(dir, "b.js")));
+      const afterDiscardA = discardWorkspaceChanges(dir, { paths: ["a.js"] });
+      assert.equal(afterDiscardA.ok, true);
+      const clean = collectGitReview(dir);
+      assert.equal(clean.fileCount, 0);
+    } finally {
+      await fs.remove(dir);
+    }
   });
 });
 

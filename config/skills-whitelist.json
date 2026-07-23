@@ -39,10 +39,10 @@
     },
     {
       "id": "mogu.coding",
-      "title": "编程双引擎",
+      "title": "MOGU AI 编程",
       "version": "2.1.0",
       "bundled": true,
-      "description": "Codex CLI + trae-agent 统一编程入口"
+      "description": "MOGU AI 自有双引擎编程"
     },
     {
       "id": "mogu.search",

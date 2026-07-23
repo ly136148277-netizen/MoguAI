@@ -1,4 +1,4 @@
-# MOGU AI 1.5.3
+# MOGU AI 2.0
 
 **English** | [简体中文](./README.zh-CN.md)
 
@@ -7,16 +7,16 @@
 </p>
 
 <p align="center">
-  <strong>Agent models · Local Agent · ComfyUI creation · Video compose</strong><br>
-  <sub>An open-source local AI creation desktop app for Windows. Your models and media stay on your PC.</sub>
+  <strong>Personal AI Control Center · Agent · Studio · Coding Factory</strong><br>
+  <sub>An open-source local AI desktop app for Windows. Your models, chats, and creations stay on your PC.</sub>
 </p>
 
 <p align="center">
   <a href="https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest"><strong>Download latest</strong></a>
   ·
-  <a href="./docs/STUDIO_v1.5.md">Studio guide</a>
+  <a href="./docs/PUBLIC_RELEASE_FINAL_FREEZE.md">Public RC plan</a>
   ·
-  <a href="./docs/SETUP_HUB_v1.5.md">Environment setup</a>
+  <a href="./docs/MOGU_NORTH_STAR_AND_CAPABILITY_FUSION.md">North star</a>
   ·
   <a href="https://github.com/ly136148277-netizen/MoguAI/issues">Report an issue</a>
 </p>
@@ -24,30 +24,38 @@
 [![Release](https://img.shields.io/github/v/release/ly136148277-netizen/mogu-ai-releases?label=download&sort=semver&color=0078D6)](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://github.com/ly136148277-netizen/MoguAI)
-[![Version](https://img.shields.io/badge/version-1.5.3-22c55e)](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/tag/v1.5.3)
+[![Version](https://img.shields.io/badge/version-2.0.1--rc.1-22c55e)](./package.json)
+
+> **Current candidate:** `package.json` = **2.0.1-rc.1**. Public GitHub evidence confirms `v2.0.0` was published on 2026-07-18.
+> Research / SWE-bench / EPB are internal Default-Off tracks and are **not** Public Release marketing.
 
 ---
 
 ## What is MOGU AI?
 
-MOGU AI brings local models, a desktop Agent, ComfyUI workflows, and video assembly into one window. Download Agent models, ask the Agent to operate your PC, run your own ComfyUI image/video workflows, and arrange generated shots into a longer video.
-
-It is not a cloud generation service. Ollama, PAI, ComfyUI, and FFmpeg run locally. Using an online model is always optional.
+MOGU AI is a Windows personal AI control center: chat-first Agent, OpenClaw/PAI runtimes, nine Skills, ComfyUI Studio, model downloads, permissions, tasks, data backup/diagnostics, and a coding factory. Online models are optional; local tools stay on your machine.
 
 <p align="center">
-  <img src="docs/images/01-home-v153.png" width="900" alt="MOGU AI 1.5.3 home" />
+  <img src="docs/images/01-home-v153.png" width="900" alt="MOGU AI home" />
 </p>
 
 ---
 
 ## What's included
 
+### Agent and runtimes
+
+- Chat-first home with explicit executor choice: Brain / OpenClaw / PAI
+- No silent fallback unless the user enables OpenClaw→PAI fallback
+- Permission levels L1/L2/L3 with audit; L3 always reconfirms
+- Task center, backup/restore (no secrets), diagnostic export
+
 ### Agent models
 
 - Browse, search, and download GGUF models
 - Import completed downloads into Ollama for offline use
 - Manage downloaded models and active downloads
-- Choose a built-in guide, local Ollama model, or online API as the Agent's guidance model
+- Guidance model: built-in tutorial, local Ollama, or online API
 - Online presets for DeepSeek, OpenAI, Qwen, Kimi, and custom OpenAI-compatible endpoints
 
 <p align="center">
@@ -60,7 +68,6 @@ It is not a cloud generation service. Ollama, PAI, ComfyUI, and FFmpeg run local
 - Ask how to install the environment or use Studio
 - PAI permission levels and confirmation for risky operations
 - Scheduled shutdown for long generation jobs
-- Local PAI executes tasks; guidance can be built-in, local, or online
 
 <p align="center">
   <img src="docs/images/03-agent-v153.png" width="900" alt="MOGU AI Agent" />
@@ -95,11 +102,11 @@ Prefer **Save (API Format)** in ComfyUI. A workflow must match the task and mode
 
 ### One-stop environment setup
 
+- Choose AI executor (OpenClaw / PAI / Brain)
 - Check and start Ollama
 - Install, select, and connect PAI
 - Scan for an existing ComfyUI installation
 - Install portable FFmpeg without manual PATH setup
-- See all four environment states on Home and Studio
 
 <p align="center">
   <img src="docs/images/06-setup-v153.png" width="900" alt="Environment setup" />
@@ -109,14 +116,23 @@ Prefer **Save (API Format)** in ComfyUI. A workflow must match the task and mode
 
 ## Download and install
 
-The recommended file is **`MOGU-AI-Setup-1.5.3.exe`**:
+Public customers should only install packages from [mogu-ai-releases](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest) after Public RC hard gates pass. Until then, local `dist` builds are **Internal Preview / unsigned**.
 
-1. Download it from [Releases](https://github.com/ly136148277-netizen/mogu-ai-releases/releases/latest)
-2. Run the installer and choose an installation directory
-3. Confirm installation; a round mushroom desktop shortcut is created automatically
-4. Open Environment on first launch and configure Ollama, PAI, ComfyUI, and FFmpeg as needed
+Typical filenames (version follows `package.json`):
 
-The portable build is **`MOGU.AI.1.5.3.exe`**. `latest.yml` and `.blockmap` are only for in-app updates.
+- Installer: `MOGU-AI-Setup-<version>.exe` (NSIS)
+- Portable: electron-builder portable EXE (**免安装版** — same AppData as the installer; **not** a self-contained data profile beside the EXE)
+
+1. Download from Releases
+2. Run the installer (or portable EXE)
+3. On first launch open Environment, choose an executor, then configure Ollama / PAI / ComfyUI / FFmpeg as needed
+
+### Data and privacy facts
+
+- User data lives under `%APPDATA%\ai-model-manager\` (same for NSIS and Portable)
+- Uninstall **keeps** AppData by default (`deleteAppDataOnUninstall: false`)
+- API keys use Electron `safeStorage` only (fail-closed; never plaintext)
+- Clean-profile QA: `MOGU_USER_DATA=<empty dir>` or `--user-data-dir=` — do not delete the developer profile
 
 ### Requirements
 
@@ -147,35 +163,15 @@ See [`docs/COMFYUI_WORKFLOWS.md`](./docs/COMFYUI_WORKFLOWS.md) and [`docs/STUDIO
 ```bash
 git clone https://github.com/ly136148277-netizen/MoguAI.git
 cd MoguAI
-npm install
-npm start
-
+npm ci
 npm test
-npm run screenshots
-npm run dist
+npm start
 ```
 
-### Architecture
-
-```text
-Electron
-├── Agent models  → GGUF downloads / Ollama / online APIs
-├── Agent         → PAI HTTP / local capabilities
-├── Studio        → PAI Studio / ComfyUI workflows
-├── Video compose → FFmpeg / external editors
-└── Environment   → Ollama / PAI / ComfyUI / FFmpeg
-```
-
-### Related repositories
-
-- [`MoguAI`](https://github.com/ly136148277-netizen/MoguAI): Electron source
-- [`mogu-ai-releases`](https://github.com/ly136148277-netizen/mogu-ai-releases): installers and auto-update metadata
-- [`mogu-map`](https://github.com/ly136148277-netizen/mogu-map): GGUF catalog CDN
-
-See [`docs/RELEASE.md`](./docs/RELEASE.md) for releases and [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution guidelines.
+Release / packaging notes: [`docs/RELEASE.md`](./docs/RELEASE.md) · Public RC freeze: [`docs/PUBLIC_RELEASE_FINAL_FREEZE.md`](./docs/PUBLIC_RELEASE_FINAL_FREEZE.md)
 
 ---
 
 ## License
 
-[MIT](./LICENSE) — free for personal and commercial use.
+MIT — see [LICENSE](./LICENSE).

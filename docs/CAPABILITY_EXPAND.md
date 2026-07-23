@@ -1,6 +1,6 @@
 # 能力扩展（大脑工具对齐 / 搜索 / 浏览器 / MCP / 记忆）
 
-存档点：`archive/brain-coding-2026-07-19`（coding bridge + brain-act）。
+存档点：`archive/brain-coding-2026-07-19`（MOGU AI 编程 + brain-act）。
 
 ## 默认路径
 

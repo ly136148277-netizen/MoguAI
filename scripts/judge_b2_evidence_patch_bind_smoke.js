@@ -44,17 +44,22 @@ const sawMissing = (epb?.binding_missing || 0) > 0;
 const sawValid = (epb?.binding_valid || 0) > 0;
 const sawEvidence = hasArt || Boolean(epb?.openEvidenceId) || (epb?.cycles || []).length > 0;
 
-// Soft: if verify never failed in-loop, evidence may be absent — still require flag enabled.
+// Evidence path must open after real verify fail.
 pass =
   ok(
-    "EPB mechanism surface",
-    epb?.enabled === true && (sawEvidence || sawMissing || sawValid || usedBind || tools.includes("run_tests")),
-    `evidence=${sawEvidence} missing=${sawMissing} valid=${sawValid} toolBind=${usedBind}`
+    "EPB evidence opened",
+    sawEvidence === true,
+    `evidence=${sawEvidence} openId=${epb?.openEvidenceId || "-"}`
   ) && pass;
 
-if (sawMissing || sawValid) {
-  pass = ok("error codes observed", true, `missing=${epb.binding_missing} valid=${epb.binding_valid}`) && pass;
-}
+// Gate must be exercised: either a blocked apply or a valid binding.
+const gateExercised = sawMissing || sawValid || usedBind || (epb?.gated_apply_attempts || 0) > 0;
+pass =
+  ok(
+    "EPB binding gate exercised",
+    gateExercised,
+    `missing=${sawMissing} valid=${sawValid} toolBind=${usedBind} gatedAttempts=${epb?.gated_apply_attempts || 0}`
+  ) && pass;
 
 console.log(pass ? "\nSMOKE PASS (mechanism; Branch N/A)" : "\nSMOKE FAIL");
 process.exit(pass ? 0 : 1);

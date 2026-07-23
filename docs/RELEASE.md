@@ -12,8 +12,8 @@
 
 原则：
 
-1. **打包只含程序与公开配置**（白名单 + ASAR denylist）；永不打进 `*.token`、`.env`、你的 `secrets.json`、本机路径。  
-2. **登录态与密钥只在各机 userData**，换电脑不会、也不应该自动带上你的账号。  
+1. **打包只含程序与公开配置**（白名单 + ASAR denylist）；永不打进 `*.token`、`.env`、你的 `secrets.json`、本机路径。
+2. **登录态与密钥只在各机 userData**，换电脑不会、也不应该自动带上你的账号。
 3. **开发版 / beta** 给你自己；**通用客户**只发稳定 Release，另走审核与 `preflight:release`。
 
 ## 一、模型库 CDN 同步
@@ -35,7 +35,7 @@ cd D:\Project\ai-model-manager
 .\scripts\publish_model_catalog.ps1 -SkipPush   # 仅本地预览 .publish-mogu-catalog
 ```
 
-> **勿与地图脚本混淆**：`publish_mogu_map.ps1` 推的是优惠地图；`publish_model_catalog.ps1` 推的是 **GGUF 模型库**。  
+> **勿与地图脚本混淆**：`publish_mogu_map.ps1` 推的是优惠地图；`publish_model_catalog.ps1` 推的是 **GGUF 模型库**。
 > **勿与 PAI 混淆**：PAI `/workflows/catalog` 是 ComfyUI 工作流，由管家 Agent 维护。
 
 2. 默认 syncUrl（jsDelivr）：
@@ -133,12 +133,18 @@ $env:CSC_KEY_PASSWORD = "..."
 ## 四、发版 Checklist
 
 - [ ] `npm test` 全绿
-- [ ] `package.json` 版本号 bump
+- [ ] `npm run check:public-profile` 全绿
+- [x] `package.json` → `2.0.1-rc.1`（公共 GitHub 证据确认 `v2.0.0` 已发布）
 - [ ] `CHANGELOG.md` 更新
-- [ ] `npm run dist`
-- [ ] 上传安装包 + `latest.yml` 到更新 CDN
+- [ ] 工作区 clean + RC tag（Grok 不创建 tag）
+- [ ] `npm run dist`（有证书则签名；无证书只能 Internal Preview）
+- [ ] `npm run check:asar`
+- [ ] `evidence:test` + `manifest:payload` + `manifest:validate` + `evidence:generate` + `evidence:validate`
+- [ ] 最终签名文件的安装/升级/卸载 E2E
+- [ ] 上传版本化资产 → **下载回验** → 最后发布对应 channel manifest（RC 为 `rc.yml`，stable 为 `latest.yml`）
 - [ ] （可选）推送 `catalog/models.json` 到 mogu-map
-- [ ] （可选）配置 CSC_LINK 后重打签名包
+
+> Portable = **免安装版**（与 NSIS 共用 AppData）。卸载默认保留用户数据。研究轨不进营销。
 
 ---
 
@@ -148,3 +154,5 @@ $env:CSC_KEY_PASSWORD = "..."
 |------|--------|
 | 模型库 / CDN / 自动更新 / 签名 | 桌面端（本仓库） |
 | 内置 PAI / ComfyUI 能力扩展 | 管家 Agent / PAI 团队 |
+| Public RC 无凭据准备（G1–G7） | Cursor Grok 4.5 任务书 |
+| clean tag / 签名 / 上传回验 / Default-On | 项目所有者 + GPT-5.6 Sol 复核 |

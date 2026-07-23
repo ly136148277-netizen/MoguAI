@@ -21,7 +21,7 @@ shutdown: requested after archive
 | EPB Spec | Review PASS；§9 CLOSED |
 | EPB 实现 | `coding-evidence-patch-bind.js` + loop/tools/handlers/bench 接线 |
 | EPB 单元 | `tests/coding-evidence-patch-bind.test.js` **4/4 PASS** |
-| EPB live smoke | `ct-epb-smoke-django15781-20260722` — **关机时未完成**（进程中断） |
+| EPB live smoke | `ct-epb-smoke-django15781-20260722` — 关机中断；**2026-07-23 晨已重跑** |
 | Sample Gate | **OPEN**；n=5；排除熟脸+15781 |
 
 ## 冻结口径（勿改）

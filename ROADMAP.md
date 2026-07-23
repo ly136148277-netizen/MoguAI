@@ -1,9 +1,12 @@
 # ROADMAP.md
 
-> 基于当前源码与项目历史整理，非凭空规划。  
-> **到 v2.0 的现行产品方案（唯一主线）：** [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)  
-> **OpenClaw Bridge 契约：** [`docs/OPENCLAW_BRIDGE.md`](./docs/OPENCLAW_BRIDGE.md)  
-> 定位：通用个人 AI 助手桌面控制中心 · OpenClaw 为 Runtime · MOGU 为体验与 Skills 层。  
+> 基于当前源码与项目历史整理，非凭空规划。
+> **北极星与 2.1–3.0 能力融合总纲：** [`docs/MOGU_NORTH_STAR_AND_CAPABILITY_FUSION.md`](./docs/MOGU_NORTH_STAR_AND_CAPABILITY_FUSION.md)
+> **当前里程碑（Public RC）：** [`docs/PUBLIC_RELEASE_FINAL_FREEZE.md`](./docs/PUBLIC_RELEASE_FINAL_FREEZE.md)
+> **到 v2.0 的历史实施方案：** [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)
+> **OpenClaw Bridge 契约：** [`docs/OPENCLAW_BRIDGE.md`](./docs/OPENCLAW_BRIDGE.md)
+> 北极星：以 GPT-5.6 为默认大脑，融合经验证的 Agent 能力，成为最强 Windows 个人 AI 工作台。
+> 当前顺序：Public RC → 2.1 Capability Fusion → 2.2 Frontier Coding → 2.3 Autonomous Tasks → 2.4 Evidence Memory → 3.0 Autonomous Workspace。
 > 文末「历史归档」旧 V2.0 章节已作废，勿作规划依据。
 
 ---
@@ -18,7 +21,13 @@
 | V1.3 | ✅ 已完成（v1.3.0） | MOGU AI 品牌、聊天导出、Ollama 引导、保存路径提示 |
 | V1.4–V1.5.3 | ✅ 已完成 | CDN、自动更新、创作台、视频合成、环境中心、发版 |
 | V1.5.5 | ✅ 基线 | 打包白名单 + ASAR denylist；`v1.5.4` 安装包已 yank |
-| V1.6.0-alpha → V2.0 | 📋 进行中 | 见 [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)（Bridge → 任务中心 → Skills → 助手控制中心） |
+| V1.6.0-alpha → V2.0 | ✅ 产品形态已形成 / RC 冻结中 | Bridge → 任务中心 → Skills → 助手控制中心 |
+| V2.0 Public RC | 🚧 Day 0–4 完成，Day 5–7 待继续 | 安全、干净、可安装、证据绑定的公共交付底座 |
+| V2.1 | 📋 Public RC 后立即启动 | Agent Capability Fusion：受控终端、多语言 LSP/Repo Map、验证闭环、Worktree/只读并行 |
+| V2.2 | 📋 后续 | Frontier Coding Agent |
+| V2.3 | 📋 后续 | Autonomous Task System |
+| V2.4 | 📋 后续 | Evidence-based Memory |
+| V3.0 | 🎯 北极星 | Autonomous Workspace / Windows 最强个人 AI 工作台 |
 
 ---
 
@@ -162,8 +171,8 @@
 
 ## 历史归档 — 旧「V2.0」章节（已作废，勿作规划依据）
 
-> **唯一现行主线：** [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)  
-> **Bridge 契约：** [`docs/OPENCLAW_BRIDGE.md`](./docs/OPENCLAW_BRIDGE.md)  
+> **唯一现行主线：** [`docs/ROADMAP_TO_V2.md`](./docs/ROADMAP_TO_V2.md)
+> **Bridge 契约：** [`docs/OPENCLAW_BRIDGE.md`](./docs/OPENCLAW_BRIDGE.md)
 > 下文保留仅为历史对照。旧定义「V2.0 = Ollama 自动启动 + 横向功能清单」**已废止**；Ollama 启停属于已交付的 1.x 能力，不再占用 v2.0 语义。
 
 ### （归档）曾标注为 V2.0-001 — 自动检测与启动 Ollama

@@ -117,6 +117,12 @@ const AgentPanel = (() => {
     els.codingCommitBtn = document.getElementById("agent-coding-commit-btn");
     els.codingVerifyBtn = document.getElementById("agent-coding-verify-btn");
     els.codingRefreshReview = document.getElementById("agent-coding-refresh-review");
+    els.codingRedispatchBtn = document.getElementById("agent-coding-redispatch-btn");
+    els.codingInstallBtn = document.getElementById("agent-coding-install-btn");
+    els.codingAcceptBtn = document.getElementById("agent-coding-accept-btn");
+    els.codingDiscardBtn = document.getElementById("agent-coding-discard-btn");
+    els.openFactoryBtn = document.getElementById("agent-open-factory-btn");
+    els.gotoFactoryBtn = document.getElementById("agent-goto-factory-btn");
     els.brainSteps = document.getElementById("agent-brain-steps");
     els.brainBanner = document.getElementById("agent-brain-banner");
     els.brainBannerText = document.getElementById("agent-brain-banner-text");
@@ -150,6 +156,17 @@ const AgentPanel = (() => {
     els.codingCommitBtn?.addEventListener("click", commitCodingChanges);
     els.codingVerifyBtn?.addEventListener("click", verifyCodingWorkspace);
     els.codingRefreshReview?.addEventListener("click", refreshCodingReview);
+    els.codingRedispatchBtn?.addEventListener("click", redispatchCoding);
+    els.codingInstallBtn?.addEventListener("click", installCodingRuntime);
+    els.codingAcceptBtn?.addEventListener("click", () => acceptCodingChanges([]));
+    els.codingDiscardBtn?.addEventListener("click", () => discardCodingChanges([]));
+    els.openFactoryBtn?.addEventListener("click", openPrecisionFactory);
+    els.gotoFactoryBtn?.addEventListener("click", () => {
+      window.AppRouter?.navigate("factory", {
+        workspace: lastCodingRetry?.workspace || undefined,
+        prompt: lastCodingRetry?.prompt || undefined,
+      });
+    });
     els.brainGotoApi?.addEventListener("click", () => openBrainSettings("api"));
     els.brainGotoLocal?.addEventListener("click", () => openBrainSettings("local"));
     els.brainBannerDismiss?.addEventListener("click", () => {
@@ -275,7 +292,13 @@ const AgentPanel = (() => {
       return;
     }
     const state = await getBrainSetupState();
-    if (state.ready) {
+    const show =
+      window.AgentRouting?.shouldShowBrainSetupBanner?.({
+        brainChannel: state.channel,
+        brainReady: state.ready,
+        runtimeMode,
+      }) ?? !state.ready;
+    if (!show) {
       els.brainBanner.classList.add("hidden");
       return;
     }
@@ -311,7 +334,7 @@ const AgentPanel = (() => {
     els.ocBanner.classList.toggle("hidden", !show);
     if (els.ocBannerText && show) {
       const state = oc?.state || oc?.lifecycle || "未连接";
-      els.ocBannerText.textContent = `尚未连接 OpenClaw Gateway（${state}）。大脑未配置时连接后走 OpenClaw；也可改用 PAI 兼容。`;
+      els.ocBannerText.textContent = `尚未连接 OpenClaw Gateway（${state}）。请先连接，或明确改选 PAI / 配置大脑——不会静默切换。`;
     }
   }
 
@@ -331,9 +354,39 @@ const AgentPanel = (() => {
     if (executor) els.executorPill.classList.add(`agent-executor-pill--${executor}`);
   }
 
-  function resolveExecutor(brainReady) {
+  function resolveExecutor(brainReady, brainChannel) {
+    const routing = window.AgentRouting;
+    if (routing?.resolveExecutorLabel) {
+      return routing.resolveExecutorLabel({
+        brainChannel: brainChannel || "builtin",
+        brainReady,
+        runtimeMode,
+      });
+    }
     if (brainReady) return "brain";
     return runtimeMode === "openclaw" ? "openclaw" : "pai";
+  }
+
+  function formatRouteAssistantMessage(route, brainReason) {
+    const lines = [];
+    if (route.message) lines.push(route.message);
+    else if (brainReason) lines.push(brainReason);
+    const choiceHints = {
+      configure_brain: "点上方提示配置联网 API 或本机模型",
+      switch_openclaw: "在运行时下拉选择 OpenClaw，并确保 Gateway 已连接",
+      switch_pai: "在运行时下拉选择 PAI（兼容）",
+      retry_openclaw: "检查 OpenClaw Gateway 后重试",
+    };
+    if (Array.isArray(route.choices) && route.choices.length) {
+      lines.push("");
+      lines.push("可选操作：");
+      for (const c of route.choices) {
+        lines.push(`· ${choiceHints[c] || c}`);
+      }
+    }
+    lines.push("");
+    lines.push("不会静默切换执行方；请明确选择后再发送。");
+    return lines.join("\n");
   }
 
   async function refreshSessions() {
@@ -411,12 +464,15 @@ const AgentPanel = (() => {
       [
         "欢迎使用 MOGU AI。",
         "",
-        "【请先做这一步】配置大脑——否则软件不知道怎么自动办事。",
-        "1. 点上方橙色条「配置联网 API」（推荐），或「配置本机模型」",
-        "2. 保存后回到对话，直接用自然语言下指令",
+        "当前默认执行方是 OpenClaw（也可改用 PAI，或配置「大脑」自动调度）。",
+        "不会静默切换：你选谁就用谁；不可用时会说明原因并给出选项。",
         "",
-        "大脑 = 听懂你的话并调度；本机 / 编程 / 出片都是工具（Key 只填大脑一次）。",
-        "未配置前只能看内置说明，不会自动调用工具。",
+        "建议第一步（任选其一）：",
+        "1. 连接 OpenClaw Gateway 后直接下指令",
+        "2. 运行时下拉改成 PAI，并到「环境」装好引擎",
+        "3. 配置联网 API / 本机模型当「大脑」",
+        "",
+        "安全试用可先说「怎么用创作台」，或做只读类操作。危险操作会二次确认。",
       ].join("\n")
     );
     welcomed = true;
@@ -609,13 +665,27 @@ const AgentPanel = (() => {
     els.codingActions?.classList.remove("hidden");
   }
 
+  function needsCodingInstall(result) {
+    if (!result) return false;
+    if (result.canInstallRuntime) return true;
+    if (result.code === "engine_missing") return true;
+    if (Array.isArray(result.issues) && result.issues.some((i) => i.code === "engine_missing")) return true;
+    return false;
+  }
+
+  function showCodingInstallCta(show) {
+    els.codingInstallBtn?.classList.toggle("hidden", !show);
+    if (show) els.codingActions?.classList.remove("hidden");
+  }
+
   function applyCodingResultToCard(result) {
     if (!result) return;
     const streamParts = [];
+    if (result.ctaMessage) streamParts.push(result.ctaMessage);
     if (result.review?.summary) streamParts.push(result.review.summary);
     else if (result.trajectorySummary) streamParts.push(result.trajectorySummary);
     else if (result.log) streamParts.push(String(result.log).slice(0, 800));
-    if (result.fixText) streamParts.push(`\n安装提示：\n${result.fixText}`);
+    if (result.ok === false && result.hint) streamParts.push(result.hint);
     showTaskCard({
       moguTaskId: result.moguTaskId || "—",
       status: result.ok === false ? "failed" : "succeeded",
@@ -624,12 +694,16 @@ const AgentPanel = (() => {
       review: result.review,
       suggestedCommitMessage: result.suggestedCommitMessage || "",
     });
+    if (result.moguTaskId && result.moguTaskId !== "—") {
+      activeMoguTaskId = result.moguTaskId;
+    }
     if (result.workspace || result.canCommit || result.canRetryOtherEngine || result.ok === false || result.review) {
       els.codingActions?.classList.remove("hidden");
     }
+    showCodingInstallCta(needsCodingInstall(result));
     els.codingRetryOther?.classList.toggle(
       "hidden",
-      !(result.canRetryOtherEngine || result.ok === false)
+      !(result.canRetryOtherEngine || result.ok === false) || needsCodingInstall(result)
     );
     if (els.codingCommitBtn) {
       els.codingCommitBtn.disabled = result.canCommit !== true && result.review?.canCommit !== true;
@@ -657,10 +731,32 @@ const AgentPanel = (() => {
 
   async function cancelActiveOpenclawTask() {
     if (!activeMoguTaskId) {
-      appendLocal("assistant", "当前没有可取消的 OpenClaw 任务。");
+      appendLocal("assistant", "当前没有可取消的任务。");
       return;
     }
     try {
+      // Coding jobs use mogu.coding.cancel; OpenClaw uses abort.
+      if (
+        String(activeMoguTaskId).startsWith("coding-") ||
+        String(activeMoguTaskId).startsWith("factory-") ||
+        lastCodingRetry?.moguTaskId === activeMoguTaskId
+      ) {
+        const result = await window.modelManager.invokeSkill({
+          skillId: "mogu.coding",
+          op: "cancel",
+          args: { moguTaskId: activeMoguTaskId },
+        });
+        showTaskCard({
+          moguTaskId: activeMoguTaskId,
+          status: result?.ok ? "cancelled" : "failed",
+          error: result?.error || "",
+        });
+        appendLocal(
+          "assistant",
+          result?.ok ? "已取消编程任务。可改说明后「再派工」。" : `取消失败：${result?.error || "未知错误"}`
+        );
+        return;
+      }
       const result = await window.modelManager.openclawAbort?.({ moguTaskId: activeMoguTaskId });
       if (result?.needsConfirmation) {
         appendLocal("assistant", result.message || "缺少精确 ID，无法安全取消。");
@@ -752,19 +848,24 @@ const AgentPanel = (() => {
       return { skillId: "mogu.coding", op: "status", args: {} };
     }
     const codingRun = t.match(
-      /^(?:用\s*)?(codex|trae|trae-agent)\s*(?:在\s*)?(.+?)\s*(?:里|中)?\s*(?:改|修|写|实现|编程)[:：\s]+(.+)$/i
+      /^(?:用\s*)?(引擎\s*[Bb]|引擎\s*[Aa]|moguai[_-]?b|moguai[_-]?a|engine[_-]?b|engine[_-]?a)\s*(?:在\s*)?(.+?)\s*(?:里|中)?\s*(?:改|修|写|实现|编程)[:：\s]+(.+)$/i
     );
     if (codingRun) {
-      const eng = /trae/i.test(codingRun[1]) ? "trae" : "codex";
+      const engKey =
+        window.MoguaiCoding?.normalizeEngineKey?.(codingRun[1]) ||
+        window.MoguCodingBrands?.normalizeEngineKey?.(codingRun[1]) ||
+        (/引擎\s*b|moguai[_-]?b|engine[_-]?b/i.test(codingRun[1]) ? "moguai_b" : "moguai_a");
       return {
         skillId: "mogu.coding",
-        op: "run",
-        args: { engine: eng, workspace: codingRun[2].trim(), prompt: codingRun[3].trim() },
+        op: "dispatch",
+        args: { engine: engKey, workspace: codingRun[2].trim(), prompt: codingRun[3].trim() },
       };
     }
-    if (/^(?:编程|改代码|写代码|修bug|修\s*bug)[:：\s]+(.+)$/i.test(t)) {
-      const prompt = t.replace(/^(?:编程|改代码|写代码|修bug|修\s*bug)[:：\s]+/i, "").trim();
-      return { skillId: "mogu.coding", op: "run", args: { prompt } };
+    if (/^(?:编程|改代码|写代码|修bug|修\s*bug|派工|dispatch)[:：\s]+(.+)$/i.test(t)) {
+      const prompt = t
+        .replace(/^(?:编程|改代码|写代码|修bug|修\s*bug|派工|dispatch)[:：\s]+/i, "")
+        .trim();
+      return { skillId: "mogu.coding", op: "dispatch", args: { prompt } };
     }
     return null;
   }
@@ -782,10 +883,10 @@ const AgentPanel = (() => {
     }
     if (mapped.skillId === "mogu.coding") {
       applyCodingResultToCard(result);
-      if (mapped.op === "run" || mapped.op === "retry") {
+      if (mapped.op === "run" || mapped.op === "dispatch" || mapped.op === "retry") {
         lastCodingRetry = {
           prompt: mapped.args?.prompt || result?.requestText || "",
-          engine: result?.engine || mapped.args?.engine || "codex",
+          engine: result?.engine || mapped.args?.engine || "moguai_a",
           workspace: result?.workspace || mapped.args?.workspace,
           moguTaskId: result?.moguTaskId,
           suggestedCommitMessage: result?.suggestedCommitMessage || "",
@@ -801,16 +902,157 @@ const AgentPanel = (() => {
       els.codingActions?.classList.add("hidden");
       els.codingReview?.classList.add("hidden");
     }
+    if (mapped.skillId === "mogu.coding" && needsCodingInstall(result)) {
+      showCodingInstallCta(true);
+    }
     replaceTempAssistant(
       result?.ok === false
-        ? `Skill 失败：${result.error || result.message || JSON.stringify(result.preflight || {})}${
-            result?.fixText ? `\n\n${result.fixText}` : ""
-          }${
-            result?.canRetryOtherEngine ? `\n可点任务卡「换引擎重试」改用 ${result.altEngine || "另一引擎"}。` : ""
+        ? `Skill 失败：${result.error || result.message || result.ctaMessage || ""}${
+            needsCodingInstall(result)
+              ? "\n请点任务卡「安装编程引擎」一键安装适配版。"
+              : result?.canRetryOtherEngine
+                ? `\n可点任务卡「换引擎重试」改用 ${result.altEngine || "另一引擎"}。`
+                : ""
           }`
         : `Skill 完成（${mapped.skillId}.${mapped.op}）${result.moguTaskId ? `\n任务 ${result.moguTaskId}` : ""}\n${summarizeSkillResult(result)}`
     );
     return result;
+  }
+
+  function openPrecisionFactory() {
+    const workspace = lastCodingRetry?.workspace || undefined;
+    const files = (lastCodingReview?.files || [])
+      .map((f) => (typeof f === "string" ? f : f?.path))
+      .filter(Boolean);
+    window.AppRouter?.navigate("factory", {
+      workspace,
+      files,
+      focusFile: files[0],
+      prompt: lastCodingRetry?.prompt || undefined,
+    });
+  }
+
+  async function installCodingRuntime() {
+    setFormBusy(true);
+    showCodingInstallCta(true);
+    appendLocal("assistant", "正在安装编程引擎适配版…", { temp: true });
+    const unsub = window.modelManager.onCodingRuntimeProgress?.((evt) => {
+      if (evt?.message) {
+        replaceTempAssistant(`安装中：${evt.message}`);
+      }
+    });
+    try {
+      const engine = lastCodingRetry?.engine || "all";
+      const result = await window.modelManager.codingRuntimeUpgrade?.({ engine: "all" });
+      const status = await window.modelManager.invokeSkill?.({
+        skillId: "mogu.coding",
+        op: "status",
+        args: {},
+      });
+      const ready =
+        status?.engines?.moguai_a?.installed || status?.engines?.moguai_b?.installed;
+      showCodingInstallCta(!ready);
+      replaceTempAssistant(
+        result?.ok
+          ? `引擎安装完成。${ready ? "可继续派工。" : "请再点「编程引擎」确认状态。"}\n${summarizeSkillResult(status)}`
+          : `安装未完成：${result?.error || result?.message || "请到设置 → MOGU AI 编程 重试"}${
+              engine ? "" : ""
+            }`
+      );
+      if (status) applyCodingResultToCard({ ...status, ok: true, moguTaskId: "—" });
+    } catch (error) {
+      replaceTempAssistant(`安装异常：${error.message}`);
+    } finally {
+      if (typeof unsub === "function") unsub();
+      setFormBusy(false);
+    }
+  }
+
+  async function acceptCodingChanges(paths = []) {
+    const workspace = lastCodingRetry?.workspace || lastCodingReview?.workspace;
+    if (!workspace) {
+      appendLocal("assistant", "没有工作区可接受改动。");
+      return;
+    }
+    setFormBusy(true);
+    try {
+      const result = await window.modelManager.invokeSkill({
+        skillId: "mogu.coding",
+        op: "accept",
+        args: { workspace, paths },
+      });
+      if (result?.review) paintCodingReview(result.review, lastCodingRetry?.suggestedCommitMessage);
+      appendLocal(
+        "assistant",
+        result?.ok === false ? `接受失败：${result.error}` : result.message || "已接受并暂存，可确认提交。"
+      );
+    } catch (error) {
+      appendLocal("assistant", `接受异常：${error.message}`);
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function discardCodingChanges(paths = []) {
+    const workspace = lastCodingRetry?.workspace || lastCodingReview?.workspace;
+    if (!workspace) {
+      appendLocal("assistant", "没有工作区可拒绝改动。");
+      return;
+    }
+    if (!window.confirm(paths.length ? `拒绝所选文件？` : "拒绝全部未提交改动？不可恢复。")) return;
+    setFormBusy(true);
+    try {
+      const result = await window.modelManager.invokeSkill({
+        skillId: "mogu.coding",
+        op: "discard",
+        args: { workspace, paths },
+      });
+      if (result?.review) paintCodingReview(result.review, lastCodingRetry?.suggestedCommitMessage);
+      appendLocal(
+        "assistant",
+        result?.ok === false ? `拒绝失败：${result.error}` : result.message || "已拒绝改动。"
+      );
+    } catch (error) {
+      appendLocal("assistant", `拒绝异常：${error.message}`);
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function redispatchCoding() {
+    if (!lastCodingRetry?.prompt) {
+      appendLocal("assistant", "没有可再派工的说明。请先跑一次编程，或在精密工厂输入派工说明。");
+      return;
+    }
+    setFormBusy(true);
+    try {
+      appendLocal("assistant", "再派工中…", { temp: true });
+      const result = await window.modelManager.invokeSkill({
+        skillId: "mogu.coding",
+        op: "dispatch",
+        args: {
+          engine: lastCodingRetry.engine,
+          prompt: lastCodingRetry.prompt,
+          workspace: lastCodingRetry.workspace,
+        },
+      });
+      lastCodingRetry.moguTaskId = result?.moguTaskId || lastCodingRetry.moguTaskId;
+      lastCodingRetry.workspace = result?.workspace || lastCodingRetry.workspace;
+      lastCodingRetry.suggestedCommitMessage =
+        result?.suggestedCommitMessage || lastCodingRetry.suggestedCommitMessage;
+      applyCodingResultToCard(result);
+      replaceTempAssistant(
+        result?.ok === false
+          ? `再派工失败：${result.error || ""}${
+              needsCodingInstall(result) ? "\n请先点「安装编程引擎」。" : ""
+            }`
+          : `再派工完成（${result?.engine || lastCodingRetry.engine}）\n${summarizeSkillResult(result)}`
+      );
+    } catch (error) {
+      replaceTempAssistant(`再派工异常：${error.message}`);
+    } finally {
+      setFormBusy(false);
+    }
   }
 
   async function retryCodingOtherEngine() {
@@ -818,10 +1060,14 @@ const AgentPanel = (() => {
       appendLocal("assistant", "没有可重试的编程任务。");
       return;
     }
-    const next = /trae/i.test(lastCodingRetry.engine) ? "codex" : "trae";
+    const brands = window.MoguaiCoding || window.MoguCodingBrands;
+    const next =
+      brands?.otherEngineKey?.(lastCodingRetry.engine) ||
+      (brands?.normalizeEngineKey?.(lastCodingRetry.engine) === "moguai_b" ? "moguai_a" : "moguai_b");
+    const nextLabel = brands?.engineShort?.(next) || next;
     setFormBusy(true);
     try {
-      appendLocal("assistant", `正在用 ${next} 重试…`, { temp: true });
+      appendLocal("assistant", `正在用 ${nextLabel} 重试…`, { temp: true });
       const result = await window.modelManager.invokeSkill({
         skillId: "mogu.coding",
         op: "retry",
@@ -932,16 +1178,20 @@ const AgentPanel = (() => {
   function summarizeSkillResult(result) {
     if (!result || typeof result !== "object") return "";
     if (result.engines) {
-      const c = result.engines.codex;
-      const t = result.engines.trae;
+      const brands = window.MoguaiCoding || window.MoguCodingBrands;
+      const labelA = brands?.engineLabel?.("moguai_a") || "MOGU AI 编程 · 引擎 A";
+      const labelB = brands?.engineLabel?.("moguai_b") || "MOGU AI 编程 · 引擎 B";
+      const c = result.engines.moguai_a;
+      const t = result.engines.moguai_b;
       const lines = [
-        `Codex: ${c?.installed ? "就绪" : "未安装"} ${c?.version || ""}`,
-        `trae-agent: ${t?.installed ? "就绪" : "未安装"} ${t?.message || ""}`,
-        result.workspace ? `工作区：${result.workspace}` : "工作区：未设置（设置 → 编程双引擎）",
+        `${labelA}: ${c?.installed ? "就绪" : "未安装"} ${c?.version || ""}`,
+        `${labelB}: ${t?.installed ? "就绪" : "未安装"} ${t?.message || ""}`,
+        result.workspace ? `工作区：${result.workspace}` : "工作区：未设置（设置 → MOGU AI 编程）",
       ];
-      if (result.fixText) lines.push("", result.fixText);
-      else if (result.copyCommands?.length) {
-        lines.push("", "可复制命令：", ...result.copyCommands.map((c) => `  ${c}`));
+      if (result.canInstallRuntime || result.ctaMessage) {
+        lines.push("", result.ctaMessage || "可点「安装编程引擎」一键安装适配版");
+      } else if (result.copyCommands?.length) {
+        lines.push("", "提示：", ...result.copyCommands.map((cmd) => `  ${cmd}`));
       }
       return lines.join("\n");
     }
@@ -966,32 +1216,51 @@ const AgentPanel = (() => {
     const brainState = await getBrainSetupState();
     await refreshBrainBanner();
 
-    // 未配大脑：先引导去设置；说明类问题仍可用内置教程
-    if (!brainState.ready) {
-      if (/怎么用|如何使用|教程|帮助|什么是|怎样|不会用/i.test(text)) {
-        await answerWithBrain(text);
-        return;
-      }
+    let allowAutoFallback = false;
+    try {
+      const settings = await window.modelManager.getSettings();
+      allowAutoFallback = settings.openclawFallbackToPai === true;
+    } catch {
+      /* ignore */
+    }
+
+    const isHelp = /怎么用|如何使用|教程|帮助|什么是|怎样|不会用/i.test(text);
+    const route =
+      window.AgentRouting?.decideAgentRoute?.({
+        brainChannel: brainState.channel,
+        brainReady: brainState.ready,
+        brainReason: brainState.reason,
+        runtimeMode,
+        allowAutoFallback,
+        isHelpQuestion: isHelp,
+      }) ||
+      (brainState.ready
+        ? { action: "use", executor: "brain" }
+        : runtimeMode === "openclaw"
+          ? { action: "use", executor: "openclaw" }
+          : { action: "use", executor: "pai" });
+
+    paintExecutorPill(route.executor || resolveExecutor(brainState.ready, brainState.channel));
+
+    if (route.action === "tutorial") {
+      await answerWithBrain(text);
+      return;
+    }
+
+    if (route.action === "need_setup" || route.action === "first_run" || route.action === "unavailable") {
       appendLocal("user", text);
       history.push({ role: "user", content: text });
-      appendLocal(
-        "assistant",
-        [
-          "还不能自动执行这条指令——请先配置大脑。",
-          "",
-          brainState.reason,
-          "",
-          "点上方橙色条：「配置联网 API」（推荐）或「配置本机模型」。",
-          "保存后回到对话再发送。问用法可以说「怎么用创作台」。",
-        ].join("\n")
-      );
-      brainBannerDismissed = false;
-      await refreshBrainBanner();
+      appendLocal("assistant", formatRouteAssistantMessage(route, brainState.reason));
+      if (route.action === "need_setup") {
+        brainBannerDismissed = false;
+        await refreshBrainBanner();
+      }
       return;
     }
 
     // 大脑模式（API / 本机）：直接输入指令 → 自动选工具执行
     if (
+      route.executor === "brain" &&
       (brainState.channel === "api" || brainState.channel === "local") &&
       typeof window.modelManager.agentBrainAct === "function"
     ) {
@@ -1006,9 +1275,9 @@ const AgentPanel = (() => {
       return;
     }
 
-    // 内置教程模式：精确指令仍可走 Skill；编程双 Runtime 均可
+    // 内置教程模式：精确指令仍可走 Skill；MOGU AI 编程双引擎均可
     const skillMapped = mapTextToSkill(text);
-    if (skillMapped && (runtimeMode !== "openclaw" || skillMapped.skillId === "mogu.coding")) {
+    if (skillMapped && (route.executor !== "openclaw" || skillMapped.skillId === "mogu.coding")) {
       setFormBusy(true);
       try {
         const skillResult = await trySkillInvoke(text);
@@ -1022,7 +1291,7 @@ const AgentPanel = (() => {
       }
     }
 
-    if (runtimeMode === "openclaw") {
+    if (route.executor === "openclaw") {
       await runOpenclawText(text);
       await refreshStatus();
       return;
@@ -1073,7 +1342,7 @@ const AgentPanel = (() => {
               if (p.step.workspace) {
                 lastCodingRetry = {
                   prompt: text,
-                  engine: "codex",
+                  engine: p.step.engine || "moguai_a",
                   workspace: p.step.workspace,
                   moguTaskId: p.step.moguTaskId,
                   suggestedCommitMessage: p.step.suggestedCommitMessage || "",
@@ -1090,29 +1359,39 @@ const AgentPanel = (() => {
       const steps = result?.steps || [];
       paintBrainSteps(steps);
       if (steps.length) {
-        const last = steps[steps.length - 1];
         const codingStep = [...steps].reverse().find((s) => s.skillId === "mogu.coding");
-        showTaskCard({
-          moguTaskId: last.moguTaskId || last.tool || "brain",
-          status: steps.every((s) => s.ok !== false) ? "succeeded" : "failed",
-          streamText: steps
-            .map((s) => `${s.tool}.${s.op} → ${s.ok !== false ? "ok" : s.error || "fail"}`)
-            .join("\n"),
-          error: steps.find((s) => s.ok === false)?.error || "",
-          review: codingStep?.review,
-          suggestedCommitMessage: codingStep?.suggestedCommitMessage || "",
-        });
         if (codingStep) {
           lastCodingRetry = {
             prompt: text,
-            engine: "codex",
+            engine: codingStep.engine || "moguai_a",
             workspace: codingStep.workspace,
             moguTaskId: codingStep.moguTaskId,
             suggestedCommitMessage: codingStep.suggestedCommitMessage || "",
           };
-          if (codingStep.ok === false || codingStep.canCommit) {
-            els.codingActions?.classList.remove("hidden");
-          }
+          applyCodingResultToCard({
+            ok: codingStep.ok !== false,
+            moguTaskId: codingStep.moguTaskId || "brain",
+            review: codingStep.review,
+            suggestedCommitMessage: codingStep.suggestedCommitMessage,
+            canCommit: codingStep.canCommit,
+            workspace: codingStep.workspace,
+            engine: codingStep.engine,
+            error: codingStep.error,
+            canInstallRuntime: codingStep.canInstallRuntime,
+            ctaMessage: codingStep.ctaMessage,
+            code: codingStep.code,
+            canRetryOtherEngine: codingStep.ok === false && !codingStep.canInstallRuntime,
+          });
+        } else {
+          const last = steps[steps.length - 1];
+          showTaskCard({
+            moguTaskId: last.moguTaskId || last.tool || "brain",
+            status: steps.every((s) => s.ok !== false) ? "succeeded" : "failed",
+            streamText: steps
+              .map((s) => `${s.tool}.${s.op} → ${s.ok !== false ? "ok" : s.error || "fail"}`)
+              .join("\n"),
+            error: steps.find((s) => s.ok === false)?.error || "",
+          });
         }
       }
       const reply =
@@ -1322,8 +1601,10 @@ const AgentPanel = (() => {
       const brainSetup = await getBrainSetupState();
       const brainLabel = brainSetup.ready
         ? brain
-        : "大脑未配置（请先设 API 或本机模型）";
-      const executor = resolveExecutor(brainSetup.ready);
+        : brainSetup.channel === "api" || brainSetup.channel === "local"
+          ? "大脑未配置（请先设 API 或本机模型）"
+          : "大脑可选（内置教程）";
+      const executor = resolveExecutor(brainSetup.ready, settings.agentBrainChannel);
       paintExecutorPill(executor);
       updateOcBanner(oc, brainSetup.ready);
 

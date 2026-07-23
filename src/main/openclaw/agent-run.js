@@ -167,7 +167,7 @@ class AgentRunService {
         });
         const decision = decideFallback({
           openclawEnabled: settings.openclawEnabled !== false,
-          fallbackToPai: settings.openclawFallbackToPai !== false,
+          fallbackToPai: settings.openclawFallbackToPai === true,
           bridgeState: this.bridge.state,
           requestAcceptedByGateway: true,
           waitTimedOut: true,

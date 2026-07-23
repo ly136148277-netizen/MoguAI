@@ -1,7 +1,21 @@
 # CHANGELOG.md
 
-本文件记录 AI 模型管理助手（ai-model-manager）的版本变更。  
+本文件记录 AI 模型管理助手（ai-model-manager）的版本变更。
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
+
+---
+
+## [2.0.1-rc.1] - Unreleased
+
+### Security / Release
+- Public Build Profile fail-closed gate
+- Explicit Brain / OpenClaw / PAI routing with silent fallback disabled by default
+- Host `OPENAI_API_KEY` inheritance disabled unless explicitly opted in for local development
+- Clean-profile QA override and navigation/window-open hardening
+- Payload Manifest and Release Evidence draft/validation tooling
+- Public RC documentation aligned with AppData, uninstall, signing, and evidence-binding facts
+
+> This candidate is not a Public Release until final signing, Installed Runtime Gate, upload re-download verification, and clean RC tag are complete.
 
 ---
 

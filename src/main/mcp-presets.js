@@ -9,7 +9,7 @@ const MCP_PRESETS = Object.freeze([
     label: "Filesystem",
     description: "读写指定目录（请把 args 最后一项改成你的安全目录）",
     command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "D:\\safe-folder"],
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "REPLACE_WITH_SAFE_FOLDER"],
     enabled: false,
   },
   {

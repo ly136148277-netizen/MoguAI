@@ -11,6 +11,7 @@ const AppRouter = (() => {
     models: ["models", "downloads", "my-models"],
     agent: ["chat", "butler", "agent-intro"],
     tasks: ["tasks"],
+    factory: ["factory"],
     create: ["studio", "comfyui", "compose"],
     env: ["setup", "data"],
     settings: ["settings", "openclaw", "skills", "permissions", "channels"],

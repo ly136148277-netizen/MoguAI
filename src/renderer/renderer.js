@@ -68,10 +68,15 @@ const settingOpenclawTokenEl = document.getElementById("setting-openclaw-token")
 const settingOpenclawTokenHintEl = document.getElementById("setting-openclaw-token-hint");
 const settingCodingEngineEl = document.getElementById("setting-coding-engine");
 const settingCodingWorkspaceEl = document.getElementById("setting-coding-workspace");
-const settingCodingCodexPathEl = document.getElementById("setting-coding-codex-path");
-const settingCodingTraePathEl = document.getElementById("setting-coding-trae-path");
+const settingCodingEngineAPathEl = document.getElementById("setting-coding-engine-a-path");
+const settingCodingEngineBPathEl = document.getElementById("setting-coding-engine-b-path");
 const settingCodingModelEl = document.getElementById("setting-coding-model");
 const settingCodingProviderEl = document.getElementById("setting-coding-provider");
+const codingRuntimeStatusEl = document.getElementById("coding-runtime-status");
+const codingRuntimeProgressEl = document.getElementById("coding-runtime-progress");
+const codingRuntimeCheckBtn = document.getElementById("coding-runtime-check-btn");
+const codingRuntimeUpgradeBtn = document.getElementById("coding-runtime-upgrade-btn");
+const codingRuntimeRetryDepsBtn = document.getElementById("coding-runtime-retry-deps-btn");
 const settingMcpServersEl = document.getElementById("setting-mcp-servers");
 const settingMcpHintEl = document.getElementById("setting-mcp-hint");
 const settingMcpPresetsEl = document.getElementById("setting-mcp-presets");
@@ -344,10 +349,10 @@ async function loadSettingsForm() {
     settingAutoUpdateEl.checked = settings.autoCheckUpdates !== false;
   }
   settingAutoOllamaEl.checked = Boolean(settings.autoStartOllama);
-  settingPaiRootEl.value = settings.paiRoot || "E:\\projects\\PAI";
+  settingPaiRootEl.value = settings.paiRoot || "";
   settingPaiApiEl.value = settings.paiApiUrl || "http://127.0.0.1:8765";
   settingPaiLevelEl.value = String(settings.paiDefaultLevel ?? 2);
-  settingAutoPaiEl.checked = settings.autoStartPai !== false;
+  settingAutoPaiEl.checked = settings.autoStartPai === true;
   if (settingComfyUiPollEl) {
     settingComfyUiPollEl.value = String(settings.comfyUiPollIntervalMs ?? 2500);
   }
@@ -360,7 +365,7 @@ async function loadSettingsForm() {
     settingOpenclawUrlEl.value = settings.openclawGatewayUrl || "ws://127.0.0.1:18789";
   }
   if (settingOpenclawFallbackEl) {
-    settingOpenclawFallbackEl.checked = settings.openclawFallbackToPai !== false;
+    settingOpenclawFallbackEl.checked = settings.openclawFallbackToPai === true;
   }
   if (settingAgentRuntimeEl) {
     settingAgentRuntimeEl.value = settings.agentRuntimeMode || "openclaw";
@@ -383,16 +388,17 @@ async function loadSettingsForm() {
       : "尚未配置 Gateway token";
   }
   if (settingCodingEngineEl) {
-    settingCodingEngineEl.value = settings.codingDefaultEngine === "trae" ? "trae" : "codex";
+    settingCodingEngineEl.value =
+      settings.codingDefaultEngine === "moguai_b" ? "moguai_b" : "moguai_a";
   }
   if (settingCodingWorkspaceEl) {
     settingCodingWorkspaceEl.value = settings.codingWorkspace || "";
   }
-  if (settingCodingCodexPathEl) {
-    settingCodingCodexPathEl.value = settings.codingCodexPath || "";
+  if (settingCodingEngineAPathEl) {
+    settingCodingEngineAPathEl.value = settings.codingEngineAPath || "";
   }
-  if (settingCodingTraePathEl) {
-    settingCodingTraePathEl.value = settings.codingTraePath || "";
+  if (settingCodingEngineBPathEl) {
+    settingCodingEngineBPathEl.value = settings.codingEngineBPath || "";
   }
   if (settingCodingModelEl) {
     settingCodingModelEl.value = settings.codingModel || "";
@@ -941,17 +947,17 @@ settingsFormEl.addEventListener("submit", async (event) => {
     locale: settingLocaleEl.value,
     openclawEnabled: Boolean(settingOpenclawEnabledEl?.checked),
     openclawGatewayUrl: settingOpenclawUrlEl?.value?.trim() || "ws://127.0.0.1:18789",
-    openclawFallbackToPai: settingOpenclawFallbackEl?.checked !== false,
+    openclawFallbackToPai: Boolean(settingOpenclawFallbackEl?.checked),
     agentRuntimeMode: settingAgentRuntimeEl?.value || "openclaw",
     agentBrainChannel: settingAgentChannelEl?.value || "builtin",
     agentLocalModel: settingAgentLocalModelEl?.value || "",
     agentApiPreset: settingAgentApiPresetEl?.value || "custom",
     agentApiBaseUrl: settingAgentApiBaseEl?.value?.trim() || "",
     agentApiModel: settingAgentApiModelEl?.value?.trim() || "",
-    codingDefaultEngine: settingCodingEngineEl?.value === "trae" ? "trae" : "codex",
+    codingDefaultEngine: settingCodingEngineEl?.value === "moguai_b" ? "moguai_b" : "moguai_a",
     codingWorkspace: settingCodingWorkspaceEl?.value?.trim() || "",
-    codingCodexPath: settingCodingCodexPathEl?.value?.trim() || "",
-    codingTraePath: settingCodingTraePathEl?.value?.trim() || "",
+    codingEngineAPath: settingCodingEngineAPathEl?.value?.trim() || "",
+    codingEngineBPath: settingCodingEngineBPathEl?.value?.trim() || "",
     codingModel: settingCodingModelEl?.value?.trim() || "",
     codingProvider: settingCodingProviderEl?.value?.trim() || "",
   };
@@ -1264,6 +1270,103 @@ settingMcpServersEl?.addEventListener("change", () => {
     }
   } catch {
     /* ignore while typing */
+  }
+});
+
+function formatCodingRuntimeStatus(result) {
+  if (!result?.ok) return result?.error || "检查失败";
+  if (result.ready && result.ctaMessage) {
+    return result.ctaMessage;
+  }
+  const lines = [];
+  if (result.ctaMessage) lines.push(result.ctaMessage);
+  for (const key of ["moguai_a", "moguai_b"]) {
+    const e = result.engines?.[key];
+    if (!e) continue;
+    const local = e.installedVersion || (e.probeInstalled ? "已探测" : "未安装");
+    const adapted = e.adaptedVersion || "—";
+    const latest = e.officialLatest || "—";
+    lines.push(
+      `${e.short || key} 本机 ${local} · 适配 ${adapted} · 官方 ${latest} — ${e.message || ""}`
+    );
+  }
+  return lines.join("\n");
+}
+
+async function refreshCodingRuntimeStatus({ quiet } = {}) {
+  if (!codingRuntimeStatusEl || !window.modelManager?.codingRuntimeCheck) return;
+  if (!quiet) codingRuntimeStatusEl.textContent = "正在检查官方版本…";
+  try {
+    const result = await window.modelManager.codingRuntimeCheck();
+    codingRuntimeStatusEl.textContent = formatCodingRuntimeStatus(result);
+    if (codingRuntimeUpgradeBtn) {
+      codingRuntimeUpgradeBtn.textContent = result?.buttonLabel || "安装/升级";
+      codingRuntimeUpgradeBtn.classList.toggle("btn--primary", Boolean(result?.needsAction?.length));
+    }
+  } catch (error) {
+    if (!quiet) codingRuntimeStatusEl.textContent = `检查失败：${error.message}`;
+  }
+}
+
+codingRuntimeCheckBtn?.addEventListener("click", () => refreshCodingRuntimeStatus());
+
+if (typeof AppRouter !== "undefined") {
+  AppRouter.onPage?.("settings", () => {
+    refreshCodingRuntimeStatus({ quiet: true });
+  });
+}
+
+codingRuntimeUpgradeBtn?.addEventListener("click", async () => {
+  if (!codingRuntimeStatusEl) return;
+  codingRuntimeProgressEl && (codingRuntimeProgressEl.textContent = "开始安装/升级…");
+  codingRuntimeUpgradeBtn.disabled = true;
+  codingRuntimeCheckBtn && (codingRuntimeCheckBtn.disabled = true);
+  codingRuntimeRetryDepsBtn && (codingRuntimeRetryDepsBtn.disabled = true);
+  const unsub = window.modelManager.onCodingRuntimeProgress?.((evt) => {
+    if (codingRuntimeProgressEl && evt?.message) {
+      const eng = evt.engine === "moguai_b" ? "引擎B" : evt.engine === "moguai_a" ? "引擎A" : "";
+      codingRuntimeProgressEl.textContent = [eng, evt.message].filter(Boolean).join(" · ");
+    }
+  });
+  try {
+    const result = await window.modelManager.codingRuntimeUpgrade({ engine: "all" });
+    const canRetry = Boolean(result?.results?.moguai_b?.canRetryDeps);
+    codingRuntimeProgressEl &&
+      (codingRuntimeProgressEl.textContent =
+        result?.message ||
+        (result?.ok ? "完成" : result?.error || result?.results?.moguai_b?.error || "失败"));
+    if (canRetry && codingRuntimeProgressEl) {
+      codingRuntimeProgressEl.textContent += " · 可点「重试引擎B依赖」";
+    }
+    await refreshCodingRuntimeStatus({ quiet: true });
+  } catch (error) {
+    codingRuntimeProgressEl && (codingRuntimeProgressEl.textContent = `失败：${error.message}`);
+  } finally {
+    codingRuntimeUpgradeBtn.disabled = false;
+    codingRuntimeCheckBtn && (codingRuntimeCheckBtn.disabled = false);
+    codingRuntimeRetryDepsBtn && (codingRuntimeRetryDepsBtn.disabled = false);
+    if (typeof unsub === "function") unsub();
+  }
+});
+
+codingRuntimeRetryDepsBtn?.addEventListener("click", async () => {
+  if (!codingRuntimeProgressEl) return;
+  codingRuntimeProgressEl.textContent = "重试引擎 B 依赖（uv sync）…";
+  codingRuntimeRetryDepsBtn.disabled = true;
+  const unsub = window.modelManager.onCodingRuntimeProgress?.((evt) => {
+    if (evt?.message) codingRuntimeProgressEl.textContent = evt.message;
+  });
+  try {
+    const result = await window.modelManager.codingRuntimeRetryDeps?.();
+    codingRuntimeProgressEl.textContent = result?.ok
+      ? result.message || "引擎 B 依赖已就绪"
+      : result?.error || "重试失败";
+    await refreshCodingRuntimeStatus({ quiet: true });
+  } catch (error) {
+    codingRuntimeProgressEl.textContent = `重试异常：${error.message}`;
+  } finally {
+    codingRuntimeRetryDepsBtn.disabled = false;
+    if (typeof unsub === "function") unsub();
   }
 });
 

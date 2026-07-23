@@ -95,12 +95,12 @@ const SkillsPanel = (() => {
         args: {},
       });
       if (!st?.engines || !els.env) return;
-      const cOk = Boolean(st.engines.codex?.installed);
-      const tOk = Boolean(st.engines.trae?.installed);
+      const cOk = Boolean(st.engines.moguai_a?.installed);
+      const tOk = Boolean(st.engines.moguai_b?.installed);
       els.env.insertAdjacentHTML(
         "beforeend",
-        `<span class="home-env-chip${cOk ? "" : " home-env-chip--warn"}">Codex ${cOk ? "就绪" : "未安装"}</span>` +
-          `<span class="home-env-chip${tOk ? "" : " home-env-chip--warn"}">trae-agent ${tOk ? "就绪" : "未安装"}</span>`
+        `<span class="home-env-chip${cOk ? "" : " home-env-chip--warn"}">引擎 A ${cOk ? "就绪" : "未安装"}</span>` +
+          `<span class="home-env-chip${tOk ? "" : " home-env-chip--warn"}">引擎 B ${tOk ? "就绪" : "未安装"}</span>`
       );
     } catch {
       /* ignore */

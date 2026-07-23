@@ -4,6 +4,20 @@ const fs = require("fs-extra");
 const { spawn } = require("child_process");
 const { pathToFileURL } = require("url");
 
+// Clean-profile QA: isolate userData without touching the developer profile.
+// Prefer Electron --user-data-dir=...; MOGU_USER_DATA is a script-friendly alias.
+(function applyMoguUserDataOverride() {
+  const fromEnv = String(process.env.MOGU_USER_DATA || "").trim();
+  if (!fromEnv) return;
+  try {
+    const resolved = path.resolve(fromEnv);
+    fs.ensureDirSync(resolved);
+    app.setPath("userData", resolved);
+  } catch (err) {
+    console.error("[mogu] MOGU_USER_DATA override failed:", err?.message || err);
+  }
+})();
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
@@ -45,6 +59,23 @@ const {
   buildMediaAllowRoots,
   assertAllowedMediaPath,
 } = require("./media-path");
+const {
+  listTree: factoryListTree,
+  searchWorkspace: factorySearchWorkspace,
+  readFileInWorkspace: factoryReadFile,
+  writeFileInWorkspace: factoryWriteFile,
+  setEventSink: factoryDebugSetSink,
+  getStatus: factoryDebugStatus,
+  startDebug: factoryDebugStart,
+  stopDebug: factoryDebugStop,
+  debugCommand: factoryDebugCommand,
+  getPausedLocals: factoryDebugLocals,
+} = require("./moguai/factory");
+const {
+  checkRuntimeUpdates: codingRuntimeCheck,
+  installOrUpgradeRuntime: codingRuntimeUpgrade,
+  retryEngineBDeps: codingRetryEngineBDeps,
+} = require("./moguai/coding");
 const {
   OpenClawBridge,
   decideFallback,
@@ -261,8 +292,8 @@ async function applyProxyPolicy() {
     await session.defaultSession.setProxy({ mode: "system" });
     await session.defaultSession.clearAuthCache();
     logger?.info?.("网络代理已刷新：跟随系统，本机地址直连", {
-      HTTP_PROXY: process.env.HTTP_PROXY || "",
-      NO_PROXY: process.env.NO_PROXY || "",
+      proxyConfigured: Boolean(process.env.HTTP_PROXY || process.env.HTTPS_PROXY),
+      noProxyEntryCount: merged ? merged.split(",").length : 0,
     });
     return {
       ok: true,
@@ -304,9 +335,30 @@ function createWindow() {
     },
   });
 
+  // Public Release: deny in-app navigation / window.open to unexpected origins.
+  const ALLOWED_EXTERNAL = /^(https?:|mailto:)/i;
+  const rendererPath = path.join(__dirname, "../renderer/index.html");
+  const rendererUrl = pathToFileURL(rendererPath).href;
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const target = String(url || "");
+    if (ALLOWED_EXTERNAL.test(target)) {
+      shell.openExternal(target).catch(() => {});
+    }
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    const target = String(url || "");
+    if (target === rendererUrl || target.startsWith(`${rendererUrl}#`)) return;
+    event.preventDefault();
+    if (ALLOWED_EXTERNAL.test(target)) {
+      shell.openExternal(target).catch(() => {});
+    }
+  });
+
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  mainWindow.loadFile(rendererPath);
   desktopOnline = true;
+
   mainWindow.on("focus", () => {
     desktopOnline = true;
   });
@@ -384,7 +436,7 @@ function initServices() {
       });
     },
   });
-  paiBridge = new PaiBridge();
+  paiBridge = new PaiBridge({ userDataPath: userData });
   ollama = new OllamaService();
   skillRuntime = new SkillRuntime({
     taskStore,
@@ -1379,6 +1431,161 @@ function registerIpcHandlers() {
     skillRuntime.installFromWhitelist(payload.skillId || payload.id)
   );
 
+  ipcMain.handle("factory:get-workspace", async () => {
+    const settings = await getPublicSettings();
+    return { ok: true, workspace: settings.codingWorkspace || "" };
+  });
+
+  ipcMain.handle("factory:pick-workspace", async () => {
+    const settings = await getPublicSettings();
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "选择精密工厂工作区",
+      properties: ["openDirectory", "createDirectory"],
+      defaultPath: settings.codingWorkspace || undefined,
+    });
+    if (result.canceled || !result.filePaths?.[0]) {
+      return { ok: false, cancelled: true };
+    }
+    const workspace = result.filePaths[0];
+    await settingsStore.update({ codingWorkspace: workspace });
+    return { ok: true, workspace };
+  });
+
+  ipcMain.handle("factory:list", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return await factoryListTree(workspace, payload.options || {});
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code || "list_failed" };
+    }
+  });
+
+  ipcMain.handle("factory:search", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return await factorySearchWorkspace(workspace, payload.query || payload.q || "", payload.options || {});
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code || "search_failed", hits: [] };
+    }
+  });
+
+  ipcMain.handle("factory:read", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return await factoryReadFile(workspace, payload.path || payload.relPath || "");
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code || "read_failed" };
+    }
+  });
+
+  ipcMain.handle("factory:write", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return await factoryWriteFile(workspace, payload.path || payload.relPath || "", payload.content);
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code || "write_failed" };
+    }
+  });
+
+  factoryDebugSetSink((evt) => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("factory-debug-event", evt);
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+
+  ipcMain.handle("factory:debug-status", async () => factoryDebugStatus());
+  ipcMain.handle("factory:debug-start", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return await factoryDebugStart({
+        workspace,
+        relPath: payload.path || payload.relPath || "",
+        breakpoints: payload.breakpoints || [],
+      });
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code || "debug_start_failed" };
+    }
+  });
+  ipcMain.handle("factory:debug-stop", async () => {
+    try {
+      return await factoryDebugStop();
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+  ipcMain.handle("factory:debug-command", async (_event, payload = {}) => {
+    try {
+      return await factoryDebugCommand(payload.command || payload.cmd, payload.params || payload || {});
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code };
+    }
+  });
+  ipcMain.handle("factory:debug-locals", async () => {
+    try {
+      return await factoryDebugLocals();
+    } catch (error) {
+      return { ok: false, error: error.message, variables: [] };
+    }
+  });
+
+  ipcMain.handle("coding:runtime-check", async () => {
+    try {
+      const settings = await loadSettingsInternal();
+      return await codingRuntimeCheck(settings);
+    } catch (error) {
+      return { ok: false, error: error.message, engines: {} };
+    }
+  });
+
+  ipcMain.handle("coding:runtime-upgrade", async (_event, payload = {}) => {
+    try {
+      const settings = await loadSettingsInternal();
+      const sendProgress = (evt) => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("coding-runtime-progress", evt);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      return await codingRuntimeUpgrade({
+        engine: payload.engine || "all",
+        settings,
+        onProgress: sendProgress,
+      });
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("coding:runtime-retry-deps", async () => {
+    try {
+      const settings = await loadSettingsInternal();
+      const sendProgress = (evt) => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("coding-runtime-progress", evt);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      return await codingRetryEngineBDeps(settings, { onProgress: sendProgress });
+    } catch (error) {
+      return { ok: false, error: error.message, canRetryDeps: true };
+    }
+  });
+
   ipcMain.handle("openclaw:open-install-docs", async () => {
     const guide = openclawLifecycle.getInstallGuide();
     const docsUrl = guide.installDocsUrl || "https://github.com/openclaw/openclaw";
@@ -1474,7 +1681,7 @@ function registerIpcHandlers() {
     return decideFallback({
       bridgeState: openclawBridge.state,
       openclawEnabled: settings.openclawEnabled === true,
-      fallbackToPai: settings.openclawFallbackToPai !== false,
+      fallbackToPai: settings.openclawFallbackToPai === true,
       requestAcceptedByGateway: payload?.requestAcceptedByGateway === true,
       waitTimedOut: payload?.waitTimedOut === true,
     });
@@ -1538,11 +1745,11 @@ function registerIpcHandlers() {
       };
     }
     // Dual-track guard: only allow PAI fallback before Gateway accepts.
-    if (openclawBridge.state !== "ready" && settings.openclawFallbackToPai !== false) {
+    if (openclawBridge.state !== "ready" && settings.openclawFallbackToPai === true) {
       const decision = decideFallback({
         bridgeState: openclawBridge.state,
         openclawEnabled: settings.openclawEnabled === true || settings.agentRuntimeMode === "openclaw",
-        fallbackToPai: settings.openclawFallbackToPai !== false,
+        fallbackToPai: settings.openclawFallbackToPai === true,
         requestAcceptedByGateway: false,
         waitTimedOut: false,
       });
