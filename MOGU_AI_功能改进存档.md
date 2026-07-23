@@ -6,8 +6,8 @@
 > **北极星**：以 GPT-5.6 为默认大脑，融合经验证的优秀 Agent 能力，成为最强 Windows 个人 AI 工作台。
 > **当前里程碑**：安全、干净、可安装的 MOGU 2.0 Public RC；不是项目终点。
 > **权威总纲**：[`docs/MOGU_NORTH_STAR_AND_CAPABILITY_FUSION.md`](./docs/MOGU_NORTH_STAR_AND_CAPABILITY_FUSION.md)
-> **当前任务状态**：PAUSED；Phase 0–Day 4 已完成，Day 5–7 等待用户下令。
-> **执行纪律**：收到明确“开始”前，只保留目标与存档，不继续代码、构建、签名、发布或能力接入。
+> **当前任务状态**：FINAL RELEASE CLOSING PHASE；`2.0.1-rc.1` Unsigned Internal Preview 已完成闭环。
+> **执行纪律**：冻结新功能、架构调整、Skill 扩展与研究调参；只允许可信签名、Signed E2E 和正式分发验证。
 
 ---
 
@@ -28,10 +28,13 @@ Public RC 安全与发行底座
 
 **当前实际完成度：**
 
-- Public RC Phase 0–Day 4：已完成；测试 259/259，v2 acceptance 17/17，coding acceptance 23/23。
-- Day 5–7：未完成；代码签名证书与 GitHub Release 权限是外部前置。
+- Public RC Phase 0–Day 6：已完成；测试 274/274，v2 acceptance 17/17，coding acceptance 23/23。
+- Source Freeze：已完成；commit `c3c455b`，tag `v2.0.1-rc.1`，远端与工作区 clean。
+- Unsigned E2E / 分发：安装、干净 Profile、卸载、数据保留、GitHub 上传与下载 SHA-256 回验全部 PASS。
+- Internal Preview：<https://github.com/ly136148277-netizen/mogu-ai-releases/releases/tag/v2.0.1-rc.1>
+- 唯一外部硬阻塞：本机没有可信 Authenticode PFX 或 Azure Trusted Signing 配置，因此 Signed RC / Signed E2E / stable `v2.0.1` 尚未完成。
 - 2.1 能力代码：尚未启动；Capability Intake Gate 和矩阵字段已冻结。
-- 当前暂停，等待用户明确“开始”。
+- 当前停机休息；下次从“取得可信代码签名证书”继续，不回到功能开发。
 
 ---
 

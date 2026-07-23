@@ -80,7 +80,7 @@ Public Release BLOCKED on clean tag + verified signing + installed E2E + upload 
 
 ## Phase 0 结果（COMPLETE）
 
-见 [`PUBLIC_RELEASE_PHASE0_FACTS.md`](./PUBLIC_RELEASE_PHASE0_FACTS.md)。路由 / Key / compat 白名单 / 干净 Profile 已落地；证书与 `gh auth` 未就绪 → 仅能冲向 Unsigned/Internal Preview，直至外部前置恢复。
+见 [`PUBLIC_RELEASE_PHASE0_FACTS.md`](./PUBLIC_RELEASE_PHASE0_FACTS.md)。路由 / Key / compat 白名单 / 干净 Profile 已落地；GitHub 凭据已从 Windows Credential Manager 安全复用，代码签名证书仍缺失。
 
 ## Day 1–4（本窗口已推进）
 
@@ -89,14 +89,14 @@ Public Release BLOCKED on clean tag + verified signing + installed E2E + upload 
 | 1 审计 | `PUBLIC_RELEASE_DAY1_AUDIT.md` | COMPLETE · P0 PAI 路径回填已修 |
 | 2 首启路由 | `PUBLIC_RELEASE_DAY2_FIRST_RUN.md` | COMPLETE |
 | 3 数据隔离 | `PUBLIC_RELEASE_DAY3_DATA_ISOLATION.md` | COMPLETE |
-| 4 门禁 | `PUBLIC_RELEASE_DAY4_GATES.md` | COMPLETE；最新复核 **272/272** · acceptance 17/17 + coding 23/23 |
+| 4 门禁 | `PUBLIC_RELEASE_DAY4_GATES.md` | COMPLETE；最新复核 **274/274** · acceptance 17/17 + coding 23/23 |
 
 | G5 | Unsigned Artifact Gate | [`PUBLIC_RELEASE_ARTIFACT_GATE_DRAFT.md`](./PUBLIC_RELEASE_ARTIFACT_GATE_DRAFT.md) · **unsigned PASS** |
 | Grok delivery | [`GROK45_PUBLIC_RC_DELIVERY.md`](./GROK45_PUBLIC_RC_DELIVERY.md) | GPT-5.6 Sol 已复核并修正 P0/P1 |
 
-**已完成：** GitHub 公共证据确认 `v2.0.0` 已发布，RC 版本确定为 `2.0.1-rc.1`；`dist-rc-final/` unsigned 候选、Payload/Evidence/Test reports 已生成并校验。
+**已完成：** commit `c3c455b` / tag `v2.0.1-rc.1` 已推送；`dist-rc-tagged/` 从 clean tag 构建。Unsigned 安装 E2E、Payload、Evidence、GitHub 上传与 fresh-download SHA-256 回验全部 PASS。预发布：<https://github.com/ly136148277-netizen/mogu-ai-releases/releases/tag/v2.0.1-rc.1>
 
-**仍阻塞 Public Release：** dirty tree 整理并形成 clean RC tag · `CSC_LINK`/签名与时间戳 · 最终签名安装包 E2E · GitHub 上传及下载回验。
+**唯一外部硬阻塞：** 本机证书库、环境变量和常见 `.pfx/.p12` 路径均无可信代码签名证书。下次只执行 Signed RC → Signed E2E → stable `v2.0.1` / `latest.yml` → 最终分发回验；禁止恢复功能开发。
 
 ## 权威路径
 
