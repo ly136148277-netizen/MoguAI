@@ -3,7 +3,7 @@ const path = require("path");
 const { EventEmitter } = require("events");
 const { applyIds, createEmptyMapping } = require("./openclaw/id-map");
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const MAX_EVENT_IDS = 64;
 const MAX_NAME_LENGTH = 200;
 const MAX_TEXT_LENGTH = 12_000;
@@ -119,6 +119,30 @@ function normalizeLastEvent(value) {
   return Object.keys(event).length ? event : null;
 }
 
+function normalizeRuntimeEventRef(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const relativePath = String(value.relativePath || "").replace(/\\/g, "/");
+  if (!relativePath || relativePath.startsWith("/") || relativePath.split("/").includes("..")) return null;
+  return {
+    kind: "run-event-jsonl",
+    relativePath: relativePath.slice(0, 300),
+    eventCount: Math.max(0, Math.floor(normalizeNumber(value.eventCount, 0))),
+    lastSequence: Math.max(0, Math.floor(normalizeNumber(value.lastSequence, 0))),
+    lastType: value.lastType == null ? null : capText(value.lastType, 100),
+    updatedAt: normalizeIso(value.updatedAt, null),
+    corrupt: value.corrupt === true,
+  };
+}
+
+function normalizeRuntimeEventSummary(value) {
+  const ref = normalizeRuntimeEventRef({ ...(value || {}), relativePath: "summary" });
+  if (!ref) return null;
+  delete ref.kind;
+  delete ref.relativePath;
+  delete ref.corrupt;
+  return ref;
+}
+
 function normalizeTask(row = {}, { defaultSource = "unknown", now = nowIso() } = {}) {
   const raw = row && typeof row === "object" ? row : {};
   const moguTaskId = String(raw.moguTaskId || makeTaskId());
@@ -162,6 +186,8 @@ function normalizeTask(row = {}, { defaultSource = "unknown", now = nowIso() } =
     idempotencyKey: raw.idempotencyKey ? capText(raw.idempotencyKey, 200) : null,
     eventIds: normalizeEventIds(raw.eventIds),
     lastEvent: normalizeLastEvent(raw.lastEvent),
+    runtimeEventRef: normalizeRuntimeEventRef(raw.runtimeEventRef),
+    runtimeEventSummary: normalizeRuntimeEventSummary(raw.runtimeEventSummary),
   };
 }
 
@@ -197,6 +223,7 @@ class TaskStore extends EventEmitter {
     this._writeChain = Promise.resolve();
     this._tmpCounter = 0;
     this.clock = typeof options.clock === "function" ? options.clock : () => new Date();
+    this.eventStore = options.eventStore || null;
     if (typeof options.onChange === "function") this.on("change", options.onChange);
   }
 
@@ -361,6 +388,8 @@ class TaskStore extends EventEmitter {
     if (Object.prototype.hasOwnProperty.call(raw, "replay")) next.replay = normalizeReplay(raw.replay);
     if (Object.prototype.hasOwnProperty.call(raw, "retryOf")) next.retryOf = raw.retryOf ? String(raw.retryOf) : null;
     if (Object.prototype.hasOwnProperty.call(raw, "retryCount")) next.retryCount = Math.max(0, Math.floor(normalizeNumber(raw.retryCount, 0)));
+    if (Object.prototype.hasOwnProperty.call(raw, "runtimeEventRef")) next.runtimeEventRef = normalizeRuntimeEventRef(raw.runtimeEventRef);
+    if (Object.prototype.hasOwnProperty.call(raw, "runtimeEventSummary")) next.runtimeEventSummary = normalizeRuntimeEventSummary(raw.runtimeEventSummary);
     if (eventId) next.eventIds = normalizeEventIds([...current.eventIds, eventId]);
     if (eventId || eventSeq != null || raw.connId) {
       next.lastEvent = normalizeLastEvent({ eventId, seq: eventSeq, connId: raw.connId || current.lastEvent?.connId });
@@ -471,6 +500,42 @@ class TaskStore extends EventEmitter {
       taskId: row.taskId,
       promptId: row.promptId,
     };
+  }
+
+  async checkpoint(moguTaskId, event = {}) {
+    if (!this.eventStore) throw new Error("run event store is not configured");
+    const task = await this.get(moguTaskId);
+    if (!task) return null;
+    const appended = await this.eventStore.append(task.moguTaskId, {
+      ...event,
+      type: event.type || "task.checkpoint",
+      source: event.source || task.source,
+    });
+    await this.update(task.moguTaskId, {
+      runtimeEventRef: appended.ref,
+      runtimeEventSummary: appended.ref,
+    });
+    return clone(appended);
+  }
+
+  async replayEvents(moguTaskId, reducer, initialValue) {
+    if (!this.eventStore) throw new Error("run event store is not configured");
+    const task = await this.get(moguTaskId);
+    if (!task) return null;
+    return this.eventStore.replay(task.moguTaskId, reducer, initialValue);
+  }
+
+  async recover(moguTaskId) {
+    if (!this.eventStore) throw new Error("run event store is not configured");
+    const task = await this.get(moguTaskId);
+    if (!task) return null;
+    const read = await this.eventStore.read(task.moguTaskId);
+    const ref = this.eventStore.reference(task.moguTaskId, read);
+    const updated = await this.update(task.moguTaskId, {
+      runtimeEventRef: ref,
+      runtimeEventSummary: ref,
+    });
+    return { task: updated, events: read.events, corruption: read.corruption, summary: ref };
   }
 }
 
