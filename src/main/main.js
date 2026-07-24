@@ -42,6 +42,7 @@ const { StorageManager } = require("./storage");
 const { DownloadEngine } = require("./download-engine");
 const { OllamaService, resolveOllamaName, OLLAMA_INSTALL_URL } = require("./ollama");
 const { SettingsStore } = require("./settings");
+const { RemoteManager } = require("./remote");
 const { SecretStore } = require("./secret-store");
 const { listMirrorOptions } = require("./mirrors");
 const { ChatSessionStore, exportSessionToMarkdown } = require("./chat-sessions");
@@ -148,6 +149,7 @@ let permissionProxy = null;
 let permissionAudit = null;
 let permissionGrants = null;
 let skillRuntime = null;
+let remoteManager = null;
 let runEventStore = null;
 let retryExecutor = null;
 let neuralRoutingService = null;
@@ -589,6 +591,18 @@ function initServices() {
     agentRunService.recoverAfterReconnect().catch((error) => {
       logger?.warn?.("openclaw recover failed", { message: error.message });
     });
+  });
+
+  remoteManager = new RemoteManager({
+    getSettings: () => settingsStore.load(),
+    permissionProxy,
+    taskStore,
+    skillRuntime,
+    agentRunService,
+    resolveSecret: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+  });
+  remoteManager.on("approval-required", (payload) => {
+    sendToRenderer("remote-approval-required", payload);
   });
 
   const promptsPath = path.join(appPath, "config", "prompts.json");
@@ -1381,6 +1395,20 @@ function registerIpcHandlers() {
     }
     const accepted = permissionProxy.respond(requestId, payload?.allowed === true, payload?.reason || "");
     return { ok: accepted };
+  });
+
+  ipcMain.handle("remote:status", async () => (remoteManager ? remoteManager.status() : { ok: false }));
+  ipcMain.handle("remote:start", async () => (remoteManager ? remoteManager.start() : { ok: false }));
+  ipcMain.handle("remote:stop", async () => (remoteManager ? remoteManager.stop() : { ok: false }));
+  ipcMain.handle("remote:inject", async (_event, payload = {}) =>
+    remoteManager ? remoteManager.inject(payload || {}) : { ok: false }
+  );
+  ipcMain.handle("remote:submit", async (_event, payload = {}) =>
+    remoteManager ? remoteManager.submitTask(payload || {}) : { ok: false }
+  );
+  ipcMain.handle("remote:approve", async (_event, payload = {}) => {
+    if (!remoteManager) return { ok: false };
+    return remoteManager.respondApproval(payload?.approvalId, payload?.decision || payload?.answer);
   });
 
   ipcMain.handle("permission:audit-list", async (_event, payload = {}) => {

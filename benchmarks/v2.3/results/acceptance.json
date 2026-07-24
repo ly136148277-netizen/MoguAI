@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.3-acceptance",
+  "status": "PASS",
+  "passed": 47,
+  "total": 47,
+  "checks": [
+    {
+      "id": "file:src/main/remote/RemoteManager.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/RemoteGateway.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/RemoteInbox.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/RemoteOutbox.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/RemoteSession.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/RemoteTypes.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/RemoteTaskQueue.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/RemoteTaskSource.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/adapters/TelegramAdapter.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/adapters/QQAdapter.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/adapters/WeChatAdapter.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/permission/RemotePermission.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/remote/notification/NotificationService.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:docs/V2.3_REMOTE_WORKSPACE.md",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:docs/V2.3_DECISION_PACKAGE.md",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:enabled",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:telegram",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:qq",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:wechat",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:allowAutoExecute",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-on:requireApproval",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "telegram:adapter-started",
+      "ok": true,
+      "detail": "telegram"
+    },
+    {
+      "id": "telegram:submit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "telegram:permission",
+      "ok": true,
+      "detail": "remote channel gate"
+    },
+    {
+      "id": "telegram:skill",
+      "ok": true,
+      "detail": "calls=2"
+    },
+    {
+      "id": "telegram:result",
+      "ok": true,
+      "detail": "succeeded"
+    },
+    {
+      "id": "telegram:outbox",
+      "ok": true,
+      "detail": "sent=14"
+    },
+    {
+      "id": "qq:adapter-started",
+      "ok": true,
+      "detail": "qq"
+    },
+    {
+      "id": "qq:submit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "qq:permission",
+      "ok": true,
+      "detail": "remote channel gate"
+    },
+    {
+      "id": "qq:skill",
+      "ok": true,
+      "detail": "calls=2"
+    },
+    {
+      "id": "qq:result",
+      "ok": true,
+      "detail": "succeeded"
+    },
+    {
+      "id": "qq:outbox",
+      "ok": true,
+      "detail": "sent=14"
+    },
+    {
+      "id": "wechat:adapter-started",
+      "ok": true,
+      "detail": "wechat"
+    },
+    {
+      "id": "wechat:submit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "wechat:permission",
+      "ok": true,
+      "detail": "remote channel gate"
+    },
+    {
+      "id": "wechat:skill",
+      "ok": true,
+      "detail": "calls=2"
+    },
+    {
+      "id": "wechat:result",
+      "ok": true,
+      "detail": "succeeded"
+    },
+    {
+      "id": "wechat:outbox",
+      "ok": true,
+      "detail": "sent=14"
+    },
+    {
+      "id": "cancel:command",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "cancel:terminal",
+      "ok": true,
+      "detail": "cancelled"
+    },
+    {
+      "id": "approval:prompt",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "approval:pass",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "recover:retry",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "log:command",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "log:status",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "recover:first",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "completedAt": "2026-07-24T04:46:33.651Z"
+}

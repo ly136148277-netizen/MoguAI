@@ -118,6 +118,15 @@ const DEFAULT_SETTINGS = {
    * Example: [{ id: "fs", label: "Filesystem", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "REPLACE_WITH_SAFE_FOLDER"], enabled: true }]
    */
   mcpServers: [],
+  /** MOGU 2.3 Remote Workspace — message-driven task source. Default OFF. */
+  remote: {
+    enabled: false,
+    telegram: false,
+    qq: false,
+    wechat: false,
+    requireApproval: true,
+    allowAutoExecute: false,
+  },
 };
 
 class SettingsStore {
@@ -136,12 +145,14 @@ class SettingsStore {
       this._cache = { ...DEFAULT_SETTINGS, ...saved };
       this._cache.v22Config = sanitizeV22Config(saved.v22Config);
       this._cache.v22LspServers = sanitizeV22LspServers(saved.v22LspServers);
+      this._cache.remote = sanitizeRemoteSettings(saved.remote);
       return this._cache;
     }
 
     this._cache = { ...DEFAULT_SETTINGS };
     this._cache.v22Config = sanitizeV22Config();
     this._cache.v22LspServers = [];
+    this._cache.remote = sanitizeRemoteSettings();
     await this.save();
     return this._cache;
   }
@@ -161,6 +172,7 @@ class SettingsStore {
     if (this._cache) {
       this._cache.v22Config = sanitizeV22Config(this._cache.v22Config);
       this._cache.v22LspServers = sanitizeV22LspServers(this._cache.v22LspServers);
+      this._cache.remote = sanitizeRemoteSettings(this._cache.remote);
     }
     if (this._cache) {
       this._cache.schemaVersion = this._cache.schemaVersion || DEFAULT_SETTINGS.schemaVersion;
@@ -395,10 +407,23 @@ function isCredentialField(key) {
   );
 }
 
+function sanitizeRemoteSettings(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    enabled: source.enabled === true,
+    telegram: source.telegram === true,
+    qq: source.qq === true,
+    wechat: source.wechat === true,
+    requireApproval: source.requireApproval !== false,
+    allowAutoExecute: source.allowAutoExecute === true,
+  };
+}
+
 module.exports = {
   SettingsStore,
   DEFAULT_SETTINGS,
   sanitizeAdapterConfig,
   sanitizeV22Config,
   sanitizeV22LspServers,
+  sanitizeRemoteSettings,
 };

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.3-regression-summary",
+  "status": "PASS",
+  "unitTests": "365/365",
+  "acceptanceV23": "47/47",
+  "completedAt": "2026-07-24T04:50:00.000Z",
+  "recommendation": "keep-default-off"
+}
