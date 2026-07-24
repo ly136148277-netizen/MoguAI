@@ -51,6 +51,7 @@ const {
 const { runLocalPatch, shouldUseLocalPatch } = require("../coding-local-patch");
 const { runCodingAgentLoop, shouldUseCodingAgent } = require("../coding-agent-loop");
 const { gateCommand } = require("../../permission-gate");
+const { summarizePlan } = require("../../moguai/neural/planner");
 
 function resolveWorkspace(settings, args = {}) {
   const ws =
@@ -405,16 +406,37 @@ async function runCore({ deps, args, task }) {
     enforce: args?.scopeEnforce !== false && args?.lockScope !== false,
   });
   const explicitPaths = parseAllowPaths(args?.allowPaths || args?.scopePaths || args?.paths);
-  const editPlan = planEditAccuracy(workspace, prompt, {
-    allowPaths: explicitPaths,
-  });
-  const scope = planChangeScope(workspace, prompt, {
-    allowPaths: explicitPaths.length
-      ? explicitPaths
-      : editPlan.targetPaths.length
-        ? editPlan.targetPaths
-        : undefined,
-  });
+  const neuralPlan = args?.neuralPlan?.schemaVersion === "2.2" ? args.neuralPlan : null;
+  const editPlan = neuralPlan
+    ? {
+        targets: neuralPlan.scope.targets,
+        targetPaths: neuralPlan.scope.targets.map((target) => target.path),
+        mustTouch: neuralPlan.scope.mustTouch,
+        locationConfidence: neuralPlan.scope.confidence,
+        locationReason: neuralPlan.scope.reason,
+        locked: neuralPlan.scope.locked,
+        indexStats: neuralPlan.repoEvidence.index,
+        seeds: neuralPlan.scope.targets.map((target) => target.path).slice(0, 8),
+      }
+    : planEditAccuracy(workspace, prompt, {
+        allowPaths: explicitPaths,
+      });
+  const scope = neuralPlan
+    ? {
+        locked: neuralPlan.scope.locked,
+        allowedPaths: neuralPlan.scope.allowedPaths,
+        source: neuralPlan.scope.source,
+        confidence: neuralPlan.scope.confidence,
+        reason: neuralPlan.scope.reason,
+        tokens: [],
+      }
+    : planChangeScope(workspace, prompt, {
+        allowPaths: explicitPaths.length
+          ? explicitPaths
+          : editPlan.targetPaths.length
+            ? editPlan.targetPaths
+            : undefined,
+      });
   // Prefer accuracy confidence when we supplied inferred targets
   if (!explicitPaths.length && editPlan.targetPaths.length) {
     scope.source = "accuracy";
@@ -432,6 +454,9 @@ async function runCore({ deps, args, task }) {
     enrichPromptWithAccuracy(prompt, editPlan),
     scopeForPrompt
   );
+  if (neuralPlan) {
+    taskPrompt += `\n\n[NeuralPlan summary]\n${JSON.stringify(summarizePlan(neuralPlan))}`;
+  }
   let effectivePrompt = enrichPrompt(taskPrompt, project);
   let scopeEnforcement = null;
   let contentAssessment = null;
@@ -748,15 +773,57 @@ async function runCore({ deps, args, task }) {
           }
         : null,
     },
+    ...(neuralPlan ? { neuralPlan: summarizePlan(neuralPlan) } : {}),
   };
 }
 
 async function run({ deps, args, task }) {
   const settings = settingsWithUserData(deps);
+  const plannerEnabled =
+    settings.v22NeuralLayer === true && settings.v22Planner === true;
+  let plannedArgs = args;
+  if (plannerEnabled && !deps.neuralPlanner?.create) {
+    return {
+      ok: false,
+      status: "BLOCKED",
+      code: "PLANNER_SERVICE_UNAVAILABLE",
+      error: "Neural planner service is unavailable",
+      moguTaskId: task?.moguTaskId || args?.moguTaskId || null,
+    };
+  }
+  if (plannerEnabled) {
+    const workspace = resolveWorkspace(settings, args);
+    if (workspace) {
+      const explicitStages =
+        Object.prototype.hasOwnProperty.call(args || {}, "patchVerifyStages") ||
+        Object.prototype.hasOwnProperty.call(args || {}, "verifyStages");
+      const neuralPlan = await deps.neuralPlanner.create({
+        ...args,
+        workspace,
+        prompt: String(args?.prompt || args?.text || args?.message || ""),
+        taskId: task?.moguTaskId || args?.moguTaskId,
+        verifyStages: explicitStages
+          ? (args.patchVerifyStages ?? args.verifyStages)
+          : undefined,
+      });
+      plannedArgs = {
+        ...args,
+        neuralPlan,
+        ...(explicitStages &&
+        !Object.prototype.hasOwnProperty.call(args || {}, "patchVerifyStages") &&
+        Array.isArray(args?.verifyStages)
+          ? { patchVerifyStages: neuralPlan.verifyStages }
+          : {}),
+        ...(!explicitStages && neuralPlan.verifyStages.length
+          ? { patchVerifyStages: neuralPlan.verifyStages }
+          : {}),
+      };
+    }
+  }
   const routingEnabled =
     settings.v22NeuralLayer === true && settings.v22ModelRouting === true;
   if (!routingEnabled) {
-    return runCore({ deps, args, task });
+    return runCore({ deps, args: plannedArgs, task });
   }
   if (!deps.neuralRoutingService?.execute) {
     return {
@@ -767,13 +834,13 @@ async function run({ deps, args, task }) {
       moguTaskId: task?.moguTaskId || args?.moguTaskId || null,
     };
   }
-  const text = String(args?.prompt || args?.text || args?.message || "").trim();
+  const text = String(plannedArgs?.prompt || plannedArgs?.text || plannedArgs?.message || "").trim();
   return deps.neuralRoutingService.execute(
     {
       taskClass: "coding",
       text,
-      moguTaskId: task?.moguTaskId || args?.moguTaskId || null,
-      runId: task?.moguTaskId || args?.runId || args?.moguTaskId || null,
+      moguTaskId: task?.moguTaskId || plannedArgs?.moguTaskId || null,
+      runId: task?.moguTaskId || plannedArgs?.runId || plannedArgs?.moguTaskId || null,
       requiredCapabilities: ["code", "text", "tools"],
       estimatedInputTokens: Math.max(1, Math.ceil(text.length / 4)),
       estimatedOutputTokens: Number(settings.v22Config?.budget?.maxOutputTokens) || 4096,
@@ -793,7 +860,7 @@ async function run({ deps, args, task }) {
           getAgentApiKey: async () => route.apiKey,
         },
         args: {
-          ...args,
+          ...plannedArgs,
           model: route.modelId,
           provider: route.provider,
         },
@@ -1230,6 +1297,25 @@ async function planScope({ deps, args }) {
   const workspace = resolveWorkspace(deps.settings, args);
   const prompt = String(args?.prompt || args?.text || "").trim();
   if (!workspace) return { ok: false, error: "缺少工作区", code: "workspace_missing" };
+  if (
+    deps.settings?.v22NeuralLayer === true &&
+    deps.settings?.v22Planner === true
+  ) {
+    if (!deps.neuralPlanner?.preview) {
+      return {
+        ok: false,
+        status: "BLOCKED",
+        code: "PLANNER_SERVICE_UNAVAILABLE",
+        error: "Neural planner service is unavailable",
+      };
+    }
+    return deps.neuralPlanner.preview({
+      ...args,
+      workspace,
+      prompt,
+      taskId: args?.moguTaskId || "coding-plan-preview",
+    });
+  }
   const explicitPaths = parseAllowPaths(args?.allowPaths || args?.scopePaths || args?.paths);
   const editPlan = planEditAccuracy(workspace, prompt, { allowPaths: explicitPaths });
   const scope = planChangeScope(workspace, prompt, {

@@ -121,7 +121,7 @@ const { StudioStore } = require("./studio-store");
 const { SkillRuntime } = require("./skills/runtime");
 const { initAutoUpdater } = require("./updater");
 const { chatWithBrain, testBrain, runBrainAgent, API_PRESETS } = require("./agent-brain");
-const { NeuralRoutingService, BudgetLedger } = require("./moguai/neural");
+const { NeuralRoutingService, NeuralPlanner, BudgetLedger } = require("./moguai/neural");
 const powerControl = require("./power-control");
 
 let mainWindow = null;
@@ -146,6 +146,7 @@ let skillRuntime = null;
 let runEventStore = null;
 let retryExecutor = null;
 let neuralRoutingService = null;
+let neuralPlanner = null;
 const factoryTerminalManagers = new Map();
 const factoryWorktreeManagers = new Map();
 let desktopOnline = true;
@@ -437,6 +438,50 @@ function initServices() {
     eventStore: runEventStore,
     ledger: budgetLedger,
   });
+  neuralPlanner = new NeuralPlanner({
+    getSettings: () => settingsStore.load(),
+    getLspServers: async () => {
+      const settings = await settingsStore.load();
+      return Array.isArray(settings.v22LspServers) ? settings.v22LspServers : [];
+    },
+    eventStore: runEventStore,
+    subtaskCoordinatorFactory: async (request, root) => {
+      const settings = await settingsStore.load();
+      if (!settings.v21RecoverableRuntime || !settings.v21ParallelWorktrees) {
+        const error = new Error("Recoverable parallel exploration is disabled");
+        error.code = "feature_disabled";
+        throw error;
+      }
+      const configuredRoot = canonicalTerminalPath(settings.codingWorkspace || "");
+      if (configuredRoot.toLowerCase() !== canonicalTerminalPath(root).toLowerCase()) {
+        const error = new Error("Repository is not the configured workspace");
+        error.code = "path_escape";
+        throw error;
+      }
+      const baselineCommit = String(request.baselineCommit || "");
+      if (!/^[0-9a-f]{40,64}$/i.test(baselineCommit)) {
+        const error = new Error("Exploration requires an explicit baseline commit");
+        error.code = "baseline_required";
+        throw error;
+      }
+      const storageKey = crypto
+        .createHash("sha256")
+        .update(`${configuredRoot}\0${baselineCommit}`)
+        .digest("hex")
+        .slice(0, 20);
+      const manager = getFactoryWorktreeManager(
+        configuredRoot,
+        baselineCommit,
+        path.join(userData, "v21-exploration-worktrees", storageKey)
+      );
+      return new SubtaskCoordinator({
+        worktreeManager: manager,
+        eventStore: runEventStore,
+        executor: ({ subtask, worktree }) =>
+          factoryQueryRepoIntelligence(worktree.path, subtask.payload?.query || { op: "stats" }),
+      });
+    },
+  });
   taskStore.on("change", (payload) => {
     sendToRenderer("task-change", {
       type: payload?.type || "updated",
@@ -483,6 +528,7 @@ function initServices() {
     updateSettings: (partial) => settingsStore.update(partial),
     getAgentApiKey: async () => (secretStore ? secretStore.get("agentApiKey") : ""),
     neuralRoutingService,
+    neuralPlanner,
     openExternal: (url) => shell.openExternal(url),
     emitProgress: (payload) => sendToRenderer("skill-progress", payload),
   });
@@ -1669,6 +1715,31 @@ function registerIpcHandlers() {
       return factoryDiscoverWorkspaceTests(workspace, payload.options || {});
     } catch (error) {
       return { ok: false, error: error.message, code: error.code || "test_discovery_failed" };
+    }
+  });
+
+  ipcMain.handle("factory:neural-plan-preview", async (_event, payload = {}) => {
+    try {
+      const settings = await settingsStore.load();
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return await neuralPlanner.preview({
+        workspace,
+        prompt: payload.prompt || payload.text || "",
+        taskId: payload.taskId || payload.moguTaskId || "factory-preview",
+        taskClass: "coding",
+        complexity: payload.complexity,
+        allowPaths: payload.allowPaths || payload.paths,
+        verifyStages: Object.prototype.hasOwnProperty.call(payload, "verifyStages")
+          ? payload.verifyStages
+          : undefined,
+        explorationSubtasks: payload.explorationSubtasks,
+        baselineCommit: payload.baselineCommit,
+        lspServerId: payload.lspServerId,
+        lspTimeoutMs: payload.lspTimeoutMs,
+        budgets: payload.budgets,
+      });
+    } catch (error) {
+      return { ok: false, code: error.code || "neural_plan_failed", error: error.message };
     }
   });
 

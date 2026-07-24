@@ -5,6 +5,7 @@ const { classifyTask } = require("./task-classifier");
 const { ModelRegistry } = require("./model-registry");
 const { ModelRouter } = require("./model-router");
 const { BudgetLedger } = require("./budget-ledger");
+const { NeuralPlanner } = require("./planner");
 const { OUTCOMES, REASONS, blocked, configHash } = require("./contracts");
 
 const NON_FALLBACK_CODES = new Set([
@@ -469,6 +470,8 @@ module.exports = {
   ModelRegistry,
   ModelRouter,
   BudgetLedger,
+  NeuralPlanner,
+  ...require("./planner"),
   routingEnabled,
   adapterConfigFromProfile,
   publicDecision,

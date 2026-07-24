@@ -76,6 +76,8 @@ const DEFAULT_SETTINGS = {
   v22ToolChain: false,
   v22DecisionTrace: false,
   v22ClosedLoop: false,
+  /** User-registered, pinned LSP launch metadata. Never auto-installed or updated. */
+  v22LspServers: [],
   /** Routing metadata only. Provider credentials remain outside settings.json. */
   v22Config: {
     modelProfiles: [],
@@ -133,11 +135,13 @@ class SettingsStore {
       const saved = await fs.readJson(this.settingsPath);
       this._cache = { ...DEFAULT_SETTINGS, ...saved };
       this._cache.v22Config = sanitizeV22Config(saved.v22Config);
+      this._cache.v22LspServers = sanitizeV22LspServers(saved.v22LspServers);
       return this._cache;
     }
 
     this._cache = { ...DEFAULT_SETTINGS };
     this._cache.v22Config = sanitizeV22Config();
+    this._cache.v22LspServers = [];
     await this.save();
     return this._cache;
   }
@@ -156,6 +160,7 @@ class SettingsStore {
     }
     if (this._cache) {
       this._cache.v22Config = sanitizeV22Config(this._cache.v22Config);
+      this._cache.v22LspServers = sanitizeV22LspServers(this._cache.v22LspServers);
     }
     if (this._cache) {
       this._cache.schemaVersion = this._cache.schemaVersion || DEFAULT_SETTINGS.schemaVersion;
@@ -253,6 +258,21 @@ function sanitizeV22Config(config = {}) {
     // Model substitution requires an explicit persisted user opt-in.
     allowModelFallback: source.allowModelFallback === true,
   };
+}
+
+function sanitizeV22LspServers(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 16).filter(isPlainObject).map((server) => ({
+    id: cleanString(server.id, 128),
+    command: cleanString(server.command, 2048),
+    args: Array.isArray(server.args)
+      ? server.args.slice(0, 64).map((arg) => cleanString(arg, 2048))
+      : [],
+    version: cleanString(server.version, 128),
+    licenseEvidenceId: cleanString(server.licenseEvidenceId, 256),
+    allowedWorkspaceRoot: cleanString(server.allowedWorkspaceRoot, 2048),
+    registeredByUser: server.registeredByUser === true,
+  }));
 }
 
 function sanitizeV22ModelProfile(profile) {
@@ -380,4 +400,5 @@ module.exports = {
   DEFAULT_SETTINGS,
   sanitizeAdapterConfig,
   sanitizeV22Config,
+  sanitizeV22LspServers,
 };

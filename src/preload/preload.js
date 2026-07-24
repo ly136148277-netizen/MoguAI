@@ -139,6 +139,8 @@ contextBridge.exposeInMainWorld("modelManager", {
   factoryRepoIntelligence: (payload) =>
     ipcRenderer.invoke("factory:repo-intelligence", payload || {}),
   factoryDiscoverTests: (payload) => ipcRenderer.invoke("factory:discover-tests", payload || {}),
+  factoryNeuralPlanPreview: (payload) =>
+    ipcRenderer.invoke("factory:neural-plan-preview", payload || {}),
   factoryTerminalStart: (payload) => ipcRenderer.invoke("factory:terminal-start", payload || {}),
   factoryTerminalCancel: (payload) => ipcRenderer.invoke("factory:terminal-cancel", payload || {}),
   factoryTerminalList: () => ipcRenderer.invoke("factory:terminal-list"),
