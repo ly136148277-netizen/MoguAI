@@ -23,8 +23,8 @@
 | V1.5.5 | ✅ 基线 | 打包白名单 + ASAR denylist；`v1.5.4` 安装包已 yank |
 | V1.6.0-alpha → V2.0 | ✅ 产品形态已形成 / RC 冻结中 | Bridge → 任务中心 → Skills → 助手控制中心 |
 | V2.0 Public RC | 🚧 Day 0–4 完成，Day 5–7 待继续 | 安全、干净、可安装、证据绑定的公共交付底座 |
-| V2.1 | 📋 Public RC 后立即启动 | Agent Capability Fusion：受控终端、多语言 LSP/Repo Map、验证闭环、Worktree/只读并行 |
-| V2.2 | 📋 后续 | Frontier Coding Agent |
+| V2.1 | ✅ 实现完成 / 默认关闭 | Agent Capability Fusion：本地门禁通过；GPT-5.6 A/B BLOCKED；封存 holdout 未开启 |
+| V2.2 | 🚧 协议脚手架 | 单任务 Neural Layer；完整 DAG、全局调度与迁移留待 V2.3 |
 | V2.3 | 📋 后续 | Autonomous Task System |
 | V2.4 | 📋 后续 | Evidence-based Memory |
 | V3.0 | 🎯 北极星 | Autonomous Workspace / Windows 最强个人 AI 工作台 |
