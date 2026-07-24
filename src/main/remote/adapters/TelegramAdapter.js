@@ -3,6 +3,17 @@
 const { BaseAdapter } = require("./BaseAdapter");
 const { boundedString } = require("../RemoteTypes");
 
+function resolveFetchImpl(explicit) {
+  if (typeof explicit === "function") return explicit;
+  try {
+    const { net } = require("electron");
+    if (typeof net?.fetch === "function") return net.fetch.bind(net);
+  } catch {
+    /* unit tests / non-electron */
+  }
+  return globalThis.fetch;
+}
+
 /**
  * Telegram Bot API adapter (transport only).
  * Commands: /start /help /status /task /cancel /retry /log
@@ -13,10 +24,11 @@ class TelegramAdapter extends BaseAdapter {
     super("telegram");
     this.botToken = options.botToken || "";
     this.apiBase = options.apiBase || "https://api.telegram.org";
-    this.fetchImpl = options.fetchImpl || globalThis.fetch;
+    this.fetchImpl = resolveFetchImpl(options.fetchImpl);
     this.pollMs = Math.max(500, Number(options.pollMs) || 2000);
     this._offset = 0;
     this._pollTimer = null;
+    this._polling = false;
     this._sent = [];
     this.simulate = options.simulate === true || !this.botToken;
   }
@@ -24,17 +36,27 @@ class TelegramAdapter extends BaseAdapter {
   async start() {
     await super.start();
     if (!this.simulate && typeof this.fetchImpl === "function") {
-      this._pollTimer = setInterval(() => {
-        this._poll().catch(() => {});
-      }, this.pollMs);
+      this._schedulePoll(0);
     }
     return { ok: true, channel: this.channel, simulate: this.simulate };
   }
 
   async stop() {
-    if (this._pollTimer) clearInterval(this._pollTimer);
+    if (this._pollTimer) clearTimeout(this._pollTimer);
     this._pollTimer = null;
+    this.running = false;
     return super.stop();
+  }
+
+  _schedulePoll(delayMs) {
+    if (this._pollTimer) clearTimeout(this._pollTimer);
+    this._pollTimer = setTimeout(() => {
+      this._poll()
+        .catch(() => {})
+        .finally(() => {
+          if (this.running && !this.simulate) this._schedulePoll(this.pollMs);
+        });
+    }, Math.max(0, delayMs));
   }
 
   /**

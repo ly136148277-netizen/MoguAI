@@ -3159,6 +3159,16 @@ app.whenReady().then(async () => {
   createWindow();
   logger.info("应用启动", { version: app.getVersion() });
 
+  // Personal Remote: start Telegram (etc.) only when owner explicitly enabled remote.
+  try {
+    if (settings.remote?.enabled === true && remoteManager) {
+      const remoteStart = await remoteManager.start();
+      logger.info("remote workspace start", remoteStart);
+    }
+  } catch (error) {
+    logger.warn("remote workspace start failed", { message: error?.message || String(error) });
+  }
+
   // Returning from v2rayN: re-read system proxy without full restart
   let proxyFocusTimer = null;
   app.on("browser-window-focus", () => {
