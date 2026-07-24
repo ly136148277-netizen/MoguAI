@@ -1,0 +1,9 @@
+{
+  "kind": "mogu-v2.3-long-task",
+  "status": "PASS_SIMULATED",
+  "note": "30-minute live soak is owner-operated; this run validates completion notification shape only",
+  "moguTaskId": "task-mryh1i2i-nqv870ls",
+  "elapsedMs": 136,
+  "completionText": "报告就绪\nSkill=mogu.memory\n输入=分析仓库 运行测试 生成报告\n修改: 无（只读验证）",
+  "notificationSample": "任务结束\n报告就绪\nSkill=mogu.memory\n输入=分析仓库 运行测试 生成报告\n修改: 无（只读验证）"
+}

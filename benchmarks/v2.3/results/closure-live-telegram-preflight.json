@@ -1,0 +1,20 @@
+{
+  "kind": "mogu-v2.3-live-telegram-preflight",
+  "status": "BLOCKED",
+  "settingsKeys": {
+    "remote.enabled": false,
+    "remote.telegram": false,
+    "remote.requireApproval": true,
+    "remote.allowAutoExecute": false
+  },
+  "expectedPersonalConfig": {
+    "remote.enabled": true,
+    "remote.telegram": true,
+    "remote.qq": false,
+    "remote.wechat": false,
+    "remote.requireApproval": true,
+    "remote.allowAutoExecute": false
+  },
+  "secretValueRead": false,
+  "blocker": "No telegramBotToken in SecretStore / MOGU_TELEGRAM_BOT_TOKEN"
+}

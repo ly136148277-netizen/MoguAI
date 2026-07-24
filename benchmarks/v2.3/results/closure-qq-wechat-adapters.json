@@ -1,0 +1,15 @@
+{
+  "kind": "mogu-v2.3-qq-wechat-adapter-only",
+  "status": "PASS",
+  "productionDefault": "OFF",
+  "qq": {
+    "connect": true,
+    "receive": true,
+    "send": true
+  },
+  "wechat": {
+    "connect": true,
+    "receive": true,
+    "send": true
+  }
+}

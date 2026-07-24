@@ -1,0 +1,36 @@
+{
+  "kind": "mogu-v2.3-permission-loop",
+  "status": "PASS",
+  "readAllowed": true,
+  "dangerousBlockedWithoutYes": "no",
+  "approvalPromptCount": 1,
+  "approvedAfterYes": true,
+  "auditTrail": [
+    {
+      "type": "permission",
+      "tool": "remote.telegram",
+      "riskLevel": 1,
+      "text": "查看项目"
+    },
+    {
+      "type": "skill",
+      "text": "查看项目"
+    },
+    {
+      "type": "permission",
+      "tool": "remote.telegram",
+      "riskLevel": 3,
+      "text": "删除文件"
+    },
+    {
+      "type": "permission",
+      "tool": "remote.telegram",
+      "riskLevel": 3,
+      "text": "删除文件"
+    },
+    {
+      "type": "skill",
+      "text": "删除文件"
+    }
+  ]
+}
