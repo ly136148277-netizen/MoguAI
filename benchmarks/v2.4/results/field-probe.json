@@ -1,0 +1,135 @@
+{
+  "ok": true,
+  "userData": "C:\\Users\\Administrator\\AppData\\Roaming\\ai-model-manager",
+  "secretValuePrinted": false,
+  "checks": [
+    {
+      "id": "defaults.controlPlaneOffInCode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "field.controlPlaneEnabled",
+      "ok": true,
+      "detail": "must be enabled for soak"
+    },
+    {
+      "id": "settings.apiKeyEmpty",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "settings.noPaiRootPersonal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "status.enabled",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "status.internalsHidden",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "status.noRawKey",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "status.noPorts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "status.noDriveE",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "discover.ok",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "discover.hasChecklist",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "discover.noPorts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain.localModelsVisible",
+      "ok": true,
+      "detail": "qwen2.5-coder:7b,llama3-8b-q4:latest,nomic-embed-text:latest,qwen3:4b,qwen3:8b,llama3:latest,qwythos:Q4,qwythos-9b-abliterated:Q6_K"
+    },
+    {
+      "id": "brain.switchLocal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain.localImmediate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain.switchApiCompat",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain.apiImmediate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain.apiKeyStillEmptyInSettings",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "deps.videoHint",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "remote.secretStoreOnly",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "secret.telegramPresentOrAbsent",
+      "ok": true,
+      "detail": "telegram=true"
+    },
+    {
+      "id": "secret.agentKeyPresentOrAbsent",
+      "ok": true,
+      "detail": "agentApiKey=true"
+    },
+    {
+      "id": "disk.settingsNoApiKey",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "disk.settingsNoTelegramToken",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "overall": "READY",
+    "brainChannel": "api",
+    "model": "qwen2.5-coder:7b",
+    "discoveryStatus": "READY",
+    "remoteEnabled": true,
+    "controlPlaneEnabled": true
+  }
+}
