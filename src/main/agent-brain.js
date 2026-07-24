@@ -90,7 +90,7 @@ function createConfiguredV21Adapter(settings, keyResolver, dependencies = {}) {
 }
 
 function blockedAdapterResult(error) {
-  if (error instanceof BrainAdapterError && error.code === BRAIN_ADAPTER_ERROR_CODES.BLOCKED) {
+  if (error instanceof BrainAdapterError && error.status === "BLOCKED") {
     return {
       ...error.toResult(),
       content: null,
@@ -336,6 +336,7 @@ async function runBrainAgent({
   ollama,
   skillRuntime,
   keyResolver,
+  neuralRoutingService,
   userText,
   history = [],
   maxRounds = 4,
@@ -398,8 +399,9 @@ async function runBrainAgent({
   }
 
   const tools = await resolveBrainTools(settings);
+  const v22Routing = settings?.v22NeuralLayer === true && settings?.v22ModelRouting === true;
   let v21Adapter = null;
-  if (settings?.v21Gpt56Adapter === true) {
+  if (!v22Routing && settings?.v21Gpt56Adapter === true) {
     try {
       v21Adapter = createConfiguredV21Adapter(settings, keyResolver);
       maxRounds = Math.min(maxRounds, v21Adapter.config.limits.maxSteps);
@@ -408,10 +410,34 @@ async function runBrainAgent({
     }
   }
 
+  let routingTaskId = null;
   for (let round = 0; round < maxRounds; round += 1) {
     onProgress?.({ phase: "thinking", round, executor: "brain" });
     let reply;
-    if (v21Adapter) {
+    if (v22Routing) {
+      if (!neuralRoutingService?.complete) {
+        return {
+          ok: false,
+          status: "BLOCKED",
+          code: "ROUTING_SERVICE_UNAVAILABLE",
+          error: "Neural routing service is unavailable",
+          content: null,
+          toolCalls: [],
+          steps,
+        };
+      }
+      reply = await neuralRoutingService.complete({
+        taskClass: "chat",
+        text,
+        messages,
+        tools,
+        signal,
+        moguTaskId: routingTaskId,
+        requiredCapabilities: tools.length ? ["text", "tools"] : ["text"],
+      });
+      routingTaskId = reply?.moguTaskId || routingTaskId;
+      if (reply?.ok === false) return { ...reply, content: null, toolCalls: [], steps, mode: "brain", executor: "brain" };
+    } else if (v21Adapter) {
       try {
         reply = await v21Adapter.complete({ messages, tools, signal });
       } catch (error) {
@@ -450,6 +476,8 @@ async function runBrainAgent({
         historyCompressed: hist.compressed,
         memoryFacts: memory.facts?.length || 0,
         remembered: remembered.length,
+        routing: reply.routing || null,
+        moguTaskId: routingTaskId,
       };
     }
 
@@ -492,8 +520,8 @@ async function runBrainAgent({
   return {
     ok: true,
     content: buildBrainContent(steps, "已达最大工具轮次。"),
-    provider: v21Adapter?.config.provider || "api",
-    model: v21Adapter?.config.modelId || settings.agentApiModel,
+    provider: v21Adapter?.config.provider || (v22Routing ? null : "api"),
+    model: v21Adapter?.config.modelId || (v22Routing ? null : settings.agentApiModel),
     steps,
     mode: "brain",
     executor: "brain",
@@ -501,6 +529,7 @@ async function runBrainAgent({
     historyCompressed: hist.compressed,
     memoryFacts: memory.facts?.length || 0,
     remembered: remembered.length,
+    moguTaskId: routingTaskId,
   };
 }
 
@@ -625,7 +654,7 @@ function extractJsonObject(text) {
   }
 }
 
-async function chatWithBrain({ settings, ollama, keyResolver, userText, history = [], signal = null }) {
+async function chatWithBrain({ settings, ollama, keyResolver, neuralRoutingService, userText, history = [], signal = null }) {
   const channel = settings.agentBrainChannel || "builtin";
   if (channel === "builtin") {
     return { ok: true, content: null, provider: "builtin" };
@@ -651,6 +680,23 @@ async function chatWithBrain({ settings, ollama, keyResolver, userText, history 
   }
 
   if (channel === "api") {
+    if (settings?.v22NeuralLayer === true && settings?.v22ModelRouting === true) {
+      if (!neuralRoutingService?.complete) {
+        return {
+          ok: false,
+          status: "BLOCKED",
+          code: "ROUTING_SERVICE_UNAVAILABLE",
+          error: "Neural routing service is unavailable",
+        };
+      }
+      return neuralRoutingService.complete({
+        taskClass: "chat",
+        text: userText,
+        messages,
+        signal,
+        requiredCapabilities: ["text"],
+      });
+    }
     if (settings?.v21Gpt56Adapter === true) {
       try {
         const adapter = createConfiguredV21Adapter(settings, keyResolver);
@@ -670,7 +716,7 @@ async function chatWithBrain({ settings, ollama, keyResolver, userText, history 
   throw new Error(`未知 Agent 通道：${channel}`);
 }
 
-async function testBrain({ settings, ollama, keyResolver }) {
+async function testBrain({ settings, ollama, keyResolver, neuralRoutingService }) {
   const channel = settings.agentBrainChannel || "builtin";
   if (channel === "builtin") {
     return { ok: true, message: "内置引导：未启用大脑调度。请在设置把引导改为「联网 API」或「本机模型」。" };
@@ -679,6 +725,7 @@ async function testBrain({ settings, ollama, keyResolver }) {
     settings,
     ollama,
     keyResolver,
+    neuralRoutingService,
     userText: "用一句话介绍你是 MOGU 的大脑编排器，并举例一个你会调用的工具名。",
     history: [],
   });

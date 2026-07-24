@@ -20,6 +20,7 @@ class AgentRunService {
     this.getSettings = opts.getSettings;
     this.logger = opts.logger || null;
     this.emitToRenderer = opts.emitToRenderer || (() => {});
+    this.neuralRoutingService = opts.neuralRoutingService || null;
     /** @type {Map<string, { moguTaskId: string, buffer: string }>} */
     this._activeByRunId = new Map();
     this._bound = false;
@@ -64,12 +65,33 @@ class AgentRunService {
       ...(opts.key ? { key: opts.key } : {}),
     };
     const payload = await this.bridge.request(method, params);
+    const acceptedModel =
+      payload?.model ||
+      payload?.modelId ||
+      payload?.acceptedModel ||
+      payload?.metadata?.model ||
+      payload?.session?.model ||
+      null;
+    const modelRouting = opts.model
+      ? {
+          requestedModel: opts.model,
+          acceptedModel: acceptedModel ? String(acceptedModel) : null,
+          status:
+            acceptedModel == null
+              ? "UNVERIFIED"
+              : String(acceptedModel) === String(opts.model)
+                ? "ENFORCED"
+                : "MODEL_MISMATCH",
+          enforced: acceptedModel != null && String(acceptedModel) === String(opts.model),
+        }
+      : { requestedModel: null, acceptedModel: null, status: "UNSUPPORTED", enforced: false };
     return {
       ok: true,
       sessionKey: payload?.key || payload?.sessionKey || payload?.id || null,
       sessionId: payload?.sessionId || payload?.id || null,
       raw: sanitizePayload(payload),
       method,
+      modelRouting,
     };
   }
 
@@ -77,21 +99,58 @@ class AgentRunService {
    * Send a user message and track a TaskStore row.
    * Marks requestAcceptedByGateway as soon as Gateway accepts the RPC.
    */
-  async send({ text, sessionKey = null, name = null } = {}) {
+  async send({ text, sessionKey = null, name = null, _route = null } = {}) {
     const message = String(text || "").trim();
     if (!message) throw new Error("消息不能为空");
 
     const settings = await this.getSettings();
+    if (
+      !_route &&
+      settings.v22NeuralLayer === true &&
+      settings.v22ModelRouting === true
+    ) {
+      if (!this.neuralRoutingService?.execute) {
+        const error = new Error("Neural routing service is unavailable");
+        error.code = "BLOCKED";
+        throw error;
+      }
+      return this.neuralRoutingService.execute(
+        {
+          taskClass: "chat",
+          text: message,
+          requiredCapabilities: ["text", "tools"],
+          createAdapter: false,
+          createTask: false,
+        },
+        (route) => this.send({ text: message, sessionKey, name, _route: route })
+      );
+    }
     const adapter = await this.ensureReady();
     const sendMethod = requireMethod(adapter, "sessionSend");
 
     let key = sessionKey;
     let sessionId = null;
+    let modelRouting = _route
+      ? {
+          requestedModel: _route.modelId,
+          acceptedModel: null,
+          status: "UNVERIFIED",
+          enforced: false,
+        }
+      : null;
     if (!key) {
-      const created = await this.sessionCreate({});
+      const created = await this.sessionCreate(_route?.modelId ? { model: _route.modelId } : {});
       key = created.sessionKey;
       sessionId = created.sessionId;
+      modelRouting = created.modelRouting;
       if (!key) throw new Error("sessions.create 未返回 sessionKey");
+      if (modelRouting?.status === "MODEL_MISMATCH") {
+        const error = new Error("Gateway accepted a different model than the routed model");
+        error.code = "MODEL_MISMATCH";
+        throw error;
+      }
+    } else if (_route) {
+      modelRouting.status = "UNSUPPORTED";
     }
 
     const task = await this.taskStore.create({
@@ -108,6 +167,15 @@ class AgentRunService {
         text: message,
         sessionKey: key,
       },
+      routing: _route
+        ? {
+            ..._route.decision,
+            profileId: _route.profile.id,
+            provider: _route.provider,
+            modelId: _route.modelId,
+            openclaw: modelRouting,
+          }
+        : null,
     });
 
     this.emitToRenderer("openclaw-task", {
@@ -132,6 +200,15 @@ class AgentRunService {
         sessionId: sessionId || payload?.sessionId || null,
         requestAcceptedByGateway: true,
         logSummary: "Gateway 已接受 Agent Run",
+        routing: _route
+          ? {
+              ..._route.decision,
+              profileId: _route.profile.id,
+              provider: _route.provider,
+              modelId: _route.modelId,
+              openclaw: modelRouting,
+            }
+          : null,
       });
       if (runId) {
         this._activeByRunId.set(String(runId), { moguTaskId: task.moguTaskId, buffer: "" });
@@ -154,6 +231,7 @@ class AgentRunService {
         runId,
         taskId,
         method: sendMethod,
+        modelRouting,
       };
     } catch (error) {
       const timedOut = error.code === "gateway_timeout" || /超时/.test(error.message || "");

@@ -121,6 +121,7 @@ const { StudioStore } = require("./studio-store");
 const { SkillRuntime } = require("./skills/runtime");
 const { initAutoUpdater } = require("./updater");
 const { chatWithBrain, testBrain, runBrainAgent, API_PRESETS } = require("./agent-brain");
+const { NeuralRoutingService, BudgetLedger } = require("./moguai/neural");
 const powerControl = require("./power-control");
 
 let mainWindow = null;
@@ -144,6 +145,7 @@ let permissionGrants = null;
 let skillRuntime = null;
 let runEventStore = null;
 let retryExecutor = null;
+let neuralRoutingService = null;
 const factoryTerminalManagers = new Map();
 const factoryWorktreeManagers = new Map();
 let desktopOnline = true;
@@ -219,7 +221,10 @@ async function migrateAgentApiKeyToSecretStore(settings) {
 async function loadSettingsInternal() {
   let settings = await settingsStore.load();
   settings = await migrateAgentApiKeyToSecretStore(settings);
-  if (settings.v21Gpt56Adapter === true) {
+  if (
+    settings.v21Gpt56Adapter === true ||
+    (settings.v22NeuralLayer === true && settings.v22ModelRouting === true)
+  ) {
     return { ...settings, agentApiKey: "" };
   }
   const key = secretStore ? await secretStore.get("agentApiKey") : "";
@@ -421,6 +426,17 @@ function initServices() {
   studioStore = new StudioStore(path.join(userData, "studio-pipeline.json"));
   runEventStore = new RunEventStore(path.join(userData, "run-events"));
   taskStore = new TaskStore(path.join(userData, "tasks.json"), { eventStore: runEventStore });
+  const budgetLedger = new BudgetLedger({
+    root: path.join(userData, "neural-routing"),
+    file: "budget-ledger.json",
+  });
+  neuralRoutingService = new NeuralRoutingService({
+    getSettings: () => settingsStore.load(),
+    secretStore,
+    taskStore,
+    eventStore: runEventStore,
+    ledger: budgetLedger,
+  });
   taskStore.on("change", (payload) => {
     sendToRenderer("task-change", {
       type: payload?.type || "updated",
@@ -466,6 +482,7 @@ function initServices() {
     getSettings: () => settingsStore.load(),
     updateSettings: (partial) => settingsStore.update(partial),
     getAgentApiKey: async () => (secretStore ? secretStore.get("agentApiKey") : ""),
+    neuralRoutingService,
     openExternal: (url) => shell.openExternal(url),
     emitProgress: (payload) => sendToRenderer("skill-progress", payload),
   });
@@ -512,6 +529,7 @@ function initServices() {
     getSettings: () => settingsStore.load(),
     logger,
     emitToRenderer: sendToRenderer,
+    neuralRoutingService,
   });
   agentRunService.bindEvents();
   openclawBridge.on("state", (status) => sendToRenderer("openclaw-state", status));
@@ -865,12 +883,28 @@ function registerIpcHandlers() {
 
   ipcMain.handle("agent:brain-presets", async () => API_PRESETS);
 
+  ipcMain.handle("routing:status", async () => neuralRoutingService.status());
+
+  ipcMain.handle("routing:preview", async (_event, payload = {}) =>
+    neuralRoutingService.preview({
+      taskClass: payload?.taskClass,
+      text: String(payload?.text || "").slice(0, 12000),
+      requiredCapabilities: Array.isArray(payload?.requiredCapabilities)
+        ? payload.requiredCapabilities.slice(0, 32)
+        : [],
+      policyId: payload?.policyId,
+      estimatedInputTokens: payload?.estimatedInputTokens,
+      estimatedOutputTokens: payload?.estimatedOutputTokens,
+    })
+  );
+
   ipcMain.handle("agent:brain-chat", async (_event, payload = {}) => {
     const settings = await loadSettingsInternal();
     return chatWithBrain({
       settings,
       ollama,
       keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+      neuralRoutingService,
       userText: String(payload.text || "").trim(),
       history: Array.isArray(payload.history) ? payload.history : [],
     });
@@ -883,6 +917,7 @@ function registerIpcHandlers() {
       ollama,
       skillRuntime,
       keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+      neuralRoutingService,
       userText: String(payload.text || "").trim(),
       history: Array.isArray(payload.history) ? payload.history : [],
       maxRounds: Math.min(6, Math.max(1, Number(payload.maxRounds) || 4)),
@@ -896,6 +931,7 @@ function registerIpcHandlers() {
       settings,
       ollama,
       keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+      neuralRoutingService,
     });
   });
 

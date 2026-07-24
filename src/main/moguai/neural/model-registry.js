@@ -150,6 +150,7 @@ function validateProfile(input) {
       reliabilityTier,
       contextWindowTokens,
       maxOutputTokens,
+      limits: isPlainObject(input.limits) ? deepFreeze({ ...input.limits }) : {},
       pricing: normalizePricing(input.pricing),
     }),
   };

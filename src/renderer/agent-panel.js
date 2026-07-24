@@ -253,6 +253,22 @@ const AgentPanel = (() => {
         };
       }
       if (channel === "api") {
+        if (settings.v22NeuralLayer === true && settings.v22ModelRouting === true) {
+          const routing = await window.modelManager.getRoutingStatus();
+          if (
+            !routing?.enabled ||
+            routing.profileCount < 1 ||
+            routing.availableProfileCount < 1 ||
+            routing.policyCount < 1
+          ) {
+            return {
+              ready: false,
+              channel,
+              reason: "神经路由已启用，但没有可用的模型配置或任务策略。",
+            };
+          }
+          return { ready: true, channel, reason: "" };
+        }
         if (!settings.agentApiKeyConfigured) {
           return {
             ready: false,

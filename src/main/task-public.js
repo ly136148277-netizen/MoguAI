@@ -10,7 +10,9 @@ function stripSecrets(value, depth = 0) {
   if (typeof value !== "object") return value;
   const out = {};
   for (const [key, item] of Object.entries(value)) {
-    if (SECRET_KEY.test(key)) continue;
+    const normalized = key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    const tokenMetric = /^(?:max)?(?:input|output|total)?tokens$/.test(normalized);
+    if (!tokenMetric && SECRET_KEY.test(key)) continue;
     out[key] = stripSecrets(item, depth + 1);
   }
   return out;

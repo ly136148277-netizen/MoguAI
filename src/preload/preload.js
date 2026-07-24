@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("modelManager", {
   toggleFavorite: (modelId) => ipcRenderer.invoke("models:toggle-favorite", modelId),
   getSettings: () => ipcRenderer.invoke("settings:get"),
   updateSettings: (partial) => ipcRenderer.invoke("settings:update", partial),
+  getRoutingStatus: () => ipcRenderer.invoke("routing:status"),
+  previewRoute: (payload) => ipcRenderer.invoke("routing:preview", payload || {}),
   getStoragePath: () => ipcRenderer.invoke("storage:get-path"),
   listStorageDrives: () => ipcRenderer.invoke("storage:list-drives"),
   pickStoragePath: (defaultPath) => ipcRenderer.invoke("storage:pick-path", defaultPath),

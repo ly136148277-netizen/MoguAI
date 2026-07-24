@@ -12,6 +12,7 @@ const DEFAULT_LIMITS = Object.freeze({
 
 const ERROR_CODES = Object.freeze({
   BLOCKED: "BLOCKED",
+  MODEL_MISMATCH: "MODEL_MISMATCH",
   INVALID_CONFIG: "INVALID_CONFIG",
   REQUEST_TOO_LARGE: "REQUEST_TOO_LARGE",
   RESPONSE_TOO_LARGE: "RESPONSE_TOO_LARGE",
@@ -27,7 +28,7 @@ class BrainAdapterError extends Error {
     super(message);
     this.name = "BrainAdapterError";
     this.code = code;
-    this.status = code === ERROR_CODES.BLOCKED ? "BLOCKED" : "ERROR";
+    this.status = [ERROR_CODES.BLOCKED, ERROR_CODES.MODEL_MISMATCH].includes(code) ? "BLOCKED" : "ERROR";
     this.retryable = Boolean(details.retryable);
     this.httpStatus = details.httpStatus || null;
     this.provider = details.provider || null;
@@ -496,7 +497,7 @@ function createOpenAiCompatibleAdapter(inputConfig, dependencies = {}) {
           });
         }
         if (payload.model != null && String(payload.model) !== config.modelId) {
-          throw new BrainAdapterError(ERROR_CODES.BLOCKED, "Provider returned an unexpected model ID; fallback is forbidden", {
+          throw new BrainAdapterError(ERROR_CODES.MODEL_MISMATCH, "Provider returned an unexpected model ID; fallback is forbidden", {
             provider: config.provider,
             modelId: config.modelId,
             requestId,

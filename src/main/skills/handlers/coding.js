@@ -368,7 +368,7 @@ async function executeEngineOnce({
   return { result, review, trajectorySummary, trajectoryFile: result.trajectoryFile };
 }
 
-async function run({ deps, args, task }) {
+async function runCore({ deps, args, task }) {
   const settings = settingsWithUserData(deps);
   const engine = normalizeEngineKey(args?.engine || settings.codingDefaultEngine || ENGINE_A);
   const workspace = resolveWorkspace(settings, args);
@@ -749,6 +749,58 @@ async function run({ deps, args, task }) {
         : null,
     },
   };
+}
+
+async function run({ deps, args, task }) {
+  const settings = settingsWithUserData(deps);
+  const routingEnabled =
+    settings.v22NeuralLayer === true && settings.v22ModelRouting === true;
+  if (!routingEnabled) {
+    return runCore({ deps, args, task });
+  }
+  if (!deps.neuralRoutingService?.execute) {
+    return {
+      ok: false,
+      status: "BLOCKED",
+      code: "ROUTING_SERVICE_UNAVAILABLE",
+      error: "Neural routing service is unavailable",
+      moguTaskId: task?.moguTaskId || args?.moguTaskId || null,
+    };
+  }
+  const text = String(args?.prompt || args?.text || args?.message || "").trim();
+  return deps.neuralRoutingService.execute(
+    {
+      taskClass: "coding",
+      text,
+      moguTaskId: task?.moguTaskId || args?.moguTaskId || null,
+      runId: task?.moguTaskId || args?.runId || args?.moguTaskId || null,
+      requiredCapabilities: ["code", "text", "tools"],
+      estimatedInputTokens: Math.max(1, Math.ceil(text.length / 4)),
+      estimatedOutputTokens: Number(settings.v22Config?.budget?.maxOutputTokens) || 4096,
+      createAdapter: false,
+    },
+    async (route) => {
+      const routedSettings = {
+        ...settings,
+        agentApiBaseUrl: route.endpoint,
+        codingProvider: route.provider,
+        codingModel: route.modelId,
+      };
+      return runCore({
+        deps: {
+          ...deps,
+          settings: routedSettings,
+          getAgentApiKey: async () => route.apiKey,
+        },
+        args: {
+          ...args,
+          model: route.modelId,
+          provider: route.provider,
+        },
+        task,
+      });
+    }
+  );
 }
 
 /**

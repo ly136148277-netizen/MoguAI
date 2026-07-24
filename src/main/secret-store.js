@@ -42,6 +42,12 @@ class SecretStore {
     return Boolean(value);
   }
 
+  async hasReference(key) {
+    const all = await this._readAll();
+    const entry = all[key];
+    return Boolean(entry?.data && entry.encoding === "safeStorage");
+  }
+
   async get(key) {
     const all = await this._readAll();
     const entry = all[key];

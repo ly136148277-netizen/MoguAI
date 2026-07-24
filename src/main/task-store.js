@@ -3,14 +3,14 @@ const path = require("path");
 const { EventEmitter } = require("events");
 const { applyIds, createEmptyMapping } = require("./openclaw/id-map");
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MAX_EVENT_IDS = 64;
 const MAX_NAME_LENGTH = 200;
 const MAX_TEXT_LENGTH = 12_000;
 const MAX_LOG_LENGTH = 4_000;
 const MAX_OUTPUTS = 100;
 
-const SOURCES = new Set(["openclaw", "pai", "studio", "comfy", "coding", "unknown"]);
+const SOURCES = new Set(["openclaw", "pai", "studio", "comfy", "coding", "brain", "routing", "unknown"]);
 const STATUSES = new Set([
   "queued",
   "running",
@@ -109,6 +109,28 @@ function normalizeReplay(value) {
   return Object.keys(allowed).length ? allowed : null;
 }
 
+function normalizeRoutingEvidence(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const scrubbed = scrubRoutingValue(value);
+  const serialized = JSON.stringify(scrubbed);
+  if (serialized.length > MAX_TEXT_LENGTH) return null;
+  return scrubbed;
+}
+
+function scrubRoutingValue(value, depth = 0) {
+  if (depth > 6 || value == null) return value == null ? value : String(value);
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => scrubRoutingValue(item, depth + 1));
+  if (typeof value !== "object") return typeof value === "string" ? value.slice(0, MAX_TEXT_LENGTH) : value;
+  const result = {};
+  for (const [key, item] of Object.entries(value).slice(0, 100)) {
+    const normalized = key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    const tokenMetric = /^(?:max)?(?:input|output|total)?tokens$/.test(normalized);
+    if (!tokenMetric && /(token|secret|password|passwd|api[-_]?key|authorization|cookie|nonce)/i.test(key)) continue;
+    result[key] = scrubRoutingValue(item, depth + 1);
+  }
+  return result;
+}
+
 function normalizeLastEvent(value) {
   if (!value || typeof value !== "object") return null;
   const event = {};
@@ -188,6 +210,9 @@ function normalizeTask(row = {}, { defaultSource = "unknown", now = nowIso() } =
     lastEvent: normalizeLastEvent(raw.lastEvent),
     runtimeEventRef: normalizeRuntimeEventRef(raw.runtimeEventRef),
     runtimeEventSummary: normalizeRuntimeEventSummary(raw.runtimeEventSummary),
+    routing: normalizeRoutingEvidence(raw.routing),
+    routingConfigHash: raw.routingConfigHash == null ? null : capText(raw.routingConfigHash, 128),
+    routingBudgetSnapshot: normalizeRoutingEvidence(raw.routingBudgetSnapshot),
   };
 }
 
@@ -390,6 +415,13 @@ class TaskStore extends EventEmitter {
     if (Object.prototype.hasOwnProperty.call(raw, "retryCount")) next.retryCount = Math.max(0, Math.floor(normalizeNumber(raw.retryCount, 0)));
     if (Object.prototype.hasOwnProperty.call(raw, "runtimeEventRef")) next.runtimeEventRef = normalizeRuntimeEventRef(raw.runtimeEventRef);
     if (Object.prototype.hasOwnProperty.call(raw, "runtimeEventSummary")) next.runtimeEventSummary = normalizeRuntimeEventSummary(raw.runtimeEventSummary);
+    if (Object.prototype.hasOwnProperty.call(raw, "routing")) next.routing = normalizeRoutingEvidence(raw.routing);
+    if (Object.prototype.hasOwnProperty.call(raw, "routingConfigHash")) {
+      next.routingConfigHash = raw.routingConfigHash == null ? null : capText(raw.routingConfigHash, 128);
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, "routingBudgetSnapshot")) {
+      next.routingBudgetSnapshot = normalizeRoutingEvidence(raw.routingBudgetSnapshot);
+    }
     if (eventId) next.eventIds = normalizeEventIds([...current.eventIds, eventId]);
     if (eventId || eventSeq != null || raw.connId) {
       next.lastEvent = normalizeLastEvent({ eventId, seq: eventSeq, connId: raw.connId || current.lastEvent?.connId });
