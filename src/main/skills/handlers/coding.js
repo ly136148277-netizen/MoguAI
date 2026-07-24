@@ -52,6 +52,13 @@ const { runLocalPatch, shouldUseLocalPatch } = require("../coding-local-patch");
 const { runCodingAgentLoop, shouldUseCodingAgent } = require("../coding-agent-loop");
 const { gateCommand } = require("../../permission-gate");
 const { summarizePlan } = require("../../moguai/neural/planner");
+const {
+  ClosedLoopExecutor,
+  closedLoopEnabled,
+  TERMINAL,
+} = require("../../moguai/neural/closed-loop");
+const { DecisionTrace } = require("../../moguai/neural/decision-trace");
+const { classifyVerifyFailure } = require("../coding-d2-retry");
 
 function resolveWorkspace(settings, args = {}) {
   const ws =
@@ -496,118 +503,359 @@ async function runCore({ deps, args, task }) {
   const maxFixRounds = Math.min(4, Math.max(0, Number(args?.maxFixRounds ?? 2)));
   const rounds = [];
   let last = null;
+  let closedLoopResult = null;
+  const useClosedLoop = closedLoopEnabled(settings);
 
-  for (let round = 0; round <= maxFixRounds; round += 1) {
-    deps.emitProgress?.({
-      moguTaskId,
-      source: "coding",
-      kind: "coding_round",
-      round,
-      message:
-        round === 0
-          ? "派工执行中"
-          : contentFixUsed && !autoVerify
-            ? `内容纠偏第 ${round} 轮`
-            : `自动再修第 ${round} 轮`,
-    });
-    last = await executeEngineOnce({
-      deps,
-      settings,
-      engine,
-      workspace,
-      prompt: effectivePrompt,
-      patchPrompt: prompt,
-      moguTaskId,
-      brain,
-      model,
-      provider,
-      jobSuffix: round ? `-r${round}` : "",
-      allowPaths: scope.allowedPaths || editPlan.targetPaths || [],
-      args,
-    });
-
-    if (scope.locked && scopeMode !== "off") {
-      scopeEnforcement = enforceScope(workspace, last.review, scope, { mode: scopeMode });
-      if (scopeEnforcement.enforced) {
-        last.review = scopeEnforcement.review || last.review;
-      }
-    } else if (scope.allowedPaths?.length && scopeMode === "warn") {
-      scopeEnforcement = checkScopeViolation(last.review, { ...scope, locked: true });
-    }
-
-    contentAssessment = assessContentAccuracy(last.review, prompt, editPlan);
-    const quality = assessChangeQuality(last.review, prompt);
-    if (contentAssessment.warning) {
-      quality.flags = [...(quality.flags || []), ...contentAssessment.flags];
-      quality.warning = [quality.warning, contentAssessment.warning].filter(Boolean).join("；");
-      quality.ok = quality.flags.length === 0;
-    }
-
-    let verify = null;
-    if (autoVerify) {
-      const decision = await authorizeExecution(
+  if (!useClosedLoop) {
+    for (let round = 0; round <= maxFixRounds; round += 1) {
+      deps.emitProgress?.({
+        moguTaskId,
+        source: "coding",
+        kind: "coding_round",
+        round,
+        message:
+          round === 0
+            ? "派工执行中"
+            : contentFixUsed && !autoVerify
+              ? `内容纠偏第 ${round} 轮`
+              : `自动再修第 ${round} 轮`,
+      });
+      last = await executeEngineOnce({
         deps,
-        {
-          tool: "mogu.coding.verify",
-          action: "auto_verify",
-          command: verifyCommand,
-          cwd: workspace,
-          riskLevel: 2,
-        },
-        args
-      );
-      verify =
-        decision?.allowed === true
-          ? runVerify(workspace, verifyCommand)
-          : deniedVerify(verifyCommand, workspace, decision);
-    }
-    rounds.push({
-      round,
-      engine,
-      ok: last.result.ok,
-      verifyOk: verify ? verify.ok : null,
-      quality,
-      contentOk: contentAssessment.ok,
-      fileCount: last.review?.fileCount || 0,
-      scopeTrimmed: scopeEnforcement?.trimmed?.length || 0,
-      error: last.result.error || null,
-    });
+        settings,
+        engine,
+        workspace,
+        prompt: effectivePrompt,
+        patchPrompt: prompt,
+        moguTaskId,
+        brain,
+        model,
+        provider,
+        jobSuffix: round ? `-r${round}` : "",
+        allowPaths: scope.allowedPaths || editPlan.targetPaths || [],
+        args,
+      });
 
-    const verifyFailed = autoVerify && verify && !verify.ok;
-    const contentFailed = contentAssessment.needsContentFix && !contentFixUsed;
-    if (!verifyFailed && !contentFailed) break;
-    if (round >= maxFixRounds) break;
+      if (scope.locked && scopeMode !== "off") {
+        scopeEnforcement = enforceScope(workspace, last.review, scope, { mode: scopeMode });
+        if (scopeEnforcement.enforced) {
+          last.review = scopeEnforcement.review || last.review;
+        }
+      } else if (scope.allowedPaths?.length && scopeMode === "warn") {
+        scopeEnforcement = checkScopeViolation(last.review, { ...scope, locked: true });
+      }
 
-    if (contentFailed) {
-      contentFixUsed = true;
+      contentAssessment = assessContentAccuracy(last.review, prompt, editPlan);
+      const quality = assessChangeQuality(last.review, prompt);
+      if (contentAssessment.warning) {
+        quality.flags = [...(quality.flags || []), ...contentAssessment.flags];
+        quality.warning = [quality.warning, contentAssessment.warning].filter(Boolean).join("；");
+        quality.ok = quality.flags.length === 0;
+      }
+
+      let verify = null;
+      if (autoVerify) {
+        const decision = await authorizeExecution(
+          deps,
+          {
+            tool: "mogu.coding.verify",
+            action: "auto_verify",
+            command: verifyCommand,
+            cwd: workspace,
+            riskLevel: 2,
+          },
+          args
+        );
+        verify =
+          decision?.allowed === true
+            ? runVerify(workspace, verifyCommand)
+            : deniedVerify(verifyCommand, workspace, decision);
+      }
+      rounds.push({
+        round,
+        engine,
+        ok: last.result.ok,
+        verifyOk: verify ? verify.ok : null,
+        quality,
+        contentOk: contentAssessment.ok,
+        fileCount: last.review?.fileCount || 0,
+        scopeTrimmed: scopeEnforcement?.trimmed?.length || 0,
+        error: last.result.error || null,
+      });
+
+      const verifyFailed = autoVerify && verify && !verify.ok;
+      const contentFailed = contentAssessment.needsContentFix && !contentFixUsed;
+      if (!verifyFailed && !contentFailed) break;
+      if (round >= maxFixRounds) break;
+
+      if (contentFailed) {
+        contentFixUsed = true;
+        taskPrompt = enrichPromptWithScope(
+          enrichPromptWithAccuracy(buildContentFixPrompt(prompt, contentAssessment, editPlan), editPlan),
+          scopeForPrompt
+        );
+        effectivePrompt = enrichPrompt(taskPrompt, project);
+        continue;
+      }
+
+      const failLog = String(verify?.log || verify?.error || "").slice(-2500);
       taskPrompt = enrichPromptWithScope(
-        enrichPromptWithAccuracy(buildContentFixPrompt(prompt, contentAssessment, editPlan), editPlan),
+        enrichPromptWithAccuracy(
+          [
+            prompt,
+            "",
+            "【自动再修】上轮改动后验证失败，请最小改动修复，不要扩大范围。",
+            `验证命令：${verify?.command || "npm test"}`,
+            failLog ? `失败输出：\n${failLog}` : "",
+            scopeEnforcement?.trimmed?.length
+              ? `说明：上轮越界文件已被回滚：${scopeEnforcement.trimmed.join(", ")}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          editPlan
+        ),
         scopeForPrompt
       );
       effectivePrompt = enrichPrompt(taskPrompt, project);
-      continue;
     }
+  } else {
+    const v22Budget = settings.v22Config?.budget || {};
+    const decisionTrace =
+      settings.v22DecisionTrace === true && deps.eventStore && moguTaskId
+        ? new DecisionTrace(deps.eventStore, { source: "closed-loop" })
+        : null;
+    let lastVerifyPayload = null;
+    const executor = new ClosedLoopExecutor({
+      decisionTrace,
+      clock: () => Date.now(),
+      budget: {
+        maxRepairIterations:
+          v22Budget.maxRepairIterations != null
+            ? Number(v22Budget.maxRepairIterations)
+            : maxFixRounds,
+        maxSteps: v22Budget.maxSteps,
+        maxToolCalls: v22Budget.maxToolCalls,
+        maxWallTimeMs: v22Budget.maxWallTimeMs,
+        maxCostUsd: v22Budget.maxCostUsd,
+      },
+      permissionCheck: async (ctx) => {
+        if (ctx.permissionDenied === true) return { allowed: false, reason: "permission_denied" };
+        if (typeof args?.closedLoopPermissionCheck === "function") {
+          return args.closedLoopPermissionCheck(ctx);
+        }
+        return true;
+      },
+      checkpoint: async (ctx) => {
+        if (deps.taskStore?.update && moguTaskId) {
+          await deps.taskStore.update(moguTaskId, {
+            logSummary: `closed-loop checkpoint attempt=${ctx.attempt || 0} repair=${ctx.repairIterations || 0}\n`,
+          });
+        }
+      },
+      classifyFailure: (verifyOut) => {
+        const classified = classifyVerifyFailure(verifyOut?.output || verifyOut?.log || "");
+        return {
+          kind: classified.class,
+          class: classified.class,
+          failedStage: classified.failedStage,
+          detail: classified.detail,
+          contentFailed: Boolean(verifyOut?.contentFailed),
+          verifyFailed: Boolean(verifyOut?.verifyFailed),
+          permissionDenied: Boolean(verifyOut?.permissionDenied),
+          verify: verifyOut?.verify || null,
+        };
+      },
+      execute: async (ctx) => {
+        const round = ctx.attempt || 0;
+        deps.emitProgress?.({
+          moguTaskId,
+          source: "coding",
+          kind: "coding_round",
+          round,
+          message:
+            round === 0
+              ? "派工执行中"
+              : contentFixUsed && !autoVerify
+                ? `内容纠偏第 ${round} 轮`
+                : `自动再修第 ${round} 轮`,
+        });
+        last = await executeEngineOnce({
+          deps,
+          settings,
+          engine,
+          workspace,
+          prompt: effectivePrompt,
+          patchPrompt: prompt,
+          moguTaskId,
+          brain,
+          model,
+          provider,
+          jobSuffix: round ? `-r${round}` : "",
+          allowPaths: scope.allowedPaths || editPlan.targetPaths || [],
+          args,
+        });
+        if (scope.locked && scopeMode !== "off") {
+          scopeEnforcement = enforceScope(workspace, last.review, scope, { mode: scopeMode });
+          if (scopeEnforcement.enforced) {
+            last.review = scopeEnforcement.review || last.review;
+          }
+        } else if (scope.allowedPaths?.length && scopeMode === "warn") {
+          scopeEnforcement = checkScopeViolation(last.review, { ...scope, locked: true });
+        }
+        return {
+          ok: last.result?.ok !== false,
+          ...last.result,
+          review: last.review,
+          agentSteps: last.result?.agentSteps,
+          toolsUsed: last.result?.toolsUsed,
+          estimatedCostUsd:
+            last.result?.estimatedCostUsd ??
+            args?.estimatedCostUsd ??
+            ctx.estimatedCostUsd ??
+            null,
+        };
+      },
+      verify: async (_ctx, _result) => {
+        contentAssessment = assessContentAccuracy(last.review, prompt, editPlan);
+        const quality = assessChangeQuality(last.review, prompt);
+        if (contentAssessment.warning) {
+          quality.flags = [...(quality.flags || []), ...contentAssessment.flags];
+          quality.warning = [quality.warning, contentAssessment.warning].filter(Boolean).join("；");
+          quality.ok = quality.flags.length === 0;
+        }
+        let verify = null;
+        if (autoVerify) {
+          const decision = await authorizeExecution(
+            deps,
+            {
+              tool: "mogu.coding.verify",
+              action: "auto_verify",
+              command: verifyCommand,
+              cwd: workspace,
+              riskLevel: 2,
+            },
+            args
+          );
+          if (decision?.allowed !== true) {
+            lastVerifyPayload = deniedVerify(verifyCommand, workspace, decision);
+            rounds.push({
+              round: rounds.length,
+              engine,
+              ok: last.result.ok,
+              verifyOk: false,
+              quality,
+              contentOk: contentAssessment.ok,
+              fileCount: last.review?.fileCount || 0,
+              scopeTrimmed: scopeEnforcement?.trimmed?.length || 0,
+              error: last.result.error || null,
+            });
+            return {
+              ok: false,
+              permissionDenied: true,
+              output: lastVerifyPayload.error || "",
+              verify: lastVerifyPayload,
+              code: "permission_denied",
+            };
+          }
+          verify = runVerify(workspace, verifyCommand);
+        }
+        lastVerifyPayload = verify;
+        const verifyFailed = autoVerify && verify && !verify.ok;
+        const contentFailed = contentAssessment.needsContentFix && !contentFixUsed;
+        rounds.push({
+          round: rounds.length,
+          engine,
+          ok: last.result.ok,
+          verifyOk: verify ? verify.ok : null,
+          quality,
+          contentOk: contentAssessment.ok,
+          fileCount: last.review?.fileCount || 0,
+          scopeTrimmed: scopeEnforcement?.trimmed?.length || 0,
+          error: last.result.error || null,
+        });
+        if (!verifyFailed && !contentFailed) {
+          return {
+            ok: true,
+            output: verify?.log || "",
+            stages: verify?.stages || last.result?.verifyStages || null,
+            verify,
+          };
+        }
+        return {
+          ok: false,
+          output: String(verify?.log || verify?.error || contentAssessment?.warning || ""),
+          stages: verify?.stages || null,
+          verify,
+          verifyFailed: Boolean(verifyFailed),
+          contentFailed: Boolean(contentFailed),
+        };
+      },
+      replan: async (_ctx, failure) => {
+        if (failure?.contentFailed) {
+          contentFixUsed = true;
+          taskPrompt = enrichPromptWithScope(
+            enrichPromptWithAccuracy(buildContentFixPrompt(prompt, contentAssessment, editPlan), editPlan),
+            scopeForPrompt
+          );
+          effectivePrompt = enrichPrompt(taskPrompt, project);
+          return { ok: true, kind: "content_fix" };
+        }
+        const failLog = String(failure?.verify?.log || failure?.verify?.error || "").slice(-2500);
+        taskPrompt = enrichPromptWithScope(
+          enrichPromptWithAccuracy(
+            [
+              prompt,
+              "",
+              "【自动再修】上轮改动后验证失败，请最小改动修复，不要扩大范围。",
+              `验证命令：${failure?.verify?.command || verifyCommand || "npm test"}`,
+              failLog ? `失败输出：\n${failLog}` : "",
+              scopeEnforcement?.trimmed?.length
+                ? `说明：上轮越界文件已被回滚：${scopeEnforcement.trimmed.join(", ")}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            editPlan
+          ),
+          scopeForPrompt
+        );
+        effectivePrompt = enrichPrompt(taskPrompt, project);
+        return { ok: true, kind: "verify_fix" };
+      },
+    });
 
-    const failLog = String(verify?.log || verify?.error || "").slice(-2500);
-    taskPrompt = enrichPromptWithScope(
-      enrichPromptWithAccuracy(
-        [
-          prompt,
-          "",
-          "【自动再修】上轮改动后验证失败，请最小改动修复，不要扩大范围。",
-          `验证命令：${verify?.command || "npm test"}`,
-          failLog ? `失败输出：\n${failLog}` : "",
-          scopeEnforcement?.trimmed?.length
-            ? `说明：上轮越界文件已被回滚：${scopeEnforcement.trimmed.join(", ")}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        editPlan
-      ),
-      scopeForPrompt
-    );
-    effectivePrompt = enrichPrompt(taskPrompt, project);
+    closedLoopResult = await executor.run({
+      moguTaskId,
+      requestAcceptedByGateway: task?.requestAcceptedByGateway === true,
+      acceptance: task?.acceptance,
+      replayKind: task?.replay?.kind || args?.replayKind,
+      estimatedCostUsd:
+        args?.estimatedCostUsd != null && Number.isFinite(Number(args.estimatedCostUsd))
+          ? Number(args.estimatedCostUsd)
+          : null,
+    });
+
+    if (!last) {
+      return {
+        ok: false,
+        status: closedLoopResult.status || TERMINAL.BLOCKED,
+        code: closedLoopResult.code || "closed_loop_blocked",
+        reason: closedLoopResult.reason,
+        error:
+          typeof closedLoopResult.reason === "string"
+            ? closedLoopResult.reason
+            : closedLoopResult.reason?.message || "Closed loop blocked before execute",
+        moguTaskId,
+        closedLoop: {
+          status: closedLoopResult.status,
+          code: closedLoopResult.code,
+          reason: closedLoopResult.reason,
+          repairIterations: closedLoopResult.repairIterations,
+          attempts: closedLoopResult.attempts,
+        },
+      };
+    }
   }
 
   let review = last.review;
@@ -777,6 +1025,18 @@ async function runCore({ deps, args, task }) {
         : null,
     },
     ...(neuralPlan ? { neuralPlan: summarizePlan(neuralPlan) } : {}),
+    ...(closedLoopResult
+      ? {
+          closedLoop: {
+            status: closedLoopResult.status,
+            code: closedLoopResult.code,
+            reason: closedLoopResult.reason,
+            repairIterations: closedLoopResult.repairIterations,
+            attempts: closedLoopResult.attempts,
+            usage: closedLoopResult.usage || null,
+          },
+        }
+      : {}),
   };
 }
 

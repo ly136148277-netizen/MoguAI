@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("modelManager", {
   updateSettings: (partial) => ipcRenderer.invoke("settings:update", partial),
   getRoutingStatus: () => ipcRenderer.invoke("routing:status"),
   previewRoute: (payload) => ipcRenderer.invoke("routing:preview", payload || {}),
+  getClosedLoopStatus: () => ipcRenderer.invoke("closed-loop:status"),
   getStoragePath: () => ipcRenderer.invoke("storage:get-path"),
   listStorageDrives: () => ipcRenderer.invoke("storage:list-drives"),
   pickStoragePath: (defaultPath) => ipcRenderer.invoke("storage:pick-path", defaultPath),

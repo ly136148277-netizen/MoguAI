@@ -121,7 +121,12 @@ const { StudioStore } = require("./studio-store");
 const { SkillRuntime } = require("./skills/runtime");
 const { initAutoUpdater } = require("./updater");
 const { chatWithBrain, testBrain, runBrainAgent, API_PRESETS } = require("./agent-brain");
-const { NeuralRoutingService, NeuralPlanner, BudgetLedger } = require("./moguai/neural");
+const {
+  NeuralRoutingService,
+  NeuralPlanner,
+  BudgetLedger,
+  getClosedLoopStatus,
+} = require("./moguai/neural");
 const powerControl = require("./power-control");
 
 let mainWindow = null;
@@ -944,6 +949,8 @@ function registerIpcHandlers() {
       estimatedOutputTokens: payload?.estimatedOutputTokens,
     })
   );
+
+  ipcMain.handle("closed-loop:status", async () => getClosedLoopStatus());
 
   ipcMain.handle("agent:brain-chat", async (_event, payload = {}) => {
     const settings = await loadSettingsInternal();

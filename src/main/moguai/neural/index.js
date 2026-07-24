@@ -475,6 +475,7 @@ module.exports = {
   ...require("./context-budget"),
   ...require("./tool-chain"),
   ...require("./decision-trace"),
+  ...require("./closed-loop"),
   routingEnabled,
   adapterConfigFromProfile,
   publicDecision,
