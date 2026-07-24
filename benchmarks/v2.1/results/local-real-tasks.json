@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.1-local-real-task-evaluation",
+  "status": "PASS",
+  "startedAt": "2026-07-24T03:01:34.864Z",
+  "completedAt": "2026-07-24T03:01:37.215Z",
+  "durationMs": 2351,
+  "branch": "capability/2.1",
+  "commit": "cd18b2de8cbcf17a5d43ed04e7c6917948d8e174",
+  "dirtyTreeExpected": true,
+  "providerUsed": false,
+  "checks": [
+    {
+      "id": "repo-index-real-repo",
+      "ok": true,
+      "detail": {
+        "files": 241,
+        "symbols": 3483,
+        "definitions": 1,
+        "references": 13,
+        "callEdges": 5921
+      }
+    },
+    {
+      "id": "test-discovery-real-repo",
+      "ok": true,
+      "detail": {
+        "tests": 68,
+        "frameworks": [
+          "node"
+        ],
+        "stages": 1
+      }
+    },
+    {
+      "id": "controlled-terminal-real-process",
+      "ok": true,
+      "detail": {
+        "status": "exited",
+        "exitCode": 0,
+        "audited": 2
+      }
+    },
+    {
+      "id": "managed-worktree-real-git",
+      "ok": true,
+      "detail": {
+        "count": 1,
+        "baselineBound": true
+      }
+    },
+    {
+      "id": "event-store-real-replay",
+      "ok": true,
+      "detail": {
+        "events": 1,
+        "corruption": null
+      }
+    },
+    {
+      "id": "permission-lease-real-budget",
+      "ok": true,
+      "detail": {
+        "consumed": "lease_consumed",
+        "after": "budget_exhausted"
+      }
+    }
+  ]
+}

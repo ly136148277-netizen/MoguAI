@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.1-holdout-evaluation",
+  "status": "NOT_OPENED",
+  "manifest": "benchmarks/swe-bench/holdout/manifest.json",
+  "taskCount": 20,
+  "outcomesViewed": false,
+  "blocker": "Two qualifying GPT-5.6 development A/B runs are required before holdout"
+}

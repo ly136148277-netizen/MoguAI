@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.1-gpt56-ab-preflight",
+  "status": "BLOCKED",
+  "checkedAt": "2026-07-24T03:01:34.862Z",
+  "checks": {
+    "adapterExplicitlyEnabled": false,
+    "providerConfigured": false,
+    "endpointConfigured": false,
+    "exactModelConfigured": false,
+    "expectedModelLocked": false,
+    "encryptedSecretMetadataPresent": false
+  },
+  "configHash": null,
+  "secretValueRead": false,
+  "fallbackAllowed": false,
+  "blocker": "Exact owner-approved GPT-5.6 provider/model/budget configuration is not available"
+}

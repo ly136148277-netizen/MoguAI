@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.1-regression-gates",
+  "status": "PASS",
+  "startedAt": "2026-07-24T03:01:37.689Z",
+  "completedAt": "2026-07-24T03:02:05.180Z",
+  "results": [
+    {
+      "id": "unit",
+      "command": "npm test",
+      "status": "PASS",
+      "exitCode": 0,
+      "observed": [
+        316
+      ]
+    },
+    {
+      "id": "acceptance-v2.0",
+      "command": "npm run acceptance:v2.0",
+      "status": "PASS",
+      "exitCode": 0,
+      "observed": [
+        17,
+        17
+      ]
+    },
+    {
+      "id": "acceptance-coding",
+      "command": "npm run acceptance:coding",
+      "status": "PASS",
+      "exitCode": 0,
+      "observed": [
+        23,
+        23
+      ]
+    },
+    {
+      "id": "acceptance-v2.1",
+      "command": "npm run acceptance:v2.1",
+      "status": "PASS",
+      "exitCode": 0,
+      "observed": [
+        23,
+        23
+      ]
+    },
+    {
+      "id": "dependency-audit",
+      "command": "npm run audit:v2.1-deps",
+      "status": "PASS",
+      "exitCode": 0,
+      "observed": []
+    }
+  ]
+}
