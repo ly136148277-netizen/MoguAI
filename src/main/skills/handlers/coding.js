@@ -275,6 +275,9 @@ async function executeEngineOnce({
         args.repoIntelligence === true ||
         (args.repoIntelligence !== false && settings.v21RepoIntelligence === true),
       authorizeCommand: (payload) => authorizeExecution(deps, payload, args),
+      settings,
+      eventStore: deps.eventStore || null,
+      moguTaskId,
     });
     result = {
       ...agent,

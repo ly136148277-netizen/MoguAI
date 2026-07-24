@@ -70,6 +70,9 @@ const {
   evidencePatchBindSummary,
   buildEpbGateUserMessage,
 } = require("./coding-evidence-patch-bind");
+const { budgetMessages } = require("../moguai/neural/context-budget");
+const { createToolChain } = require("../moguai/neural/tool-chain");
+const { DecisionTrace } = require("../moguai/neural/decision-trace");
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -255,6 +258,9 @@ async function runCodingAgentLoop({
   evidencePatchBindDir = undefined,
   repoIntelligence = false,
   authorizeCommand = null,
+  settings = null,
+  eventStore = null,
+  moguTaskId = null,
 } = {}) {
   const ws = String(workspace || "").trim();
   if (!ws) {
@@ -285,6 +291,32 @@ async function runCodingAgentLoop({
   const stages = normalizeVerifyStages(verifyCommand, verifyStages);
   const started = Date.now();
   const stepCap = Math.min(40, Math.max(4, Number(maxSteps) || 24));
+  const contextEnabled =
+    settings?.v22NeuralLayer === true && settings?.v22ContextBudget === true;
+  const toolChainEnabled =
+    settings?.v22NeuralLayer === true && settings?.v22ToolChain === true;
+  const decisionTrace =
+    settings?.v22DecisionTrace === true && eventStore && moguTaskId
+      ? new DecisionTrace(eventStore, { source: "coding" })
+      : null;
+  const contextOptions = {
+    maxBytes:
+      Number(settings?.v22Config?.context?.maxBytes) ||
+      Number(settings?.v22Config?.budget?.maxInputBytes) ||
+      128 * 1024,
+    maxEstimatedTokens:
+      Number(settings?.v22Config?.budget?.maxInputTokens) || 24_000,
+  };
+  const chain = toolChainEnabled
+    ? createToolChain({
+        kind: "coding",
+        tools: runner.defs,
+        maxCalls: Number(settings?.v22Config?.budget?.maxToolCalls) || stepCap * 3,
+        maxSteps: Number(settings?.v22Config?.budget?.maxSteps) || stepCap,
+        maxRecoveries: Number(settings?.v22Config?.budget?.maxRepairIterations) || 2,
+      })
+    : null;
+  if (chain) chain.transition("investigate");
   const messages = [
     { role: "system", content: buildSystemPrompt() },
     {
@@ -421,12 +453,52 @@ async function runCodingAgentLoop({
 
   while (steps < stepCap && Date.now() - started < timeoutMs) {
     steps += 1;
+    if (chain) {
+      const stepCheck = chain.beginStep();
+      if (!stepCheck.ok) {
+        return {
+          ...stepCheck,
+          engine: "coding_agent",
+          log: [...trace, `tool_chain: ${stepCheck.code}`].join("\n"),
+          toolsUsed: runner.getUsed(),
+          agentSteps: steps,
+        };
+      }
+    }
+    let requestMessages = messages;
+    if (contextEnabled) {
+      const budgeted = budgetMessages(messages, contextOptions);
+      if (!budgeted.ok) {
+        return {
+          ...budgeted,
+          engine: "coding_agent",
+          log: [...trace, `context_budget: ${budgeted.code}`].join("\n"),
+          toolsUsed: runner.getUsed(),
+          agentSteps: steps,
+        };
+      }
+      requestMessages = budgeted.messages;
+      if (decisionTrace) {
+        await decisionTrace.contextSelected(
+          moguTaskId,
+          { hash: budgeted.hash, bytes: budgeted.bytes, estimatedTokens: budgeted.estimatedTokens },
+          { dedupeKey: `context:${steps}:${budgeted.hash}` }
+        );
+        for (const item of budgeted.evicted) {
+          await decisionTrace.contextEvicted(
+            moguTaskId,
+            { id: item.id, hash: item.hash, reason: item.reason },
+            { dedupeKey: `evicted:${steps}:${item.id}:${item.hash}` }
+          );
+        }
+      }
+    }
     let reply;
     try {
       reply = await chatWithTools({
         model,
-        messages,
-        tools: runner.defs,
+        messages: requestMessages,
+        tools: chain ? chain.filterTools(runner.defs) : runner.defs,
         baseUrl,
         apiKey,
         timeoutMs: Math.min(180_000, timeoutMs),
@@ -511,6 +583,32 @@ async function runCodingAgentLoop({
     for (const call of reply.toolCalls) {
       const name = call?.function?.name || call?.name || "";
       const args = parseToolArgs(call?.function?.arguments || call?.arguments);
+      if (chain) {
+        const gate = chain.prepareCall(name, { planReady: Boolean(runner.getPlan()) });
+        if (!gate.ok) {
+          trace.push(`step${steps}: tool_chain_block ${name} code=${gate.code}`);
+          if (decisionTrace) {
+            await decisionTrace.toolViolation(
+              moguTaskId,
+              { tool: name, phase: chain.phase, code: gate.code },
+              { dedupeKey: `violation:${steps}:${call.id || name}` }
+            );
+          }
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id || `call_${steps}_${name}`,
+            content: `ERROR: ${gate.code}: ${gate.reason.message}`,
+          });
+          continue;
+        }
+      }
+      if (decisionTrace) {
+        await decisionTrace.toolSelected(
+          moguTaskId,
+          { tool: name, phase: chain?.phase || null },
+          { dedupeKey: `selected:${steps}:${call.id || name}` }
+        );
+      }
 
       // B2-D2 pre-gate: block disallowed tools before execute.
       if (d2.active) {
@@ -633,6 +731,13 @@ async function runCodingAgentLoop({
       }
 
       let out = await runner.execute(name, args);
+      if (decisionTrace) {
+        await decisionTrace.toolResult(
+          moguTaskId,
+          { tool: name, ok: /\bok=true\b/.test(String(out)) || !String(out).startsWith("ERROR:"), result: out },
+          { dedupeKey: `result:${steps}:${call.id || name}` }
+        );
+      }
       if (name === "apply_patch" && /ok=true/.test(out)) appliedOnce = true;
 
       // Feedback-B: re-present failures only (presentation; not success noise).
@@ -792,6 +897,13 @@ async function runCodingAgentLoop({
           log: out,
           failedStage: (/failedStage=([^\s]+)/.exec(out) || [])[1] || null,
         };
+        if (decisionTrace) {
+          await decisionTrace.verificationResult(
+            moguTaskId,
+            { ok: lastVerify.ok, kind: lastVerify.kind, failedStage: lastVerify.failedStage },
+            { dedupeKey: `verify:${steps}:${call.id || name}` }
+          );
+        }
 
         // Close or open D2 cycles around real verify outcomes.
         if (d2.active && d2.active.phase === "need_verify") {
@@ -997,6 +1109,24 @@ async function runCodingAgentLoop({
           role: "user",
           content: truncateUser(gateUserText()),
         });
+      }
+      if (chain) {
+        if (
+          chain.phase === "investigate" &&
+          ["grep", "search", "read", "list", "find_references", "repo_intelligence", "discover_tests"].includes(name)
+        ) {
+          chain.transition("plan");
+        } else if (name === "set_plan" && /ok=true/.test(out)) {
+          chain.transition("execute", { planReady: true });
+        } else if (name === "apply_patch" && /ok=true/.test(out)) {
+          chain.transition("verify");
+        } else if (name === "run_tests" && lastVerify?.ok) {
+          chain.transition("review");
+        } else if (name === "run_tests" && !lastVerify?.ok) {
+          chain.recover("plan");
+        } else if (name === "git_diff" && chain.phase === "review") {
+          chain.transition("complete", { reviewed: true });
+        }
       }
     }
 

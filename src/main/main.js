@@ -518,6 +518,7 @@ function initServices() {
   ollama = new OllamaService();
   skillRuntime = new SkillRuntime({
     taskStore,
+    eventStore: runEventStore,
     permissionProxy,
     paiBridge,
     ollama,
@@ -951,6 +952,7 @@ function registerIpcHandlers() {
       ollama,
       keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
       neuralRoutingService,
+      eventStore: runEventStore,
       userText: String(payload.text || "").trim(),
       history: Array.isArray(payload.history) ? payload.history : [],
     });
@@ -964,6 +966,7 @@ function registerIpcHandlers() {
       skillRuntime,
       keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
       neuralRoutingService,
+      eventStore: runEventStore,
       userText: String(payload.text || "").trim(),
       history: Array.isArray(payload.history) ? payload.history : [],
       maxRounds: Math.min(6, Math.max(1, Number(payload.maxRounds) || 4)),

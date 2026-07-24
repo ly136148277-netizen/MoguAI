@@ -14,6 +14,9 @@ const {
   ERROR_CODES: BRAIN_ADAPTER_ERROR_CODES,
   createOpenAiCompatibleAdapter,
 } = require("./brain/openai-compatible-adapter");
+const { budgetMessages } = require("./moguai/neural/context-budget");
+const { createToolChain } = require("./moguai/neural/tool-chain");
+const { DecisionTrace } = require("./moguai/neural/decision-trace");
 
 const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁中文沟通。
 
@@ -337,6 +340,7 @@ async function runBrainAgent({
   skillRuntime,
   keyResolver,
   neuralRoutingService,
+  eventStore = null,
   userText,
   history = [],
   maxRounds = 4,
@@ -399,6 +403,35 @@ async function runBrainAgent({
   }
 
   const tools = await resolveBrainTools(settings);
+  const contextEnabled =
+    settings?.v22NeuralLayer === true && settings?.v22ContextBudget === true;
+  const toolChainEnabled =
+    settings?.v22NeuralLayer === true && settings?.v22ToolChain === true;
+  const decisionTrace =
+    settings?.v22DecisionTrace === true && eventStore
+      ? new DecisionTrace(eventStore, { source: "brain" })
+      : null;
+  const contextOptions = {
+    maxBytes:
+      Number(settings?.v22Config?.context?.maxBytes) ||
+      Number(settings?.v22Config?.budget?.maxInputBytes) ||
+      128 * 1024,
+    maxEstimatedTokens:
+      Number(settings?.v22Config?.budget?.maxInputTokens) || 24_000,
+  };
+  const chain = toolChainEnabled
+    ? createToolChain({
+        kind: "brain",
+        tools,
+        maxCalls: Number(settings?.v22Config?.budget?.maxToolCalls) || maxRounds * 4,
+        maxSteps: Number(settings?.v22Config?.budget?.maxSteps) || maxRounds,
+      })
+    : null;
+  if (chain) {
+    chain.transition("investigate");
+    chain.transition("plan");
+    chain.transition("execute", { planReady: true });
+  }
   const v22Routing = settings?.v22NeuralLayer === true && settings?.v22ModelRouting === true;
   let v21Adapter = null;
   if (!v22Routing && settings?.v21Gpt56Adapter === true) {
@@ -412,7 +445,36 @@ async function runBrainAgent({
 
   let routingTaskId = null;
   for (let round = 0; round < maxRounds; round += 1) {
+    if (chain) {
+      const stepCheck = chain.beginStep();
+      if (!stepCheck.ok) {
+        return { ...stepCheck, content: null, toolCalls: [], steps, mode: "brain", executor: "brain" };
+      }
+    }
     onProgress?.({ phase: "thinking", round, executor: "brain" });
+    let requestMessages = messages;
+    if (contextEnabled) {
+      const budgeted = budgetMessages(messages, contextOptions);
+      if (!budgeted.ok) {
+        return { ...budgeted, content: null, toolCalls: [], steps, mode: "brain", executor: "brain" };
+      }
+      requestMessages = budgeted.messages;
+      if (decisionTrace && routingTaskId) {
+        await decisionTrace.contextSelected(
+          routingTaskId,
+          { hash: budgeted.hash, bytes: budgeted.bytes, estimatedTokens: budgeted.estimatedTokens },
+          { dedupeKey: `context:${round}:${budgeted.hash}` }
+        );
+        for (const item of budgeted.evicted) {
+          await decisionTrace.contextEvicted(
+            routingTaskId,
+            { id: item.id, hash: item.hash, reason: item.reason },
+            { dedupeKey: `evicted:${round}:${item.id}:${item.hash}` }
+          );
+        }
+      }
+    }
+    const requestTools = chain ? chain.filterTools(tools) : tools;
     let reply;
     if (v22Routing) {
       if (!neuralRoutingService?.complete) {
@@ -429,17 +491,17 @@ async function runBrainAgent({
       reply = await neuralRoutingService.complete({
         taskClass: "chat",
         text,
-        messages,
-        tools,
+        messages: requestMessages,
+        tools: requestTools,
         signal,
         moguTaskId: routingTaskId,
-        requiredCapabilities: tools.length ? ["text", "tools"] : ["text"],
+        requiredCapabilities: requestTools.length ? ["text", "tools"] : ["text"],
       });
       routingTaskId = reply?.moguTaskId || routingTaskId;
       if (reply?.ok === false) return { ...reply, content: null, toolCalls: [], steps, mode: "brain", executor: "brain" };
     } else if (v21Adapter) {
       try {
-        reply = await v21Adapter.complete({ messages, tools, signal });
+        reply = await v21Adapter.complete({ messages: requestMessages, tools: requestTools, signal });
       } catch (error) {
         return blockedAdapterResult(error);
       }
@@ -448,8 +510,8 @@ async function runBrainAgent({
         baseUrl: settings.agentApiBaseUrl,
         apiKey: settings.agentApiKey,
         model: settings.agentApiModel,
-        messages,
-        tools,
+        messages: requestMessages,
+        tools: requestTools,
       });
     }
 
@@ -495,8 +557,40 @@ async function runBrainAgent({
       } catch {
         args = {};
       }
+      if (chain) {
+        const gate = chain.prepareCall(name, { planReady: true });
+        if (!gate.ok) {
+          if (decisionTrace && routingTaskId) {
+            await decisionTrace.toolViolation(
+              routingTaskId,
+              { tool: name, phase: chain.phase, code: gate.code },
+              { dedupeKey: `violation:${round}:${call.id || name}` }
+            );
+          }
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id || `call_${round}_${name}`,
+            content: `ERROR: ${gate.code}: ${gate.reason.message}`,
+          });
+          continue;
+        }
+      }
+      if (decisionTrace && routingTaskId) {
+        await decisionTrace.toolSelected(
+          routingTaskId,
+          { tool: name, phase: chain?.phase || null },
+          { dedupeKey: `selected:${round}:${call.id || name}` }
+        );
+      }
       onProgress?.({ phase: "tool", tool: name, args, round, executor: "brain", steps });
       const result = await invokeMappedTool(skillRuntime, name, args, "brain", settings);
+      if (decisionTrace && routingTaskId) {
+        await decisionTrace.toolResult(
+          routingTaskId,
+          { tool: name, ok: result?.ok !== false, error: result?.error || null },
+          { dedupeKey: `result:${round}:${call.id || name}` }
+        );
+      }
       const step = {
         tool: name,
         skillId: mapToolNameToSkill(name),
