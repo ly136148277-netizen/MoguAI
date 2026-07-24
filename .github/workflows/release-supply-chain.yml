@@ -1,0 +1,111 @@
+name: Release supply-chain evidence
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-sign-and-verify:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read and validate version
+        id: version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$version") {
+            throw "Tag ${{ github.ref_name }} does not match package version $version"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build unsigned reproducible candidate
+        run: npx electron-builder --config.directories.output=dist-ci
+
+      - name: Run source and artifact gates
+        shell: pwsh
+        run: |
+          node scripts/run_release_tests.js `
+            --app-out dist-ci/win-unpacked `
+            --output dist-ci/release-test-report.json
+          node scripts/check_public_build_profile.js `
+            --output dist-ci/public-build-profile.json
+          node scripts/generate_payload_manifest.js `
+            --input dist-ci `
+            --output "dist-ci/payload-manifest-${{ steps.version.outputs.version }}.json" `
+            --version "${{ steps.version.outputs.version }}"
+          node scripts/validate_payload_manifest.js `
+            "dist-ci/payload-manifest-${{ steps.version.outputs.version }}.json" `
+            dist-ci
+          node scripts/generate_release_evidence.js `
+            --payload "dist-ci/payload-manifest-${{ steps.version.outputs.version }}.json" `
+            --profile dist-ci/public-build-profile.json `
+            --tests-report dist-ci/release-test-report.json `
+            --output dist-ci/release-evidence-manifest.json
+          node scripts/validate_release_evidence.js `
+            dist-ci/release-evidence-manifest.json
+          node scripts/release_checksums.js `
+            --root dist-ci `
+            --version "${{ steps.version.outputs.version }}" `
+            --output dist-ci/SHA256SUMS.txt
+          node scripts/release_checksums.js verify `
+            --root dist-ci `
+            --input dist-ci/SHA256SUMS.txt
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Keyless-sign release files with GitHub OIDC
+        shell: pwsh
+        env:
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.workflow_ref }}
+        run: |
+          $files = @()
+          Get-Content dist-ci/SHA256SUMS.txt | ForEach-Object {
+            if ($_ -match '^[a-f0-9]{64} \*(.+)$') {
+              $files += Join-Path "dist-ci" $Matches[1]
+            }
+          }
+          $files += "dist-ci/SHA256SUMS.txt"
+          foreach ($file in $files) {
+            $bundle = "$file.sigstore.json"
+            cosign sign-blob --yes --bundle $bundle $file
+            if ($LASTEXITCODE -ne 0) { throw "Cosign signing failed: $file" }
+            cosign verify-blob $file `
+              --bundle $bundle `
+              --certificate-identity $env:CERTIFICATE_IDENTITY `
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com
+            if ($LASTEXITCODE -ne 0) { throw "Cosign verification failed: $file" }
+          }
+
+      - name: Upload verified supply-chain bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mogu-ai-${{ steps.version.outputs.version }}-supply-chain
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            dist-ci/*.exe
+            dist-ci/*.blockmap
+            dist-ci/*.yml
+            dist-ci/*.json
+            dist-ci/SHA256SUMS.txt
+            dist-ci/*.sigstore.json

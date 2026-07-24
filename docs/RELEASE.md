@@ -128,6 +128,35 @@ $env:CSC_KEY_PASSWORD = "..."
 - **标准 OV 证书**：可用，新证书仍需积累信誉
 - **自签**：仅内部测试，用户会看到警告
 
+### 开源免费路径与供应链证明
+
+- **SignPath Foundation**：当前首选免费 Authenticode 路径，但必须经过
+  Foundation 人工审批，并满足“全部分发组件 OSI 兼容开源、公开可审计构建、
+  无专有组件”等条件。申请包见
+  [`SIGNPATH_FOUNDATION_APPLICATION.md`](./SIGNPATH_FOUNDATION_APPLICATION.md)。
+- **Sigstore/Cosign**：免费绑定 GitHub Actions OIDC 身份并提供透明日志证明；
+  **不能**替代 Windows Authenticode，也不会让 SmartScreen 显示受信任发布者。
+- **Azure Artifact Signing**：截至 2026-07，Basic 官方价为
+  `$9.99/month`（区域与身份资格仍以 Azure 当前规则为准）。
+
+代码签名政策：[`CODE_SIGNING_POLICY.md`](./CODE_SIGNING_POLICY.md)。
+
+内部自签流水线（绝不公发）：
+
+```powershell
+.\scripts\build_test_signed_rc.ps1 -OutputDir dist-test-signed
+.\scripts\test_signed_installer_e2e.ps1 -DistDir dist-test-signed
+```
+
+免费 Sigstore 供应链流水线：
+
+```text
+.github/workflows/release-supply-chain.yml
+```
+
+用户可用 `cosign verify-blob` 验证每个 `*.sigstore.json` bundle；验证时必须
+同时固定 workflow identity 与 OIDC issuer。
+
 ---
 
 ## 四、发版 Checklist
@@ -140,6 +169,8 @@ $env:CSC_KEY_PASSWORD = "..."
 - [ ] `npm run dist`（有证书则签名；无证书只能 Internal Preview）
 - [ ] `npm run check:asar`
 - [ ] `evidence:test` + `manifest:payload` + `manifest:validate` + `evidence:generate` + `evidence:validate`
+- [ ] `release:checksums` + `release:checksums:verify`
+- [ ] Sigstore bundles 对精确 GitHub workflow identity 验证通过（补充证明，不替代 Authenticode）
 - [ ] 最终签名文件的安装/升级/卸载 E2E
 - [ ] 上传版本化资产 → **下载回验** → 最后发布对应 channel manifest（RC 为 `rc.yml`，stable 为 `latest.yml`）
 - [ ] （可选）推送 `catalog/models.json` 到 mogu-map

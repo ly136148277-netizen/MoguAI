@@ -168,7 +168,7 @@ npm test
 npm start
 ```
 
-Release / packaging notes: [`docs/RELEASE.md`](./docs/RELEASE.md) · Public RC freeze: [`docs/PUBLIC_RELEASE_FINAL_FREEZE.md`](./docs/PUBLIC_RELEASE_FINAL_FREEZE.md)
+Release / packaging notes: [`docs/RELEASE.md`](./docs/RELEASE.md) · Code signing policy: [`docs/CODE_SIGNING_POLICY.md`](./docs/CODE_SIGNING_POLICY.md) · Public RC freeze: [`docs/PUBLIC_RELEASE_FINAL_FREEZE.md`](./docs/PUBLIC_RELEASE_FINAL_FREEZE.md)
 
 ---
 

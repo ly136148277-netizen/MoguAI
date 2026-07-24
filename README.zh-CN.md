@@ -168,7 +168,7 @@ npm test
 npm start
 ```
 
-发版说明：[`docs/RELEASE.md`](./docs/RELEASE.md) · 公共 RC：[`docs/PUBLIC_RELEASE_FINAL_FREEZE.md`](./docs/PUBLIC_RELEASE_FINAL_FREEZE.md)
+发版说明：[`docs/RELEASE.md`](./docs/RELEASE.md) · 代码签名政策：[`docs/CODE_SIGNING_POLICY.md`](./docs/CODE_SIGNING_POLICY.md) · 公共 RC：[`docs/PUBLIC_RELEASE_FINAL_FREEZE.md`](./docs/PUBLIC_RELEASE_FINAL_FREEZE.md)
 
 ---
 

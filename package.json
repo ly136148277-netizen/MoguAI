@@ -45,6 +45,8 @@
     "check:public-profile": "node scripts/check_public_build_profile.js",
     "manifest:payload": "node scripts/generate_payload_manifest.js",
     "manifest:validate": "node scripts/validate_payload_manifest.js",
+    "release:checksums": "node scripts/release_checksums.js",
+    "release:checksums:verify": "node scripts/release_checksums.js verify",
     "evidence:test": "node scripts/run_release_tests.js",
     "evidence:generate": "node scripts/generate_release_evidence.js",
     "evidence:validate": "node scripts/validate_release_evidence.js",
