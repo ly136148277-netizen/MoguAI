@@ -9,6 +9,11 @@ const {
   toolNameToSkillId,
 } = require("./skills/registry");
 const { mcpManager } = require("./mcp-client");
+const {
+  BrainAdapterError,
+  ERROR_CODES: BRAIN_ADAPTER_ERROR_CODES,
+  createOpenAiCompatibleAdapter,
+} = require("./brain/openai-compatible-adapter");
 
 const AGENT_SYSTEM_PROMPT = `你是 MOGU AI 的大脑（编排器），用简洁中文沟通。
 
@@ -74,6 +79,28 @@ function normalizeBaseUrl(url) {
   return String(url || "")
     .trim()
     .replace(/\/+$/, "");
+}
+
+function createConfiguredV21Adapter(settings, keyResolver, dependencies = {}) {
+  if (settings?.v21Gpt56Adapter !== true) return null;
+  return createOpenAiCompatibleAdapter(settings.v21Gpt56AdapterConfig || {}, {
+    keyResolver,
+    ...dependencies,
+  });
+}
+
+function blockedAdapterResult(error) {
+  if (error instanceof BrainAdapterError && error.code === BRAIN_ADAPTER_ERROR_CODES.BLOCKED) {
+    return {
+      ...error.toResult(),
+      content: null,
+      toolCalls: [],
+      steps: [],
+      mode: "brain",
+      executor: "brain",
+    };
+  }
+  throw error;
 }
 
 function mapToolNameToSkill(name) {
@@ -308,10 +335,12 @@ async function runBrainAgent({
   settings,
   ollama,
   skillRuntime,
+  keyResolver,
   userText,
   history = [],
   maxRounds = 4,
   onProgress = null,
+  signal = null,
 } = {}) {
   const channel = settings.agentBrainChannel || "builtin";
   const text = String(userText || "").trim();
@@ -369,16 +398,34 @@ async function runBrainAgent({
   }
 
   const tools = await resolveBrainTools(settings);
+  let v21Adapter = null;
+  if (settings?.v21Gpt56Adapter === true) {
+    try {
+      v21Adapter = createConfiguredV21Adapter(settings, keyResolver);
+      maxRounds = Math.min(maxRounds, v21Adapter.config.limits.maxSteps);
+    } catch (error) {
+      return blockedAdapterResult(error);
+    }
+  }
 
   for (let round = 0; round < maxRounds; round += 1) {
     onProgress?.({ phase: "thinking", round, executor: "brain" });
-    const reply = await chatOpenAiCompatible({
-      baseUrl: settings.agentApiBaseUrl,
-      apiKey: settings.agentApiKey,
-      model: settings.agentApiModel,
-      messages,
-      tools,
-    });
+    let reply;
+    if (v21Adapter) {
+      try {
+        reply = await v21Adapter.complete({ messages, tools, signal });
+      } catch (error) {
+        return blockedAdapterResult(error);
+      }
+    } else {
+      reply = await chatOpenAiCompatible({
+        baseUrl: settings.agentApiBaseUrl,
+        apiKey: settings.agentApiKey,
+        model: settings.agentApiModel,
+        messages,
+        tools,
+      });
+    }
 
     if (!reply.toolCalls.length) {
       const remembered = await autoPersistMemory(skillRuntime, text, steps, settings);
@@ -389,8 +436,14 @@ async function runBrainAgent({
       return {
         ok: true,
         content: withReview,
-        provider: "api",
+        provider: reply.provider || "api",
         model: reply.model,
+        usage: reply.usage,
+        finishReason: reply.finishReason,
+        requestId: reply.requestId,
+        traceId: reply.traceId,
+        latencyMs: reply.latencyMs,
+        configHash: reply.configHash,
         steps,
         mode: "brain",
         executor: "brain",
@@ -439,8 +492,8 @@ async function runBrainAgent({
   return {
     ok: true,
     content: buildBrainContent(steps, "已达最大工具轮次。"),
-    provider: "api",
-    model: settings.agentApiModel,
+    provider: v21Adapter?.config.provider || "api",
+    model: v21Adapter?.config.modelId || settings.agentApiModel,
     steps,
     mode: "brain",
     executor: "brain",
@@ -572,7 +625,7 @@ function extractJsonObject(text) {
   }
 }
 
-async function chatWithBrain({ settings, ollama, userText, history = [] }) {
+async function chatWithBrain({ settings, ollama, keyResolver, userText, history = [], signal = null }) {
   const channel = settings.agentBrainChannel || "builtin";
   if (channel === "builtin") {
     return { ok: true, content: null, provider: "builtin" };
@@ -598,6 +651,14 @@ async function chatWithBrain({ settings, ollama, userText, history = [] }) {
   }
 
   if (channel === "api") {
+    if (settings?.v21Gpt56Adapter === true) {
+      try {
+        const adapter = createConfiguredV21Adapter(settings, keyResolver);
+        return await adapter.complete({ messages, signal });
+      } catch (error) {
+        return blockedAdapterResult(error);
+      }
+    }
     return chatOpenAiCompatible({
       baseUrl: settings.agentApiBaseUrl,
       apiKey: settings.agentApiKey,
@@ -609,7 +670,7 @@ async function chatWithBrain({ settings, ollama, userText, history = [] }) {
   throw new Error(`未知 Agent 通道：${channel}`);
 }
 
-async function testBrain({ settings, ollama }) {
+async function testBrain({ settings, ollama, keyResolver }) {
   const channel = settings.agentBrainChannel || "builtin";
   if (channel === "builtin") {
     return { ok: true, message: "内置引导：未启用大脑调度。请在设置把引导改为「联网 API」或「本机模型」。" };
@@ -617,9 +678,11 @@ async function testBrain({ settings, ollama }) {
   const result = await chatWithBrain({
     settings,
     ollama,
+    keyResolver,
     userText: "用一句话介绍你是 MOGU 的大脑编排器，并举例一个你会调用的工具名。",
     history: [],
   });
+  if (result?.ok === false) return result;
   return {
     ok: true,
     message: `连通成功（${result.provider}${result.model ? ` · ${result.model}` : ""}）`,
@@ -643,6 +706,7 @@ module.exports = {
   autoPersistMemory,
   buildHistoryForBrain,
   buildSystemPrompt,
+  createConfiguredV21Adapter,
   testBrain,
   normalizeBaseUrl,
   extractJsonObject,
