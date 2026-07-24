@@ -223,6 +223,8 @@ function shouldUseCodingAgent(settings = {}, args = {}) {
  *   hypothesisDiversity?: boolean,
  *   diversityJaccardMax?: number,
  *   cycleArtifactDir?: string,
+ *   repoIntelligence?: boolean,
+ *   authorizeCommand?: (payload: object) => Promise<object|boolean>,
  * }} opts
  */
 async function runCodingAgentLoop({
@@ -251,6 +253,8 @@ async function runCodingAgentLoop({
   feedbackConsumeDir = undefined,
   evidencePatchBind = undefined,
   evidencePatchBindDir = undefined,
+  repoIntelligence = false,
+  authorizeCommand = null,
 } = {}) {
   const ws = String(workspace || "").trim();
   if (!ws) {
@@ -275,6 +279,8 @@ async function runCodingAgentLoop({
     dockerStrict: strict,
     dockerSwe: swe,
     requirePlan: true,
+    repoIntelligence: repoIntelligence === true,
+    authorizeCommand,
   });
   const stages = normalizeVerifyStages(verifyCommand, verifyStages);
   const started = Date.now();

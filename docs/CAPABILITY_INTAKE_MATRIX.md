@@ -1,12 +1,23 @@
-# Capability Intake Matrix（骨架 · Grok G7）
+# Capability Intake Matrix
 
 ```yaml
-date: 2026-07-23
-status: RESEARCH ONLY · no capability code imported
+date: 2026-07-24
+status: 2.1 IMPLEMENTED DEFAULT-OFF · imported dependency evidence closed
 gate: Capability Intake Gate (see north-star doc)
 ```
 
-> License 列均为待核实。不得因“开源”推断可商用。最终法律结论留给所有者/GPT-5.6 Sol。
+> “候选来源”不等于复制来源。2.1 仅引入下表明确列出的 `node-pty`；其余能力为 MOGU
+> clean-room/既有代码演进，或仍是未采用的研究候选。
+
+| 2.1 能力 | 实际实现/来源 | 采用方式 | License/版本 | 权限风险 | 验证 | 默认 |
+|----------|---------------|----------|----------------|----------|------|------|
+| ConPTY 终端 | `microsoft/node-pty` | 精确版本依赖 + MOGU Adapter | MIT `1.1.0`，commit `1def577…` | 高；授权、根路径、env、时限、审计 | 单元/回归；真实交互 E2E 待评测 | OFF |
+| Repo Map/引用/调用边 | MOGU 既有 `coding-*` + clean-room | 内部实现 | MOGU MIT | 只读 | 单元/acceptance | OFF |
+| LSP Client | MOGU clean-room stdio JSON-RPC | 内部实现；服务器外置 | MOGU MIT；未捆绑服务器 | 外部进程，中高 | mock lifecycle/crash/timeout | OFF |
+| 测试发现 | MOGU clean-room | 内部实现 | MOGU MIT | 只读 | Node/Python/Go/Rust fixture | OFF |
+| Worktree/只读子任务 | Git CLI Adapter + MOGU manager | 系统工具 Adapter | Git 不随 MOGU 再分发 | 高；manager-owned only | 隔离/清理/并发测试 | OFF |
+| Event/lease/retry/checkpoint | MOGU clean-room | 内部实现 | MOGU MIT | 高；fail-closed | 持久、过期、去重、恢复测试 | OFF |
+| OpenAI-compatible Brain Adapter | MOGU clean-room | 内部协议 Adapter | MOGU MIT | 密钥/网络，高 | no-fallback/secret/size/timeout | OFF |
 
 | 能力候选 | 来源 | 一手入口（待核） | 版本/commit | License | 采用方式 | MOGU 位置 | 权限/数据风险 | 遥测/更新风险 | A/B 指标 | Default-On |
 |----------|------|------------------|-------------|---------|----------|-----------|---------------|---------------|----------|------------|
@@ -20,10 +31,10 @@ gate: Capability Intake Gate (see north-star doc)
 | IDE Agent 行为（索引/LSP/Diff/后台） | Cursor | 公开产品行为；完整栈不默认开源 | n/a | n/a proprietary | Clean-room only | 精密工厂 | 高 | n/a | 同任务同预算对照 | OFF |
 | 终端自主 / 计划-修改-验证 | Claude Code | 公开产品行为 | n/a | n/a proprietary | Clean-room only | Coding Worker | 高 | n/a | 长轨迹成功率 | OFF |
 
-## Intake 下一步（Public RC 后 · 非本任务）
+## 未采用候选的下一步
 
 1. 为每一行补齐一手仓库 URL、精确 commit、LICENSE 原文与 SPDX。
 2. 扫描二级依赖、商标、专利、遥测端点。
 3. 选定采用方式并写行为 Spec。
-4. 经 PermissionProxy / TaskStore / Audit 接入后做 GPT-5.6 同协议 A/B。
+4. 经 PermissionProxy / TaskStore / Audit 接入后做同一 GPT-5.6 配置的同协议 A/B。
 5. 稳定增益才 Default-On。

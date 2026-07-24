@@ -21,10 +21,16 @@
     "acceptance:v1.4": "node scripts/acceptance_v1.4.0.js",
     "acceptance:v1.7": "node scripts/acceptance_v1.7.js",
     "acceptance:v2.0": "node scripts/acceptance_v2.0.js",
+    "acceptance:v2.1": "node scripts/acceptance_v2.1.js",
+    "audit:v2.1-deps": "node scripts/audit_v21_dependencies.js",
+    "evaluate:v2.1": "node scripts/run_v21_local_evaluation.js",
+    "gates:v2.1": "node scripts/run_v21_gates.js",
     "acceptance:coding": "node scripts/acceptance_coding_bridge.js",
     "acceptance:moguai-coding": "node scripts/acceptance_coding_bridge.js",
     "bench:swe:fetch": "node scripts/bench_swe_fetch.js",
     "bench:swe:fetch-all": "node scripts/bench_swe_fetch_all.js",
+    "bench:swe:fetch-verified": "node scripts/fetch_swe_verified.js",
+    "bench:v2.1:freeze-holdout": "node scripts/freeze_v21_holdout.js",
     "bench:swe:sample": "node scripts/bench_swe_sample.js",
     "bench:swe:pull-images": "node scripts/bench_swe_pull_images.js",
     "bench:swe:run": "node scripts/bench_swe_run.js",
@@ -66,6 +72,7 @@
     "electron-updater": "^6.8.9",
     "fs-extra": "^11.3.0",
     "monaco-editor": "^0.52.2",
+    "node-pty": "1.1.0",
     "ws": "^8.21.1"
   },
   "devDependencies": {
@@ -89,6 +96,7 @@
       "assets/icon.ico",
       "models.json",
       "package.json",
+      "THIRD_PARTY_NOTICES.md",
       "config/prompts.json",
       "config/repository.json",
       "config/update.json",
@@ -106,6 +114,9 @@
       "!scripts/**/*",
       "!**/*.token"
     ],
+      "asarUnpack": [
+        "node_modules/node-pty/**/*"
+      ],
     "publish": [
       {
         "provider": "generic",

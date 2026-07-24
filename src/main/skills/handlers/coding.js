@@ -50,6 +50,7 @@ const {
 } = require("../coding-accuracy");
 const { runLocalPatch, shouldUseLocalPatch } = require("../coding-local-patch");
 const { runCodingAgentLoop, shouldUseCodingAgent } = require("../coding-agent-loop");
+const { gateCommand } = require("../../permission-gate");
 
 function resolveWorkspace(settings, args = {}) {
   const ws =
@@ -83,6 +84,34 @@ function settingsWithUserData(deps = {}) {
   return {
     ...(deps.settings || {}),
     userDataPath: deps.userDataPath || deps.settings?.userDataPath || "",
+  };
+}
+
+async function authorizeExecution(deps, payload = {}, args = {}) {
+  const command = String(payload.command || "").trim();
+  const cwd = String(payload.cwd || "").trim();
+  const action = `${payload.action || "verify"} cwd=${cwd} command=${command}`.slice(0, 500);
+  return gateCommand(deps.permissionProxy, action, {
+    tool: payload.tool || "mogu.coding.verify",
+    riskLevel: Number(payload.riskLevel) || 2,
+    channel: args.channel || "desktop",
+    runId: args.runId || args.moguTaskId || null,
+    sessionKey: args.sessionKey || null,
+    requireGatewayApproval: args.requireGatewayApproval === true,
+    gatewayApproved: args.gatewayApproved === true,
+  });
+}
+
+function deniedVerify(command, workspace, decision) {
+  return {
+    ok: false,
+    exitCode: null,
+    command,
+    workspace,
+    log: "",
+    permissionDenied: true,
+    reason: decision?.reason || "authorization_denied",
+    error: decision?.message || "验证命令未获授权",
   };
 }
 
@@ -241,6 +270,10 @@ async function executeEngineOnce({
           ? Boolean(args.evidencePatchBind)
           : undefined,
       evidencePatchBindDir: String(args.evidencePatchBindDir || "").trim() || undefined,
+      repoIntelligence:
+        args.repoIntelligence === true ||
+        (args.repoIntelligence !== false && settings.v21RepoIntelligence === true),
+      authorizeCommand: (payload) => authorizeExecution(deps, payload, args),
     });
     result = {
       ...agent,
@@ -484,7 +517,21 @@ async function run({ deps, args, task }) {
 
     let verify = null;
     if (autoVerify) {
-      verify = runVerify(workspace, verifyCommand);
+      const decision = await authorizeExecution(
+        deps,
+        {
+          tool: "mogu.coding.verify",
+          action: "auto_verify",
+          command: verifyCommand,
+          cwd: workspace,
+          riskLevel: 2,
+        },
+        args
+      );
+      verify =
+        decision?.allowed === true
+          ? runVerify(workspace, verifyCommand)
+          : deniedVerify(verifyCommand, workspace, decision);
     }
     rounds.push({
       round,
@@ -860,7 +907,24 @@ async function compare({ deps, args, task }) {
       if (scopeEnforcement.enforced) review = scopeEnforcement.review || review;
     }
     const patch = savePatch(workspace, eng);
-    const verify = doVerify ? runVerify(workspace, verifyCmd) : null;
+    let verify = null;
+    if (doVerify) {
+      const decision = await authorizeExecution(
+        deps,
+        {
+          tool: "mogu.coding.verify",
+          action: "compare_verify",
+          command: verifyCmd,
+          cwd: workspace,
+          riskLevel: 2,
+        },
+        args
+      );
+      verify =
+        decision?.allowed === true
+          ? runVerify(workspace, verifyCmd)
+          : deniedVerify(verifyCmd, workspace, decision);
+    }
     const content = assessContentAccuracy(review, prompt, editPlan);
     const quality = assessChangeQuality(review, prompt);
     let score = scoreEngineTrial({ verify, review, quality });
@@ -1041,7 +1105,20 @@ async function verify({ deps, args }) {
   const command =
     String(args?.command || args?.cmd || deps.settings?.codingVerifyCommand || "").trim() ||
     "npm test";
-  return runVerify(workspace, command);
+  const decision = await authorizeExecution(
+    deps,
+    {
+      tool: "mogu.coding.verify",
+      action: "verify",
+      command,
+      cwd: workspace,
+      riskLevel: 2,
+    },
+    args
+  );
+  return decision?.allowed === true
+    ? runVerify(workspace, command)
+    : deniedVerify(command, workspace, decision);
 }
 
 async function discard({ deps, args }) {

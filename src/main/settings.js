@@ -61,6 +61,31 @@ const DEFAULT_SETTINGS = {
   codingModel: "",
   codingProvider: "",
   codingSandbox: "",
+  /** MOGU 2.1 capability gates remain independently opt-in. */
+  v21RepoIntelligence: false,
+  v21Lsp: false,
+  v21ControlledTerminal: false,
+  v21ParallelWorktrees: false,
+  v21RecoverableRuntime: false,
+  v21Gpt56Adapter: false,
+  /** Provider-neutral adapter config. Credentials always live in SecretStore. */
+  v21Gpt56AdapterConfig: {
+    provider: "",
+    endpoint: "",
+    modelId: "",
+    secretId: "agentApiKey",
+    capabilities: { tools: true, jsonMode: false },
+    sampling: { temperature: 0.3, topP: null, seed: null },
+    limits: {
+      timeoutMs: 90000,
+      maxSteps: 4,
+      maxOutputTokens: 4096,
+      maxRequestBytes: 2097152,
+      maxResponseBytes: 4194304,
+      maxToolArgumentsBytes: 65536,
+      maxCostUsd: null,
+    },
+  },
   /** Optional Playwright package root for mogu.browser */
   browserPlaywrightPath: "",
   /**
@@ -100,6 +125,9 @@ class SettingsStore {
     // Never persist API keys in settings.json (handled by SecretStore).
     if (this._cache && Object.prototype.hasOwnProperty.call(this._cache, "agentApiKey")) {
       this._cache.agentApiKey = "";
+    }
+    if (this._cache?.v21Gpt56AdapterConfig) {
+      this._cache.v21Gpt56AdapterConfig = sanitizeAdapterConfig(this._cache.v21Gpt56AdapterConfig);
     }
     if (this._cache) {
       this._cache.schemaVersion = this._cache.schemaVersion || DEFAULT_SETTINGS.schemaVersion;
@@ -152,4 +180,18 @@ class SettingsStore {
   }
 }
 
-module.exports = { SettingsStore, DEFAULT_SETTINGS };
+function sanitizeAdapterConfig(config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return {};
+  const clean = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (/^(api.?key|key|token|authorization|credential|headers)$/i.test(key)) continue;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      clean[key] = sanitizeAdapterConfig(value);
+    } else {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
+module.exports = { SettingsStore, DEFAULT_SETTINGS, sanitizeAdapterConfig };

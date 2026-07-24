@@ -21,6 +21,8 @@ const {
 } = require("./coding-local-patch");
 const { runVerifyWithOptionalDocker } = require("./coding-docker-verify");
 const { findReferences } = require("./coding-find-refs");
+const { createRepoIndex } = require("../moguai/intelligence/repo-index");
+const { discoverTests } = require("../moguai/intelligence/test-discovery");
 
 const TOOL_DEFS = [
   {
@@ -267,6 +269,34 @@ const TOOL_DEFS = [
     function: {
       name: "git_diff",
       description: "Show current git porcelain + unified diff summary of uncommitted changes.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "repo_intelligence",
+      description:
+        "Query the opt-in static repository index for files, symbols, definitions, references, imports, importers, or conservative call edges.",
+      parameters: {
+        type: "object",
+        properties: {
+          op: {
+            type: "string",
+            enum: ["files", "symbols", "definitions", "references", "imports", "importers", "calls", "refresh"],
+          },
+          symbol: { type: "string" },
+          path: { type: "string" },
+        },
+        required: ["op"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "discover_tests",
+      description: "Discover repository tests and verification stages without executing them.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -580,6 +610,7 @@ async function grepWorkspace(workspace, opts = {}) {
  *   dockerStrict?: boolean,
  *   dockerSwe?: boolean,
  *   requirePlan?: boolean,
+ *   authorizeCommand?: (payload: object) => Promise<object|boolean>,
  * }} ctx
  */
 function createCodingToolRunner(ctx = {}) {
@@ -593,6 +624,10 @@ function createCodingToolRunner(ctx = {}) {
     process.env.MOGU_VERIFY_DOCKER_SWE === "1" ||
     /sweb\.eval\./i.test(dockerImage);
   const requirePlan = ctx.requirePlan !== false;
+  const authorizeCommand =
+    typeof ctx.authorizeCommand === "function" ? ctx.authorizeCommand : null;
+  const repoIntelligenceEnabled = ctx.repoIntelligence === true;
+  let repoIndex = null;
   const used = [];
   const checkpoints = [];
   let plan = null;
@@ -835,6 +870,23 @@ function createCodingToolRunner(ctx = {}) {
           ? stages.filter((s) => s.name.toLowerCase().includes(filter.toLowerCase()))
           : stages;
         if (!selected.length) return `ERROR: no stage matching ${filter}`;
+        if (!authorizeCommand) {
+          return "ERROR: authorization_required: run_tests requires an injected command authorization callback";
+        }
+        for (const stage of selected) {
+          const decision = await authorizeCommand({
+            tool: "mogu.coding.run_tests",
+            action: "verify",
+            riskLevel: 2,
+            executable: "system-shell",
+            command: stage.command,
+            cwd: workspace,
+            stage: stage.name,
+          });
+          if (!(decision === true || decision?.allowed === true)) {
+            return `ERROR: authorization_denied: ${decision?.message || decision?.reason || `run_tests denied for ${stage.name}`}`;
+          }
+        }
         const verify = runVerifyWithOptionalDocker(workspace, selected, {
           timeoutMs: 300_000,
           dockerImage,
@@ -860,6 +912,28 @@ function createCodingToolRunner(ctx = {}) {
 
       if (tool === "git_diff") {
         return gitDiffSummary(workspace);
+      }
+
+      if (tool === "repo_intelligence") {
+        if (!repoIntelligenceEnabled) return "ERROR: repo intelligence is disabled";
+        if (!repoIndex) repoIndex = createRepoIndex(workspace);
+        const op = String(rawArgs.op || "").trim();
+        let result;
+        if (op === "refresh") result = repoIndex.update();
+        else if (op === "files") result = repoIndex.listFiles();
+        else if (op === "symbols") result = repoIndex.getSymbols(rawArgs.path);
+        else if (op === "definitions") result = repoIndex.findDefinitions(rawArgs.symbol);
+        else if (op === "references") result = repoIndex.findReferences(rawArgs.symbol);
+        else if (op === "imports") result = repoIndex.getImports(rawArgs.path);
+        else if (op === "importers") result = repoIndex.getImporters(rawArgs.path);
+        else if (op === "calls") result = repoIndex.getCallEdges(rawArgs.symbol);
+        else return `ERROR: unknown repo intelligence op ${op}`;
+        return truncate(JSON.stringify({ ok: true, op, result }, null, 2), 7000);
+      }
+
+      if (tool === "discover_tests") {
+        if (!repoIntelligenceEnabled) return "ERROR: repo intelligence is disabled";
+        return truncate(JSON.stringify(discoverTests(workspace), null, 2), 7000);
       }
 
       if (tool === "find_references") {
@@ -893,7 +967,11 @@ function createCodingToolRunner(ctx = {}) {
   }
 
   return {
-    defs: TOOL_DEFS,
+    defs: repoIntelligenceEnabled
+      ? TOOL_DEFS
+      : TOOL_DEFS.filter(
+          (def) => !["repo_intelligence", "discover_tests"].includes(def.function.name)
+        ),
     execute,
     getUsed: () => [...used],
     getPlan: () => (plan ? { ...plan } : null),

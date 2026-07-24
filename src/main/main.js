@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, Menu, dialog, session, protocol, net
 const path = require("path");
 const fs = require("fs-extra");
 const { spawn } = require("child_process");
+const crypto = require("node:crypto");
 const { pathToFileURL } = require("url");
 
 // Clean-profile QA: isolate userData without touching the developer profile.
@@ -64,6 +65,14 @@ const {
   searchWorkspace: factorySearchWorkspace,
   readFileInWorkspace: factoryReadFile,
   writeFileInWorkspace: factoryWriteFile,
+  queryRepoIntelligence: factoryQueryRepoIntelligence,
+  discoverWorkspaceTests: factoryDiscoverWorkspaceTests,
+  TerminalSessionManager,
+  WorktreeManager,
+  RunEventStore,
+  RetryExecutor,
+  SubtaskCoordinator,
+  canonicalExisting: canonicalTerminalPath,
   setEventSink: factoryDebugSetSink,
   getStatus: factoryDebugStatus,
   startDebug: factoryDebugStart,
@@ -133,6 +142,10 @@ let permissionProxy = null;
 let permissionAudit = null;
 let permissionGrants = null;
 let skillRuntime = null;
+let runEventStore = null;
+let retryExecutor = null;
+const factoryTerminalManagers = new Map();
+const factoryWorktreeManagers = new Map();
 let desktopOnline = true;
 let confirmUiReady = false;
 let allModelsCache = [];
@@ -206,6 +219,9 @@ async function migrateAgentApiKeyToSecretStore(settings) {
 async function loadSettingsInternal() {
   let settings = await settingsStore.load();
   settings = await migrateAgentApiKeyToSecretStore(settings);
+  if (settings.v21Gpt56Adapter === true) {
+    return { ...settings, agentApiKey: "" };
+  }
   const key = secretStore ? await secretStore.get("agentApiKey") : "";
   return { ...settings, agentApiKey: key || "" };
 }
@@ -403,7 +419,8 @@ function initServices() {
   secretStore = new SecretStore(path.join(userData, "secrets.json"));
   chatSessions = new ChatSessionStore(path.join(userData, "chat-sessions"));
   studioStore = new StudioStore(path.join(userData, "studio-pipeline.json"));
-  taskStore = new TaskStore(path.join(userData, "tasks.json"));
+  runEventStore = new RunEventStore(path.join(userData, "run-events"));
+  taskStore = new TaskStore(path.join(userData, "tasks.json"), { eventStore: runEventStore });
   taskStore.on("change", (payload) => {
     sendToRenderer("task-change", {
       type: payload?.type || "updated",
@@ -451,6 +468,32 @@ function initServices() {
     getAgentApiKey: async () => (secretStore ? secretStore.get("agentApiKey") : ""),
     openExternal: (url) => shell.openExternal(url),
     emitProgress: (payload) => sendToRenderer("skill-progress", payload),
+  });
+  retryExecutor = new RetryExecutor({
+    taskStore,
+    eventStore: runEventStore,
+    permissionCheck: ({ replay, task }) =>
+      permissionProxy.requestPermission({
+        tool: replay.kind.startsWith("skill.") ? replay.kind.split(".").slice(0, -1).join(".").replace(/^skill\./, "") : "mogu.runtime.retry",
+        action: `重放本地步骤 ${replay.kind}`,
+        riskLevel: Number(replay.payload?.riskLevel) || 2,
+        runId: task.moguTaskId,
+        channel: "desktop",
+      }),
+    executor: async ({ replay }) => {
+      const parts = String(replay.kind || "").split(".");
+      if (parts[0] !== "skill" || parts.length < 4) {
+        const error = new Error(`不支持的本地重放类型: ${replay.kind}`);
+        error.code = "unsupported_replay";
+        throw error;
+      }
+      const operation = parts.pop();
+      const skillId = parts.slice(1).join(".");
+      return skillRuntime.invoke(skillId, operation, replay.payload || {}, {
+        skipPermission: true,
+        skipTask: true,
+      });
+    },
   });
   downloader = new DownloadEngine(storage, settingsStore, {
     stateDir: getDownloadStateDir(),
@@ -700,6 +743,66 @@ async function handleDownloadComplete(payload) {
   }
 }
 
+function terminalPermissionDecision(payload = {}) {
+  const action = `${payload.executable} ${JSON.stringify(payload.args || [])} cwd=${payload.cwd}`.slice(0, 500);
+  return gateCommand(permissionProxy, action, {
+    tool: payload.tool || "mogu.terminal.start",
+    riskLevel: Number(payload.riskLevel) || 2,
+    channel: payload.channel || "desktop",
+    runId: payload.runId || null,
+    sessionKey: payload.sessionKey || null,
+    requireGatewayApproval: payload.requireGatewayApproval === true,
+    gatewayApproved: payload.gatewayApproved === true,
+  });
+}
+
+function getFactoryTerminalManager(workspace) {
+  const root = canonicalTerminalPath(workspace);
+  if (!factoryTerminalManagers.has(root)) {
+    factoryTerminalManagers.set(
+      root,
+      new TerminalSessionManager({
+        allowedRoots: [root],
+        authorize: terminalPermissionDecision,
+        audit: (entry) => logger?.info?.("controlled terminal", entry),
+        maxConcurrent: 2,
+      })
+    );
+  }
+  return factoryTerminalManagers.get(root);
+}
+
+function getFactoryWorktreeManager(repoRoot, baselineCommit, tempRoot) {
+  const key = `${path.resolve(repoRoot)}\0${String(baselineCommit || "HEAD")}`;
+  if (!factoryWorktreeManagers.has(key)) {
+    factoryWorktreeManagers.set(
+      key,
+      new WorktreeManager({
+        repoRoot,
+        baselineCommit,
+        tempRoot,
+        authorize: (payload) =>
+          gateCommand(
+            permissionProxy,
+            `${payload.action} managed worktree at ${payload.repoRoot} baseline=${payload.baselineCommit}`,
+            {
+              tool: payload.tool || "mogu.worktree",
+              riskLevel: 2,
+              channel: payload.permission?.channel || "desktop",
+              runId: payload.permission?.runId || null,
+              sessionKey: payload.permission?.sessionKey || null,
+              requireGatewayApproval: payload.permission?.requireGatewayApproval === true,
+              gatewayApproved: payload.permission?.gatewayApproved === true,
+            }
+          ),
+        audit: (entry) => logger?.info?.("managed worktree", entry),
+        maxActive: 2,
+      })
+    );
+  }
+  return factoryWorktreeManagers.get(key);
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("models:list", async (_event, query = {}) => buildModelList(query));
 
@@ -767,6 +870,7 @@ function registerIpcHandlers() {
     return chatWithBrain({
       settings,
       ollama,
+      keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
       userText: String(payload.text || "").trim(),
       history: Array.isArray(payload.history) ? payload.history : [],
     });
@@ -778,6 +882,7 @@ function registerIpcHandlers() {
       settings,
       ollama,
       skillRuntime,
+      keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
       userText: String(payload.text || "").trim(),
       history: Array.isArray(payload.history) ? payload.history : [],
       maxRounds: Math.min(6, Math.max(1, Number(payload.maxRounds) || 4)),
@@ -787,7 +892,11 @@ function registerIpcHandlers() {
 
   ipcMain.handle("agent:brain-test", async () => {
     const settings = await loadSettingsInternal();
-    return testBrain({ settings, ollama });
+    return testBrain({
+      settings,
+      ollama,
+      keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+    });
   });
 
   ipcMain.handle("mcp:status", async () => {
@@ -1198,6 +1307,36 @@ function registerIpcHandlers() {
     return permissionGrants.revoke(payload?.grantId || payload?.id);
   });
 
+  ipcMain.handle("permission:leases-issue", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    if (!settings.v21RecoverableRuntime) return { ok: false, error: "feature_disabled" };
+    return permissionGrants.issue(payload || {});
+  });
+
+  ipcMain.handle("permission:leases-check", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    if (!settings.v21RecoverableRuntime) return { allowed: false, reason: "feature_disabled" };
+    return permissionGrants.check(payload || {});
+  });
+
+  ipcMain.handle("permission:leases-consume", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    if (!settings.v21RecoverableRuntime) return { allowed: false, reason: "feature_disabled" };
+    return permissionGrants.consume(payload || {});
+  });
+
+  ipcMain.handle("permission:leases-list", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    if (!settings.v21RecoverableRuntime) return { ok: false, error: "feature_disabled", leases: [] };
+    return { ok: true, leases: await permissionGrants.listLeases(payload || {}) };
+  });
+
+  ipcMain.handle("permission:leases-prune", async () => {
+    const settings = await settingsStore.load();
+    if (!settings.v21RecoverableRuntime) return { ok: false, error: "feature_disabled" };
+    return permissionGrants.prune();
+  });
+
   ipcMain.handle("pai:run", async (_event, payload) => {
     const settings = await settingsStore.load();
     if (!(await paiBridge.ping(settings))) {
@@ -1468,6 +1607,172 @@ function registerIpcHandlers() {
       return await factorySearchWorkspace(workspace, payload.query || payload.q || "", payload.options || {});
     } catch (error) {
       return { ok: false, error: error.message, code: error.code || "search_failed", hits: [] };
+    }
+  });
+
+  ipcMain.handle("factory:repo-intelligence", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      if (settings.v21RepoIntelligence !== true) {
+        return { ok: false, code: "feature_disabled", error: "Repo intelligence is disabled" };
+      }
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return factoryQueryRepoIntelligence(workspace, payload);
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code || "repo_intelligence_failed" };
+    }
+  });
+
+  ipcMain.handle("factory:discover-tests", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      if (settings.v21RepoIntelligence !== true) {
+        return { ok: false, code: "feature_disabled", error: "Test discovery is disabled" };
+      }
+      const workspace = payload.workspace || settings.codingWorkspace || "";
+      return factoryDiscoverWorkspaceTests(workspace, payload.options || {});
+    } catch (error) {
+      return { ok: false, error: error.message, code: error.code || "test_discovery_failed" };
+    }
+  });
+
+  ipcMain.handle("factory:terminal-start", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      if (settings.v21ControlledTerminal !== true) {
+        return { ok: false, code: "feature_disabled", error: "Controlled terminal is disabled" };
+      }
+      const workspace = String(settings.codingWorkspace || "").trim();
+      if (!workspace) return { ok: false, code: "workspace_missing", error: "Coding workspace is not configured" };
+      if (
+        payload.workspace &&
+        canonicalTerminalPath(payload.workspace).toLowerCase() !==
+          canonicalTerminalPath(workspace).toLowerCase()
+      ) {
+        return { ok: false, code: "cwd_not_allowed", error: "Workspace is not an allowed terminal root" };
+      }
+      const manager = getFactoryTerminalManager(workspace);
+      const result = await manager.start({
+        executable: payload.executable,
+        args: payload.args,
+        cwd: payload.cwd || workspace,
+        env: payload.env || {},
+        durationMs: payload.durationMs,
+        cols: payload.cols,
+        rows: payload.rows,
+        permission: payload.permission || {},
+        onData: (event) => sendToRenderer("factory-terminal-data", event),
+      });
+      return { ok: true, ...result };
+    } catch (error) {
+      return { ok: false, code: error.code || "terminal_start_failed", error: error.message };
+    }
+  });
+
+  ipcMain.handle("factory:terminal-cancel", async (_event, payload = {}) => {
+    for (const manager of factoryTerminalManagers.values()) {
+      if (manager.get(payload.id)?.status === "running") return manager.cancel(payload.id, "cancelled");
+    }
+    return { ok: false, code: "session_not_found" };
+  });
+
+  ipcMain.handle("factory:terminal-list", async () => ({
+    ok: true,
+    sessions: [...factoryTerminalManagers.values()].flatMap((manager) => manager.list()),
+  }));
+
+  ipcMain.handle("factory:worktree", async (_event, payload = {}) => {
+    try {
+      const settings = await getPublicSettings();
+      if (settings.v21ParallelWorktrees !== true) {
+        return { ok: false, code: "feature_disabled", error: "Parallel worktrees are disabled" };
+      }
+      const repoRoot = String(settings.codingWorkspace || "").trim();
+      if (!repoRoot) return { ok: false, code: "workspace_missing", error: "Coding workspace is not configured" };
+      if (
+        payload.repoRoot &&
+        canonicalTerminalPath(payload.repoRoot).toLowerCase() !==
+          canonicalTerminalPath(repoRoot).toLowerCase()
+      ) {
+        return { ok: false, code: "path_escape", error: "Repository is not the configured workspace" };
+      }
+      const baselineCommit = String(payload.baselineCommit || "").trim();
+      if (!/^[0-9a-f]{40,64}$/i.test(baselineCommit)) {
+        return {
+          ok: false,
+          code: "baseline_required",
+          error: "Parallel worktrees require an explicit baseline commit hash",
+        };
+      }
+      const storageKey = crypto
+        .createHash("sha256")
+        .update(`${path.resolve(repoRoot)}\0${String(baselineCommit)}`)
+        .digest("hex")
+        .slice(0, 20);
+      const manager = getFactoryWorktreeManager(
+        repoRoot,
+        baselineCommit,
+        path.join(app.getPath("userData"), "v21-exploration-worktrees", storageKey)
+      );
+      const operation = String(payload.operation || payload.op || "list");
+      if (operation === "list") return { ok: true, worktrees: await manager.list() };
+      if (operation === "add") return { ok: true, worktree: await manager.add({ permission: payload.permission || {} }) };
+      if (operation === "remove") return await manager.remove(payload.id, { permission: payload.permission || {} });
+      if (operation === "prune") return await manager.prune({ permission: payload.permission || {} });
+      return { ok: false, code: "invalid_operation", error: "Supported worktree operations: list/add/remove/prune" };
+    } catch (error) {
+      return { ok: false, code: error.code || "worktree_failed", error: error.message };
+    }
+  });
+
+  ipcMain.handle("factory:explore-subtasks", async (_event, payload = {}) => {
+    try {
+      const settings = await settingsStore.load();
+      if (!settings.v21RecoverableRuntime || !settings.v21ParallelWorktrees) {
+        return { ok: false, code: "feature_disabled", error: "Recoverable parallel exploration is disabled" };
+      }
+      const moguTaskId = String(payload.moguTaskId || "");
+      const configuredRoot = String(settings.codingWorkspace || "").trim();
+      if (!configuredRoot) return { ok: false, code: "workspace_missing", error: "Coding workspace is not configured" };
+      const repoRoot = canonicalTerminalPath(configuredRoot);
+      if (payload.repoRoot || payload.workspace) {
+        const requestedRoot = canonicalTerminalPath(payload.repoRoot || payload.workspace);
+        if (requestedRoot.toLowerCase() !== repoRoot.toLowerCase()) {
+          return { ok: false, code: "path_escape", error: "Repository is not the configured workspace" };
+        }
+      }
+      const baselineCommit = String(payload.baselineCommit || "");
+      if (!moguTaskId || !/^[0-9a-f]{40,64}$/i.test(baselineCommit)) {
+        return { ok: false, code: "invalid_request", error: "moguTaskId and explicit baseline commit are required" };
+      }
+      const storageKey = crypto
+        .createHash("sha256")
+        .update(`${repoRoot}\0${baselineCommit}`)
+        .digest("hex")
+        .slice(0, 20);
+      const manager = getFactoryWorktreeManager(
+        repoRoot,
+        baselineCommit,
+        path.join(app.getPath("userData"), "v21-exploration-worktrees", storageKey)
+      );
+      const coordinator = new SubtaskCoordinator({
+        worktreeManager: manager,
+        eventStore: runEventStore,
+        executor: ({ subtask, worktree }) =>
+          factoryQueryRepoIntelligence(worktree.path, subtask.payload?.query || { op: "stats" }),
+      });
+      if (payload.operation === "recover") {
+        return coordinator.recover(moguTaskId, {
+          resume: payload.resume === true,
+          permission: payload.permission || {},
+        });
+      }
+      return coordinator.join(moguTaskId, payload.subtasks || [], {
+        joinId: payload.joinId,
+        permission: payload.permission || {},
+      });
+    } catch (error) {
+      return { ok: false, code: error.code || "subtask_failed", error: error.message };
     }
   });
 
@@ -1832,6 +2137,17 @@ function registerIpcHandlers() {
         message: "任务缺少可重放描述，无法安全重试。",
       };
     }
+    const settings = await settingsStore.load();
+    if (settings.v21RecoverableRuntime) {
+      const result = await retryExecutor.execute(id, {
+        idempotencyKey: payload?.idempotencyKey || null,
+      });
+      return {
+        ...result,
+        task: toPublicTask(result.task),
+        retryOf: id,
+      };
+    }
     const task = await taskStore.retry(id, {
       idempotencyKey: payload?.idempotencyKey || null,
     });
@@ -1843,6 +2159,36 @@ function registerIpcHandlers() {
       task: toPublicTask(task),
       needsExecution: true,
       retryOf: id,
+    };
+  });
+
+  ipcMain.handle("tasks:checkpoint", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    if (!settings.v21RecoverableRuntime) return { ok: false, reason: "feature_disabled" };
+    const id = String(payload?.moguTaskId || "");
+    if (!id) throw new Error("moguTaskId 不能为空");
+    const appended = await taskStore.checkpoint(id, {
+      eventId: payload.eventId,
+      type: payload.type || "task.checkpoint",
+      source: payload.source || "ipc",
+      payload: payload.payload || {},
+    });
+    return { ok: Boolean(appended), event: appended ? { ...appended.event, payload: undefined } : null, summary: appended?.ref || null };
+  });
+
+  ipcMain.handle("tasks:recover", async (_event, payload = {}) => {
+    const settings = await settingsStore.load();
+    if (!settings.v21RecoverableRuntime) return { ok: false, reason: "feature_disabled" };
+    const recovered = await taskStore.recover(String(payload?.moguTaskId || ""));
+    if (!recovered) return { ok: false, reason: "not_found" };
+    return {
+      ok: true,
+      task: toPublicTask(recovered.task),
+      summary: recovered.summary,
+      corruption: recovered.corruption,
+      events: recovered.events.map(({ sequence, eventId, timestamp, type, source }) => ({
+        sequence, eventId, timestamp, type, source,
+      })),
     };
   });
 
