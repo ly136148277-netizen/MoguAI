@@ -1174,6 +1174,7 @@
         </div>
         <div class="hub-tabs" data-hub="settings">
           <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="control-plane">控制中心</button>
           <button type="button" class="hub-tab is-active" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
           <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
@@ -1209,6 +1210,7 @@
         </div>
         <div class="hub-tabs" data-hub="settings">
           <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="control-plane">控制中心</button>
           <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab is-active" data-hub-nav="skills">技能</button>
           <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
@@ -1237,6 +1239,7 @@
         </div>
         <div class="hub-tabs" data-hub="settings">
           <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="control-plane">控制中心</button>
           <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
           <button type="button" class="hub-tab is-active" data-hub-nav="permissions">权限</button>
@@ -1252,6 +1255,55 @@
       </section>
 
       <!-- 渠道引导（不自研协议） -->
+      <section id="view-control-plane" class="view">
+        <div class="view-head view-head--compact">
+          <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
+          <span class="view-category-label">设置 · 控制中心</span>
+        </div>
+        <div class="hub-tabs" data-hub="settings">
+          <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab is-active" data-hub-nav="control-plane">控制中心</button>
+          <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
+          <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
+          <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
+          <button type="button" class="hub-tab" data-hub-nav="channels">渠道</button>
+        </div>
+        <div class="panel">
+          <h3 class="settings-section-title">MOGU 控制中心</h3>
+          <p class="settings-section-hint">统一查看大脑、身体器官与远程状态。默认关闭；完成向导后开启。</p>
+          <div class="settings-inline-actions">
+            <button type="button" class="btn btn--primary btn--tiny" id="cp-enable">开启控制中心</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="cp-refresh">刷新状态</button>
+          </div>
+          <p id="cp-overall" class="settings-section-hint"></p>
+          <h4 class="settings-section-title">AI 大脑</h4>
+          <p id="cp-brain" class="settings-section-hint"></p>
+          <div class="settings-grid" style="gap:8px;margin:8px 0;">
+            <label>本地模型 <input id="cp-local-model" type="text" placeholder="qwen2.5-coder:7b" /></label>
+            <button type="button" class="btn btn--primary btn--tiny" id="cp-use-local">使用本地</button>
+            <label>云端地址 <input id="cp-api-base" type="text" placeholder="https://api.openai.com/v1" /></label>
+            <label>模型名 <input id="cp-api-model" type="text" placeholder="gpt-4o-mini" /></label>
+            <label>API Key <input id="cp-api-key" type="password" placeholder="仅写入加密存储" autocomplete="off" /></label>
+            <input id="cp-api-preset" type="hidden" value="custom" />
+            <button type="button" class="btn btn--primary btn--tiny" id="cp-use-api">使用云端</button>
+          </div>
+          <p id="cp-brain-status" class="settings-section-hint"></p>
+          <h4 class="settings-section-title">首次向导</h4>
+          <div class="settings-inline-actions">
+            <button type="button" class="btn btn--ghost btn--tiny" id="cp-wizard-local">选本地 AI</button>
+            <button type="button" class="btn btn--ghost btn--tiny" id="cp-wizard-openai">选 OpenAI</button>
+          </div>
+          <p id="cp-wizard-hint" class="settings-section-hint"></p>
+          <h4 class="settings-section-title">依赖检查</h4>
+          <input id="cp-deps-text" type="text" value="帮我生成视频" style="width:100%;margin:4px 0;" />
+          <button type="button" class="btn btn--ghost btn--tiny" id="cp-deps-check">检查依赖</button>
+          <pre id="cp-deps-result" class="settings-section-hint" style="white-space:pre-wrap;"></pre>
+          <h4 class="settings-section-title">远程</h4>
+          <p id="cp-remote" class="settings-section-hint"></p>
+          <h4 class="settings-section-title">待处理</h4>
+          <pre id="cp-issues" class="settings-section-hint" style="white-space:pre-wrap;"></pre>
+        </div>
+      </section>
       <section id="view-channels" class="view">
         <div class="view-head view-head--compact">
           <button type="button" class="btn btn--primary back-home-btn">← 返回</button>
@@ -1259,6 +1311,7 @@
         </div>
         <div class="hub-tabs" data-hub="settings">
           <button type="button" class="hub-tab" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="control-plane">控制中心</button>
           <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
           <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
@@ -1295,6 +1348,7 @@
         </div>
         <div class="hub-tabs" data-hub="settings">
           <button type="button" class="hub-tab is-active" data-hub-nav="settings">通用设置</button>
+          <button type="button" class="hub-tab" data-hub-nav="control-plane">控制中心</button>
           <button type="button" class="hub-tab" data-hub-nav="openclaw">OpenClaw</button>
           <button type="button" class="hub-tab" data-hub-nav="skills">技能</button>
           <button type="button" class="hub-tab" data-hub-nav="permissions">权限</button>
@@ -1630,6 +1684,8 @@
   <script src="skills-panel.js"></script>
   <script src="permissions-panel.js"></script>
   <script src="channels-panel.js"></script>
+  <script src="control-plane-panel.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
+

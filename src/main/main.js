@@ -122,6 +122,7 @@ const { StudioStore } = require("./studio-store");
 const { SkillRuntime } = require("./skills/runtime");
 const { initAutoUpdater } = require("./updater");
 const { chatWithBrain, testBrain, runBrainAgent, API_PRESETS } = require("./agent-brain");
+const { createControlPlane } = require("./control-plane");
 const {
   NeuralRoutingService,
   NeuralPlanner,
@@ -150,6 +151,7 @@ let permissionAudit = null;
 let permissionGrants = null;
 let skillRuntime = null;
 let remoteManager = null;
+let controlPlane = null;
 let runEventStore = null;
 let retryExecutor = null;
 let neuralRoutingService = null;
@@ -628,6 +630,45 @@ function initServices() {
   });
   remoteManager.on("approval-required", (payload) => {
     sendToRenderer("remote-approval-required", payload);
+  });
+
+  controlPlane = createControlPlane({
+    getSettings: () => settingsStore.load(),
+    updateSettings: (partial) => settingsStore.update(partial),
+    secretStore,
+    getSetupStatus: async () => {
+      const settings = await settingsStore.load();
+      return getSetupStatus({
+        paiBridge,
+        ollamaService: ollama,
+        settings,
+        userDataPath: app.getPath("userData"),
+        logger,
+      });
+    },
+    listOllamaModels: async () => {
+      if (!ollama?.listModels) return { models: [] };
+      return ollama.listModels();
+    },
+    getOpenclawStatus: async () => (openclawBridge ? openclawBridge.getPublicStatus() : {}),
+    getRemoteStatus: async () => (remoteManager ? remoteManager.status() : { ok: false }),
+    startRemote: async () => (remoteManager ? remoteManager.start() : { ok: false }),
+    stopRemote: async () => (remoteManager ? remoteManager.stop() : { ok: false }),
+    probeCoding: async () => {
+      try {
+        const settings = await settingsStore.load();
+        return await codingRuntimeCheck(settings);
+      } catch (error) {
+        return { ok: false, error: error.message };
+      }
+    },
+    testBrain: async (settings) =>
+      testBrain({
+        settings,
+        ollama,
+        keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+        neuralRoutingService,
+      }),
   });
 
   const promptsPath = path.join(appPath, "config", "prompts.json");
@@ -1440,6 +1481,64 @@ function registerIpcHandlers() {
     const token = String(payload?.token || payload?.telegramToken || "").trim();
     if (!token) return { ok: false, error: "token_required" };
     return secretStore.set("telegramBotToken", token);
+  });
+
+  // —— MOGU 2.4 Control Plane (Default-Off) ——
+  ipcMain.handle("control-plane:status", async () =>
+    controlPlane ? controlPlane.status() : { ok: false, error: "unavailable" }
+  );
+  ipcMain.handle("control-plane:discover", async () =>
+    controlPlane ? controlPlane.discovery.discover() : { ok: false }
+  );
+  ipcMain.handle("control-plane:brain-get", async () =>
+    controlPlane ? controlPlane.brain.get() : { ok: false }
+  );
+  ipcMain.handle("control-plane:brain-set", async (_event, payload = {}) =>
+    controlPlane ? controlPlane.brain.set(payload || {}) : { ok: false }
+  );
+  ipcMain.handle("control-plane:brain-models", async () =>
+    controlPlane ? controlPlane.brain.listLocalModels() : { ok: false, models: [] }
+  );
+  ipcMain.handle("control-plane:brain-test", async () => {
+    if (!controlPlane) return { ok: false };
+    const settings = await loadSettingsInternal();
+    return testBrain({
+      settings,
+      ollama,
+      keyResolver: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+      neuralRoutingService,
+    });
+  });
+  ipcMain.handle("control-plane:deps-check", async (_event, payload = {}) =>
+    controlPlane ? controlPlane.supervisor.check(payload || {}) : { ok: false }
+  );
+  ipcMain.handle("control-plane:remote-status", async () =>
+    controlPlane ? controlPlane.remote.status() : { ok: false }
+  );
+  ipcMain.handle("control-plane:remote-set-telegram-token", async (_event, payload = {}) =>
+    controlPlane ? controlPlane.remote.setTelegramToken(payload?.token) : { ok: false }
+  );
+  ipcMain.handle("control-plane:secret-has", async (_event, payload = {}) => {
+    const key = String(payload?.key || "").trim();
+    if (!key || !secretStore) return { ok: false, present: false };
+    const allowed = new Set(["agentApiKey", "openclawGatewayToken", "telegramBotToken"]);
+    if (!allowed.has(key)) return { ok: false, present: false, error: "key_not_allowed" };
+    const present = await secretStore.has(key);
+    return { ok: true, key, present, secretValuePrinted: false };
+  });
+  ipcMain.handle("control-plane:wizard-status", async () =>
+    controlPlane ? controlPlane.wizard.status() : { ok: false }
+  );
+  ipcMain.handle("control-plane:wizard-choose-ai", async (_event, payload = {}) =>
+    controlPlane ? controlPlane.wizard.chooseAi(payload || {}) : { ok: false }
+  );
+  ipcMain.handle("control-plane:wizard-complete", async () =>
+    controlPlane ? controlPlane.wizard.complete() : { ok: false }
+  );
+  ipcMain.handle("control-plane:enable", async (_event, payload = {}) => {
+    const enabled = payload?.enabled !== false;
+    await settingsStore.update({ controlPlaneEnabled: enabled === true });
+    return getPublicSettings();
   });
   ipcMain.handle("remote:configure-personal", async (_event, payload = {}) => {
     const telegramUserId = String(payload?.telegramUserId || "").trim();

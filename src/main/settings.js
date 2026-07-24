@@ -137,6 +137,12 @@ const DEFAULT_SETTINGS = {
     qqUserId: "",
     wechatUserId: "",
   },
+  /** MOGU 2.4 Control Plane — Default OFF until wizard / explicit enable. */
+  controlPlaneEnabled: false,
+  autoStartServices: false,
+  autoInstallRuntime: false,
+  modelFallback: false,
+  backgroundSupervisor: false,
 };
 
 class SettingsStore {

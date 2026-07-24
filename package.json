@@ -24,6 +24,8 @@
     "acceptance:v2.1": "node scripts/acceptance_v2.1.js",
     "acceptance:v2.2": "node scripts/acceptance_v2.2.js",
     "acceptance:v2.3": "node scripts/acceptance_v2.3.js",
+    "acceptance:v2.4": "node scripts/acceptance_v2.4.js",
+    "audit:v2.4-security": "node scripts/audit_v24_security.js",
     "verify:v2.3-closure": "node scripts/verify_v23_closure.js",
     "verify:v2.3-field-preflight": "node scripts/verify_v23_closure.js",
     "audit:v2.1-deps": "node scripts/audit_v21_dependencies.js",

@@ -14,7 +14,7 @@ const AppRouter = (() => {
     factory: ["factory"],
     create: ["studio", "comfyui", "compose"],
     env: ["setup", "data"],
-    settings: ["settings", "openclaw", "skills", "permissions", "channels"],
+    settings: ["settings", "control-plane", "openclaw", "skills", "permissions", "channels"],
     help: ["help"],
   };
 

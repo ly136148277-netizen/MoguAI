@@ -1645,6 +1645,7 @@ window.AppCore = {
   window.SkillsPanel?.init();
   window.PermissionsPanel?.init();
   window.ChannelsPanel?.init();
+  window.ControlPlanePanel?.init();
   window.PageController.init();
 
   await loadMeta();

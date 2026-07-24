@@ -1,0 +1,48 @@
+{
+  "kind": "mogu-v2.4-security-audit",
+  "status": "PASS",
+  "failed": 0,
+  "checks": [
+    {
+      "id": "settings.agentApiKey.empty",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "remote.defaultOff",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "controlPlane.defaultOff",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "no-env-secret-pattern",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "snapshot.no-raw-key",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "snapshot.internalsHidden",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "snapshot.endpoint-not-port",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "remote.secretStoreOnly",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "completedAt": "2026-07-24T07:12:15.453Z"
+}

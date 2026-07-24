@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.4-acceptance",
+  "status": "PASS",
+  "passed": 34,
+  "total": 34,
+  "checks": [
+    {
+      "id": "file:src/main/control-plane/index.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/control-plane/CapabilityRegistry.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/control-plane/BrainManager.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/control-plane/CapabilityDiscovery.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/control-plane/DependencySupervisor.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/control-plane/RemoteCenter.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/main/control-plane/FirstRunWizard.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:docs/V2.4_DECISION_PACKAGE.md",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:src/renderer/control-plane-panel.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:controlPlaneEnabled",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:autoStartServices",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:autoInstallRuntime",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:modelFallback",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:backgroundSupervisor",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:remote",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "wizard:status",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "wizard:choose-local",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain:ollama-set",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain:ollama-no-restart",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain:ollama-applied",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain:ollama-model",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain:openai-set",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "brain:openai-immediate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "secret:api-key-store",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "secret:not-in-settings",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "remote:token-secret",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "remote:status",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "remote:owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "deps:video-blocked",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "deps:comfy-hint",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "discover:not-ready-or-ready",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "discover:no-ports",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "secret:store-only-flag",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "gate:disabled",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "completedAt": "2026-07-24T07:12:15.022Z"
+}
