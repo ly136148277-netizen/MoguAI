@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.2-gpt56-ab-preflight",
+  "status": "BLOCKED",
+  "checkedAt": "2026-07-24T04:16:28.751Z",
+  "checks": {
+    "neuralExplicitlyEnabled": false,
+    "profileConfigured": false,
+    "exactModelConfigured": false,
+    "expectedModelLocked": false,
+    "encryptedSecretMetadataPresent": false
+  },
+  "configHash": null,
+  "secretValueRead": false,
+  "fallbackAllowed": false,
+  "blocker": "Exact owner-approved GPT-5.6 / model-profile configuration is not available"
+}

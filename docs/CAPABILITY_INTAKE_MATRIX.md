@@ -2,7 +2,7 @@
 
 ```yaml
 date: 2026-07-24
-status: 2.1 IMPLEMENTED DEFAULT-OFF · imported dependency evidence closed
+status: 2.1+2.2 IMPLEMENTED DEFAULT-OFF · no new 2.2 runtime deps
 gate: Capability Intake Gate (see north-star doc)
 ```
 
@@ -21,6 +21,13 @@ gate: Capability Intake Gate (see north-star doc)
 | Worktree/只读子任务 | Git CLI Adapter + MOGU manager | 系统工具 Adapter | Git 不随 MOGU 再分发 | 高；manager-owned only | 隔离/清理/并发测试 | OFF |
 | Event/lease/retry/checkpoint | MOGU clean-room | 内部实现 | MOGU MIT | 高；fail-closed | 持久、过期、去重、恢复测试 | OFF |
 | OpenAI-compatible Brain Adapter | MOGU clean-room | 内部协议 Adapter | MOGU MIT | 密钥/网络，高 | no-fallback/secret/size/timeout | OFF |
+
+| 2.2 能力 | 实际实现/来源 | 采用方式 | License/版本 | 权限风险 | 验证 | 默认 |
+|----------|---------------|----------|----------------|----------|------|------|
+| Task Classifier / Model Router / Budget | MOGU clean-room | 内部实现 | MOGU MIT；无新 npm | 高；无静默换模型 | 路由金标 + integration | OFF |
+| Neural Planner + pinned LSP config | MOGU clean-room client；服务器外置 | 内部 + 配置级 | 服务器须单独 License 证据 | 外部进程 | schema/LSP fallback 测试 | OFF |
+| Context Budget / Tool Chain / Decision Trace | MOGU clean-room | 内部实现 | MOGU MIT | 中高；阶段限权 | 脱敏/阶段/轨迹测试 | OFF |
+| Bounded Closed Loop | MOGU clean-room wrapping coding loop | 内部包装 | MOGU MIT | 高；预算/Gateway fail-closed | closed-loop 单元 + coding | OFF |
 
 | 能力候选 | 来源 | 一手入口（待核） | 版本/commit | License | 采用方式 | MOGU 位置 | 权限/数据风险 | 遥测/更新风险 | A/B 指标 | Default-On |
 |----------|------|------------------|-------------|---------|----------|-----------|---------------|---------------|----------|------------|

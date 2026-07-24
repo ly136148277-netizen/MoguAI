@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.2-holdout-evaluation",
+  "status": "NOT_OPENED",
+  "freezer": "scripts/freeze_v22_holdout.js",
+  "disjointFrom": "benchmarks/swe-bench/holdout/manifest.json",
+  "outcomesViewed": false,
+  "blocker": "Two qualifying same-model development A/B runs are required before freezing/opening a v2.2 holdout"
+}

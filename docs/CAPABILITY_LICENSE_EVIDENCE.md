@@ -2,7 +2,7 @@
 
 ```yaml
 date: 2026-07-24
-status: 2.1 IMPORTS CLOSED · future candidates remain research-only
+status: 2.1 IMPORTS CLOSED · 2.2 NO NEW RUNTIME DEPS · LSP servers remain external
 legal_conclusion: technical evidence complete for imported dependencies; owner retains release approval
 ```
 
@@ -73,10 +73,34 @@ legal_conclusion: technical evidence complete for imported dependencies; owner r
 - 采用方式：Clean-room only
 - License：proprietary / n/a
 
+## 2.2 Neural Layer
+
+### 未新增运行时 npm 依赖
+
+- 2.2 代码位于 `src/main/moguai/neural/*`，仅使用 Node 标准库与既有项目依赖。
+- `package.json` / lockfile 运行时依赖集合相对 2.1 无新增；`node-pty@1.1.0` 仍按 2.1 审计钉扎。
+- 机械验证：`npm run audit:v2.2-intake`。
+
+### 外部语言服务器（配置项，未捆绑）
+
+- MOGU 只提供 stdio LSP client；服务器由用户显式登记。
+- 登记字段必须包含：`command`、`args`、`version`、`licenseEvidenceId`、允许工作区根。
+- 缺版本、缺 License 证据或根路径越界 → LSP `BLOCKED`，自动退回静态 RepoIndex，并写
+  `neural.lsp_fallback`。
+- 当前版本不下载、不安装、不自动更新任何语言服务器二进制。
+- 每个具体服务器进入推荐列表前仍须单独完成一手 License / 二级依赖 / 遥测审查。
+
+### Clean-room / 行为复现声明
+
+- Task classifier、model router、context budget、tool-chain、decision trace、closed loop：
+  MOGU 自行实现；借鉴公开产品行为 Spec，未复制 Cursor / Claude Code 等专有源码。
+- 竞品开源候选（Aider / Trae / OpenHands 等）仍是研究候选，未在 2.2 作为新依赖引入。
+
 ## Gate 结论
 
 `node-pty@1.1.0` 及其唯一运行依赖的来源、版本、SRI、MIT License、Notice、安全边界和维护责任
 已登记并由 `npm run audit:v2.1-deps` 机械验证。其能力仍 Default-Off。
 
-其余研究候选没有作为 2.1 新代码或依赖引入，`UNKNOWN` 不授权采用。任何未来引入都必须新增独立
-证据条目；最终公开发布及 Default-On 仍由所有者讨论批准。
+2.2 Neural Layer **未新增运行时 npm 依赖**；外部 LSP 服务器保持配置级引入且默认 fail-closed。
+其余研究候选 `UNKNOWN` 不授权采用。任何未来引入都必须新增独立证据条目；最终公开发布及
+Default-On 仍由所有者讨论批准。

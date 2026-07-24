@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "kind": "mogu-v2.2-offline-mechanism-evaluation",
+  "status": "PASS",
+  "startedAt": "2026-07-24T04:16:28.752Z",
+  "completedAt": "2026-07-24T04:16:29.660Z",
+  "durationMs": 908,
+  "branch": "capability/2.2",
+  "commit": "d9ba82d8c0e85c919cfe9a12b22f5ca97979a699",
+  "providerUsed": false,
+  "checks": [
+    {
+      "id": "task-classifier-coding",
+      "ok": true,
+      "detail": {
+        "taskClass": "coding",
+        "category": "coding",
+        "complexity": "low",
+        "requiredCapabilities": [
+          "code",
+          "text",
+          "tools"
+        ],
+        "classificationMethod": "deterministic-rule",
+        "confidence": {
+          "kind": "heuristic",
+          "level": "rule-match",
+          "isModelCertainty": false
+        },
+        "evidence": {
+          "explicitTaskClass": null,
+          "matchedRules": [
+            "coding"
+          ]
+        }
+      }
+    },
+    {
+      "id": "model-router-exact",
+      "ok": true,
+      "detail": {
+        "status": "SELECTED",
+        "primary": "strong"
+      }
+    },
+    {
+      "id": "budget-ledger-reserve-commit",
+      "ok": true,
+      "detail": {
+        "reservationId": "463fd61ada63f7498d8543a64bd7b4f2339973fa0ee8e5395458c2fb5a09feb8",
+        "commit": "COMMITTED"
+      }
+    },
+    {
+      "id": "context-budget-redact",
+      "ok": true,
+      "detail": {
+        "bytes": 34,
+        "estimatedTokens": 12
+      }
+    },
+    {
+      "id": "tool-chain-phase-gate",
+      "ok": true,
+      "detail": {
+        "phase": "investigate",
+        "blocked": "TOOL_NOT_ALLOWED_IN_PHASE"
+      }
+    },
+    {
+      "id": "decision-trace-replay",
+      "ok": true,
+      "detail": {
+        "eventCount": 1,
+        "firstSequence": 1,
+        "lastSequence": 1,
+        "counts": {
+          "neural.plan": 0,
+          "context.selected": 0,
+          "context.evicted": 0,
+          "tool.selected": 0,
+          "tool.result": 0,
+          "tool.violation": 0,
+          "verification.result": 0,
+          "decision.branch": 1
+        }
+      }
+    },
+    {
+      "id": "neural-plan-real-repo",
+      "ok": true,
+      "detail": {
+        "hypotheses": 12,
+        "lsp": "UNAVAILABLE"
+      }
+    },
+    {
+      "id": "closed-loop-repair",
+      "ok": true,
+      "detail": {
+        "status": "SUCCEEDED",
+        "attempts": 2
+      }
+    }
+  ]
+}
