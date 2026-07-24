@@ -3,18 +3,20 @@
   "status": "BLOCKED",
   "settingsKeys": {
     "remote.enabled": false,
-    "remote.telegram": false,
+    "remote.telegram.enabled": false,
     "remote.requireApproval": true,
-    "remote.allowAutoExecute": false
+    "remote.allowAutoExecute": false,
+    "remoteOwner.telegramUserId": ""
   },
   "expectedPersonalConfig": {
     "remote.enabled": true,
-    "remote.telegram": true,
-    "remote.qq": false,
-    "remote.wechat": false,
+    "remote.telegram.enabled": true,
+    "remote.qq.enabled": false,
+    "remote.wechat.enabled": false,
     "remote.requireApproval": true,
-    "remote.allowAutoExecute": false
+    "remote.allowAutoExecute": false,
+    "remoteOwner.telegramUserId": "<your telegram numeric id>"
   },
   "secretValueRead": false,
-  "blocker": "No telegramBotToken in SecretStore / MOGU_TELEGRAM_BOT_TOKEN"
+  "blocker": "No telegramBotToken in SecretStore"
 }

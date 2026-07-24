@@ -3,16 +3,37 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { DEFAULT_SETTINGS, sanitizeRemoteSettings } = require("../src/main/settings");
+const {
+  DEFAULT_SETTINGS,
+  sanitizeRemoteSettings,
+  sanitizeRemoteOwner,
+} = require("../src/main/settings");
 const { TaskStore } = require("../src/main/task-store");
-const { RemoteManager, inferCapability } = require("../src/main/remote");
+const {
+  RemoteManager,
+  inferCapability,
+  assertRemoteOwner,
+  isRemoteChannelEnabled,
+} = require("../src/main/remote");
 const { progressBar } = require("../src/main/remote/RemoteTaskQueue");
 
-test("remote settings default off and sanitize exact booleans", () => {
+test("remote settings default off and accept nested channel objects", () => {
   assert.equal(DEFAULT_SETTINGS.remote.enabled, false);
-  assert.equal(DEFAULT_SETTINGS.remote.telegram, false);
+  assert.equal(DEFAULT_SETTINGS.remote.telegram.enabled, false);
   assert.equal(DEFAULT_SETTINGS.remote.allowAutoExecute, false);
-  assert.equal(DEFAULT_SETTINGS.remote.requireApproval, true);
+  assert.equal(DEFAULT_SETTINGS.remoteOwner.telegramUserId, "");
+  const nested = sanitizeRemoteSettings({
+    enabled: true,
+    telegram: { enabled: true },
+    qq: { enabled: false },
+    wechat: false,
+  });
+  assert.equal(nested.enabled, true);
+  assert.equal(nested.telegram.enabled, true);
+  assert.equal(isRemoteChannelEnabled(nested, "telegram"), true);
+  assert.equal(isRemoteChannelEnabled(nested, "qq"), false);
+  const flat = sanitizeRemoteSettings({ telegram: true });
+  assert.equal(flat.telegram.enabled, true);
   const dirty = sanitizeRemoteSettings({
     enabled: "true",
     telegram: 1,
@@ -20,9 +41,23 @@ test("remote settings default off and sanitize exact booleans", () => {
     requireApproval: false,
   });
   assert.equal(dirty.enabled, false);
-  assert.equal(dirty.telegram, false);
+  assert.equal(dirty.telegram.enabled, false);
   assert.equal(dirty.allowAutoExecute, false);
   assert.equal(dirty.requireApproval, false);
+  assert.equal(sanitizeRemoteOwner({ telegramUserId: " 123 " }).telegramUserId, "123");
+});
+
+test("owner binding rejects strangers and unconfigured owners", () => {
+  const settings = {
+    remoteOwner: sanitizeRemoteOwner({ telegramUserId: "111" }),
+  };
+  assert.equal(assertRemoteOwner(settings, { channel: "telegram", userId: "111" }).ok, true);
+  assert.equal(assertRemoteOwner(settings, { channel: "telegram", userId: "222" }).reason, "owner_mismatch");
+  assert.equal(
+    assertRemoteOwner({ remoteOwner: {} }, { channel: "telegram", userId: "111" }).reason,
+    "owner_not_configured"
+  );
+  assert.equal(assertRemoteOwner(settings, { channel: "mock", userId: "x" }).ok, true);
 });
 
 test("adapters never expose brain/skill methods", () => {
@@ -47,9 +82,10 @@ test("remote pipeline uses permission + task store + skill runtime only", async 
     getSettings: async () => ({
       remote: sanitizeRemoteSettings({
         enabled: true,
-        telegram: true,
+        telegram: { enabled: true },
         requireApproval: false,
       }),
+      remoteOwner: sanitizeRemoteOwner({ telegramUserId: "u1" }),
     }),
     permissionProxy: {
       async requestPermission(req) {
@@ -67,6 +103,15 @@ test("remote pipeline uses permission + task store + skill runtime only", async 
   });
   try {
     await manager.start();
+    const denied = await manager.submitTask({
+      channel: "telegram",
+      userId: "stranger",
+      conversationId: "c0",
+      text: "hello",
+      capability: "READ",
+    });
+    assert.equal(denied.ok, false);
+    assert.equal(denied.reason, "owner_mismatch");
     const result = await manager.submitTask({
       channel: "telegram",
       userId: "u1",
@@ -79,9 +124,15 @@ test("remote pipeline uses permission + task store + skill runtime only", async 
     assert.match(String(gates[0].channel), /^remote:/);
     assert.equal(skills.length, 1);
     assert.equal(result.result.status, "succeeded");
-    const task = await taskStore.get(result.task.moguTaskId);
-    assert.equal(task.kind, "remote");
-    assert.equal(task.source, "unknown");
+    const status = await manager.inject({
+      channel: "telegram",
+      userId: "u1",
+      conversationId: "c1",
+      command: "/status",
+      text: "",
+    });
+    assert.equal(status.ok, true);
+    assert.match(status.text, /MOGU Remote Status/);
   } finally {
     await manager.stop();
     fs.rmSync(root, { recursive: true, force: true });

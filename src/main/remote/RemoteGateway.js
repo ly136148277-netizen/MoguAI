@@ -1,6 +1,11 @@
 "use strict";
 
 const { createTaskRequest, createTaskResult, boundedString } = require("./RemoteTypes");
+const {
+  assertRemoteOwner,
+  isLevel1Command,
+  isRemoteChannelEnabled,
+} = require("./remote-policy");
 
 /**
  * Unified remote entry. All adapters call submitTask() — never Brain/Skill directly.
@@ -13,6 +18,10 @@ class RemoteGateway {
     this.notifications = options.notifications;
     this.inbox = options.inbox;
     this.getSettings = options.getSettings || (async () => ({ remote: { enabled: false } }));
+    this.getWorkstationStatus =
+      typeof options.getWorkstationStatus === "function"
+        ? options.getWorkstationStatus
+        : async () => ({});
     this._lastBySession = new Map();
   }
 
@@ -22,9 +31,23 @@ class RemoteGateway {
     if (remote.enabled !== true) {
       return { ok: false, reason: "remote_disabled" };
     }
-    const channelFlag = message.channel;
-    if (channelFlag && remote[channelFlag] !== true && channelFlag !== "mock") {
-      return { ok: false, reason: "channel_disabled", channel: channelFlag };
+    if (!isRemoteChannelEnabled(remote, message.channel) && message.channel !== "mock") {
+      return { ok: false, reason: "channel_disabled", channel: message.channel };
+    }
+
+    const owner = assertRemoteOwner(settings, message);
+    if (!owner.ok) {
+      await this.notifications.notify({
+        channel: message.channel,
+        userId: message.userId,
+        conversationId: message.conversationId,
+        kind: "error",
+        text:
+          owner.reason === "owner_not_configured"
+            ? "Remote owner 未绑定。请在 settings.remoteOwner 配置你的频道用户 ID。"
+            : "拒绝：非绑定主人账号。",
+      });
+      return { ok: false, reason: owner.reason };
     }
 
     const inbound = this.inbox.enqueue(message);
@@ -34,18 +57,30 @@ class RemoteGateway {
       conversationId: inbound.conversationId,
     });
 
-    const command = String(inbound.command || "").toLowerCase();
+    let command = String(inbound.command || "").toLowerCase();
+    const textBody = String(inbound.text || "").trim();
+    if (!command && /^\/mogu\s+status\b/i.test(textBody)) {
+      command = "/status";
+    }
+    if (!command && textBody.toLowerCase() === "/mogu status") {
+      command = "/status";
+    }
+    if (command === "/mogu" && /^status\b/i.test(textBody)) {
+      command = "/status";
+    }
+
     if (command === "/start" || command === "/help") {
       const text =
         command === "/start"
-          ? "MOGU Remote Workspace ready. Commands: /help /status /task /cancel /retry /log"
+          ? "MOGU Remote Agent ready.\nCommands: /help /status /task /cancel /retry /log\nOnly the bound owner is accepted."
           : [
               "MOGU Remote commands:",
-              "/task <text> — submit task",
-              "/status — progress",
+              "/status — workstation + queue",
+              "/task <text> — submit Level-2 task",
               "/cancel — cancel last task",
               "/retry — retry last task",
               "/log — last reply",
+              "Dangerous ops require YES / NO",
             ].join("\n");
       await this.notifications.notify({
         channel: session.channel,
@@ -55,24 +90,20 @@ class RemoteGateway {
         text,
       });
       this.sessions.touch(session.sessionId, { lastCommand: command, lastReply: text });
-      return { ok: true, command, sessionId: session.sessionId };
+      return { ok: true, command, sessionId: session.sessionId, level: 1 };
     }
 
     if (command === "/status") {
-      const last = this._lastBySession.get(session.sessionId);
-      const progress = last?.moguTaskId ? this.queue.getProgress(last.moguTaskId) : null;
-      const text = progress
-        ? `Task:\n${progress.bar}\nRunning: ${progress.skillId || progress.phase}\nElapsed: ${Math.round(progress.elapsedMs / 1000)}s`
-        : "No active remote task.";
+      const text = await this._formatStatus(session);
       await this.notifications.notify({
         channel: session.channel,
         userId: session.userId,
         conversationId: session.conversationId,
         kind: "status",
         text,
-        moguTaskId: last?.moguTaskId,
       });
-      return { ok: true, command, progress };
+      this.sessions.touch(session.sessionId, { lastCommand: "/status", lastReply: text });
+      return { ok: true, command: "/status", level: 1, text };
     }
 
     if (command === "/log") {
@@ -84,7 +115,7 @@ class RemoteGateway {
         kind: "log",
         text,
       });
-      return { ok: true, command };
+      return { ok: true, command, level: 1 };
     }
 
     if (command === "/cancel") {
@@ -101,7 +132,7 @@ class RemoteGateway {
         text: `Cancelled ${last.moguTaskId}`,
         moguTaskId: last.moguTaskId,
       });
-      return { ok: true, command, cancelled };
+      return { ok: true, command, cancelled, level: 1 };
     }
 
     if (command === "/retry") {
@@ -116,17 +147,25 @@ class RemoteGateway {
       });
     }
 
-    // Admin YES/NO replies for pending approvals
     const yesNo = String(inbound.text || "").trim().toUpperCase();
     if (yesNo === "YES" || yesNo === "NO") {
-      // Prefer explicit approvalId in raw; otherwise reject (fail-closed without id).
       const approvalId = inbound.raw?.approvalId || inbound.attachments?.[0]?.approvalId;
-      if (approvalId) {
-        const answered = this.permission.respond(approvalId, yesNo);
-        return { ok: answered.ok, command: "approval", answered };
-      }
+      const answered = approvalId
+        ? this.permission.respond(approvalId, yesNo)
+        : this.permission.respondForUser(session.userId, yesNo, session.channel);
+      await this.notifications.notify({
+        channel: session.channel,
+        userId: session.userId,
+        conversationId: session.conversationId,
+        kind: "status",
+        text: answered.ok
+          ? `审批已记录: ${yesNo}`
+          : `审批失败: ${answered.reason || "unknown"}`,
+      });
+      return { ok: answered.ok, command: "approval", answered, level: 1 };
     }
 
+    // Plain text without /task still becomes a Level-2 task for the owner.
     const capability = inferCapability(inbound.text, inbound.command);
     return this.submitTask({
       channel: session.channel,
@@ -134,13 +173,31 @@ class RemoteGateway {
       conversationId: session.conversationId,
       sessionId: session.sessionId,
       text: inbound.text || inbound.command || "",
-      command: inbound.command,
+      command: inbound.command || "/task",
       capability,
-      skillId: capability === "READ" ? "mogu.memory" : "mogu.memory",
+      skillId: "mogu.memory",
       op: "recall",
       args: { text: inbound.text },
       attachments: inbound.attachments,
     });
+  }
+
+  async _formatStatus(session) {
+    const last = this._lastBySession.get(session.sessionId);
+    const progress = last?.moguTaskId ? this.queue.getProgress(last.moguTaskId) : null;
+    const workstation = await this.getWorkstationStatus().catch(() => ({}));
+    const lines = [
+      "MOGU Remote Status",
+      `GPU: ${workstation.gpu || "unknown"}`,
+      `Task: ${progress ? progress.phase : workstation.task || "idle"}`,
+      `Model: ${workstation.model || "adapter status unknown"}`,
+      `Queue: ${workstation.queue ?? 0}`,
+      `Remote: ${workstation.remoteRunning ? "running" : "ready"}`,
+    ];
+    if (progress) {
+      lines.push(`Active: ${last.moguTaskId}`, progress.bar, `Skill: ${progress.skillId || "-"}`);
+    }
+    return lines.join("\n");
   }
 
   async submitTask(input = {}) {
@@ -148,6 +205,13 @@ class RemoteGateway {
     const remote = settings.remote || {};
     if (remote.enabled !== true) {
       return { ok: false, reason: "remote_disabled" };
+    }
+    if (!isRemoteChannelEnabled(remote, input.channel) && input.channel !== "mock") {
+      return { ok: false, reason: "channel_disabled", channel: input.channel };
+    }
+    const owner = assertRemoteOwner(settings, input);
+    if (!owner.ok) {
+      return { ok: false, reason: owner.reason };
     }
 
     const session =
@@ -221,6 +285,7 @@ class RemoteGateway {
       result: finished.result || null,
       cancelled: finished.cancelled === true,
       taskRequest,
+      level: isLevel1Command(taskRequest.command, taskRequest.text) ? 1 : 2,
     };
   }
 }
@@ -230,7 +295,9 @@ function inferCapability(text, command) {
   if (/(delete|\brm\b|remove|删除|卸载)/i.test(value)) return "DELETE";
   if (/(shutdown|reboot|\badmin\b|系统)/i.test(value)) return "SYSTEM";
   if (/(\brun\b|\bexec\b|terminal|执行|运行)/i.test(value)) return "RUN";
-  if (/(write|edit|patch|commit|push|修改|写入|提交)/i.test(value)) return "WRITE";
+  if (/(write|edit|patch|commit|push|修改|写入|提交|git\s*push|安装|付款|邮件)/i.test(value)) {
+    return "WRITE";
+  }
   return "READ";
 }
 

@@ -600,6 +600,31 @@ function initServices() {
     skillRuntime,
     agentRunService,
     resolveSecret: async (secretId) => (secretStore ? secretStore.get(secretId) : ""),
+    getWorkstationStatus: async ({ running, taskStore: store }) => {
+      const settings = await settingsStore.load();
+      let queue = 0;
+      try {
+        const page = await store.listPage({ limit: 50 });
+        queue = (page?.items || page?.tasks || []).filter((task) =>
+          ["queued", "running"].includes(String(task.status || ""))
+        ).length;
+      } catch {
+        queue = 0;
+      }
+      const model =
+        settings.v21Gpt56Adapter === true && settings.v21Gpt56AdapterConfig?.modelId
+          ? `${settings.v21Gpt56AdapterConfig.modelId} adapter ready`
+          : settings.agentApiModel
+            ? `${settings.agentApiModel} configured`
+            : "no cloud model configured";
+      return {
+        gpu: process.env.MOGU_GPU_LABEL || "see-device-manager",
+        task: queue > 0 ? "busy" : "idle",
+        model,
+        queue,
+        remoteRunning: running === true,
+      };
+    },
   });
   remoteManager.on("approval-required", (payload) => {
     sendToRenderer("remote-approval-required", payload);
@@ -1409,6 +1434,44 @@ function registerIpcHandlers() {
   ipcMain.handle("remote:approve", async (_event, payload = {}) => {
     if (!remoteManager) return { ok: false };
     return remoteManager.respondApproval(payload?.approvalId, payload?.decision || payload?.answer);
+  });
+  ipcMain.handle("remote:set-telegram-token", async (_event, payload = {}) => {
+    if (!secretStore) return { ok: false, error: "secret_store_unavailable" };
+    const token = String(payload?.token || payload?.telegramToken || "").trim();
+    if (!token) return { ok: false, error: "token_required" };
+    return secretStore.set("telegramBotToken", token);
+  });
+  ipcMain.handle("remote:configure-personal", async (_event, payload = {}) => {
+    const telegramUserId = String(payload?.telegramUserId || "").trim();
+    const next = await settingsStore.update({
+      remote: {
+        enabled: payload?.enabled === true,
+        telegram: { enabled: payload?.telegram !== false },
+        qq: { enabled: false },
+        wechat: { enabled: false },
+        requireApproval: payload?.requireApproval !== false,
+        allowAutoExecute: false,
+      },
+      remoteOwner: {
+        telegramUserId,
+        qqUserId: "",
+        wechatUserId: "",
+      },
+    });
+    const token = String(payload?.telegramToken || payload?.token || "").trim();
+    if (token && secretStore) {
+      const saved = await secretStore.set("telegramBotToken", token);
+      if (!saved?.ok) return { ok: false, error: saved?.error || "token_store_failed", settings: next };
+    }
+    if (remoteManager && next.remote?.enabled === true) {
+      await remoteManager.start();
+    }
+    return {
+      ok: true,
+      remote: next.remote,
+      remoteOwner: { telegramUserId: next.remoteOwner?.telegramUserId ? "[set]" : "" },
+      tokenStored: Boolean(token),
+    };
   });
 
   ipcMain.handle("permission:audit-list", async (_event, payload = {}) => {

@@ -44,13 +44,19 @@ function createHarness(overrides = {}) {
     ...DEFAULT_SETTINGS,
     remote: sanitizeRemoteSettings({
       enabled: true,
-      telegram: true,
-      qq: true,
-      wechat: true,
+      telegram: { enabled: true },
+      qq: { enabled: true },
+      wechat: { enabled: true },
       requireApproval: true,
       allowAutoExecute: false,
       ...overrides.remote,
     }),
+    remoteOwner: {
+      telegramUserId: "telegram-user",
+      qqUserId: "qq-user",
+      wechatUserId: "wechat-user",
+      ...(overrides.remoteOwner || {}),
+    },
   };
   const skillCalls = [];
   const manager = new RemoteManager({
@@ -75,7 +81,12 @@ function createHarness(overrides = {}) {
     skillCalls,
     decisions,
     setSettings(next) {
-      settings = { ...settings, ...next, remote: sanitizeRemoteSettings(next.remote || settings.remote) };
+      settings = {
+        ...settings,
+        ...next,
+        remote: sanitizeRemoteSettings(next.remote || settings.remote),
+        remoteOwner: { ...settings.remoteOwner, ...(next.remoteOwner || {}) },
+      };
     },
     async cleanup() {
       await manager.stop();
@@ -90,7 +101,7 @@ async function runPipeline(channel) {
     await harness.manager.start();
     const adapter = harness.manager.getAdapter(channel);
     check(`${channel}:adapter-started`, Boolean(adapter), channel);
-    const result = await adapter.receive({
+    await adapter.receive({
       text: "/task 分析这段代码的结构",
       from: { id: `${channel}-user` },
       chat: { id: `${channel}-chat` },
@@ -98,7 +109,6 @@ async function runPipeline(channel) {
       userId: `${channel}-user`,
       conversationId: `${channel}-chat`,
     });
-    // Adapter emit is async via event; also drive gateway explicitly for determinism.
     const submitted = await harness.manager.inject({
       channel,
       userId: `${channel}-user`,
@@ -129,6 +139,7 @@ async function runPipeline(channel) {
 async function runCancel() {
   const harness = createHarness({
     remote: { requireApproval: false },
+    remoteOwner: { telegramUserId: "u-cancel", qqUserId: "qq-user", wechatUserId: "wechat-user" },
     slowMs: 200,
   });
   try {
@@ -166,6 +177,7 @@ async function runApproval() {
   let sawPrompt = false;
   const harness = createHarness({
     remote: { requireApproval: true, allowAutoExecute: false },
+    remoteOwner: { telegramUserId: "admin-user", qqUserId: "qq-user", wechatUserId: "wechat-user" },
     adminResponder: async () => {
       sawPrompt = true;
       return { decision: "YES" };
@@ -190,7 +202,10 @@ async function runApproval() {
 }
 
 async function runRecoveryAndLog() {
-  const harness = createHarness({ remote: { requireApproval: false } });
+  const harness = createHarness({
+    remote: { requireApproval: false },
+    remoteOwner: { telegramUserId: "telegram-user", qqUserId: "u-log", wechatUserId: "wechat-user" },
+  });
   try {
     await harness.manager.start();
     const first = await harness.manager.inject({
@@ -246,18 +261,21 @@ function verifyFilesAndDefaults() {
     "src/main/remote/adapters/WeChatAdapter.js",
     "src/main/remote/permission/RemotePermission.js",
     "src/main/remote/notification/NotificationService.js",
+    "src/main/remote/remote-policy.js",
     "docs/V2.3_REMOTE_WORKSPACE.md",
     "docs/V2.3_DECISION_PACKAGE.md",
+    "docs/V2.3_REMOTE_FIELD_REPORT.md",
   ]) {
     check(`file:${relative}`, hasFile(relative));
   }
   const remote = DEFAULT_SETTINGS.remote;
   check("default-off:enabled", remote?.enabled === false);
-  check("default-off:telegram", remote?.telegram === false);
-  check("default-off:qq", remote?.qq === false);
-  check("default-off:wechat", remote?.wechat === false);
+  check("default-off:telegram", remote?.telegram?.enabled === false);
+  check("default-off:qq", remote?.qq?.enabled === false);
+  check("default-off:wechat", remote?.wechat?.enabled === false);
   check("default-off:allowAutoExecute", remote?.allowAutoExecute === false);
   check("default-on:requireApproval", remote?.requireApproval === true);
+  check("default-off:owner", DEFAULT_SETTINGS.remoteOwner?.telegramUserId === "");
 }
 
 async function main() {

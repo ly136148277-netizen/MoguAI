@@ -9,6 +9,7 @@ const { TelegramAdapter } = require("./adapters/TelegramAdapter");
 const { QQAdapter } = require("./adapters/QQAdapter");
 const { WeChatAdapter } = require("./adapters/WeChatAdapter");
 const types = require("./RemoteTypes");
+const policy = require("./remote-policy");
 
 module.exports = {
   RemoteManager,
@@ -21,5 +22,6 @@ module.exports = {
   WeChatAdapter,
   progressBar,
   inferCapability,
+  ...policy,
   ...types,
 };

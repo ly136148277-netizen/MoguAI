@@ -25,6 +25,7 @@
     "acceptance:v2.2": "node scripts/acceptance_v2.2.js",
     "acceptance:v2.3": "node scripts/acceptance_v2.3.js",
     "verify:v2.3-closure": "node scripts/verify_v23_closure.js",
+    "verify:v2.3-field-preflight": "node scripts/verify_v23_closure.js",
     "audit:v2.1-deps": "node scripts/audit_v21_dependencies.js",
     "audit:v2.2-intake": "node scripts/audit_v22_intake.js",
     "evaluate:v2.1": "node scripts/run_v21_local_evaluation.js",

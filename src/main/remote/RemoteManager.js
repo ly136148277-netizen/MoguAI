@@ -12,6 +12,7 @@ const { NotificationService } = require("./notification/NotificationService");
 const { TelegramAdapter } = require("./adapters/TelegramAdapter");
 const { QQAdapter } = require("./adapters/QQAdapter");
 const { WeChatAdapter } = require("./adapters/WeChatAdapter");
+const { isRemoteChannelEnabled } = require("./remote-policy");
 
 class RemoteManager extends EventEmitter {
   /**
@@ -23,6 +24,7 @@ class RemoteManager extends EventEmitter {
    *   agentRunService?: any,
    *   resolveSecret?: (id:string)=>Promise<string|null>,
    *   adminResponder?: Function,
+   *   getWorkstationStatus?: Function,
    * }} deps
    */
   constructor(deps = {}) {
@@ -83,6 +85,22 @@ class RemoteManager extends EventEmitter {
       notifications: this.notifications,
       inbox: this.inbox,
       getSettings: deps.getSettings,
+      getWorkstationStatus: async () => {
+        if (typeof deps.getWorkstationStatus === "function") {
+          return deps.getWorkstationStatus({
+            running: this.running,
+            queue: this.queue,
+            taskStore: deps.taskStore,
+          });
+        }
+        return {
+          gpu: "unknown",
+          task: "idle",
+          model: "unknown",
+          queue: 0,
+          remoteRunning: this.running,
+        };
+      },
     });
     this.taskSource = new RemoteTaskSource(this.gateway);
   }
@@ -97,17 +115,17 @@ class RemoteManager extends EventEmitter {
     await this.stop();
     this.permission.configure(remote);
 
-    if (remote.telegram === true) {
+    if (isRemoteChannelEnabled(remote, "telegram")) {
       let botToken = "";
       if (typeof this.deps.resolveSecret === "function") {
         botToken = (await this.deps.resolveSecret("telegramBotToken")) || "";
       }
       this._registerAdapter(new TelegramAdapter({ botToken, simulate: !botToken }));
     }
-    if (remote.qq === true) {
+    if (isRemoteChannelEnabled(remote, "qq")) {
       this._registerAdapter(new QQAdapter({ simulate: true }));
     }
-    if (remote.wechat === true) {
+    if (isRemoteChannelEnabled(remote, "wechat")) {
       this._registerAdapter(new WeChatAdapter({ simulate: true }));
     }
 

@@ -1,5 +1,9 @@
 const fs = require("fs-extra");
 const path = require("path");
+const {
+  sanitizeRemoteSettings,
+  sanitizeRemoteOwner,
+} = require("./remote/remote-policy");
 
 const DEFAULT_SETTINGS = {
   schemaVersion: 2,
@@ -121,11 +125,17 @@ const DEFAULT_SETTINGS = {
   /** MOGU 2.3 Remote Workspace — message-driven task source. Default OFF. */
   remote: {
     enabled: false,
-    telegram: false,
-    qq: false,
-    wechat: false,
+    telegram: { enabled: false },
+    qq: { enabled: false },
+    wechat: { enabled: false },
     requireApproval: true,
     allowAutoExecute: false,
+  },
+  /** Bound owner IDs for remote channels. Empty = fail-closed when channel enabled. */
+  remoteOwner: {
+    telegramUserId: "",
+    qqUserId: "",
+    wechatUserId: "",
   },
 };
 
@@ -146,6 +156,7 @@ class SettingsStore {
       this._cache.v22Config = sanitizeV22Config(saved.v22Config);
       this._cache.v22LspServers = sanitizeV22LspServers(saved.v22LspServers);
       this._cache.remote = sanitizeRemoteSettings(saved.remote);
+      this._cache.remoteOwner = sanitizeRemoteOwner(saved.remoteOwner);
       return this._cache;
     }
 
@@ -153,6 +164,7 @@ class SettingsStore {
     this._cache.v22Config = sanitizeV22Config();
     this._cache.v22LspServers = [];
     this._cache.remote = sanitizeRemoteSettings();
+    this._cache.remoteOwner = sanitizeRemoteOwner();
     await this.save();
     return this._cache;
   }
@@ -173,6 +185,7 @@ class SettingsStore {
       this._cache.v22Config = sanitizeV22Config(this._cache.v22Config);
       this._cache.v22LspServers = sanitizeV22LspServers(this._cache.v22LspServers);
       this._cache.remote = sanitizeRemoteSettings(this._cache.remote);
+      this._cache.remoteOwner = sanitizeRemoteOwner(this._cache.remoteOwner);
     }
     if (this._cache) {
       this._cache.schemaVersion = this._cache.schemaVersion || DEFAULT_SETTINGS.schemaVersion;
@@ -407,18 +420,6 @@ function isCredentialField(key) {
   );
 }
 
-function sanitizeRemoteSettings(value = {}) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  return {
-    enabled: source.enabled === true,
-    telegram: source.telegram === true,
-    qq: source.qq === true,
-    wechat: source.wechat === true,
-    requireApproval: source.requireApproval !== false,
-    allowAutoExecute: source.allowAutoExecute === true,
-  };
-}
-
 module.exports = {
   SettingsStore,
   DEFAULT_SETTINGS,
@@ -426,4 +427,5 @@ module.exports = {
   sanitizeV22Config,
   sanitizeV22LspServers,
   sanitizeRemoteSettings,
+  sanitizeRemoteOwner,
 };

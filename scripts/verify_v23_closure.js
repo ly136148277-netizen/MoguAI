@@ -6,9 +6,13 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { DEFAULT_SETTINGS, sanitizeRemoteSettings } = require("../src/main/settings");
+const {
+  DEFAULT_SETTINGS,
+  sanitizeRemoteSettings,
+  sanitizeRemoteOwner,
+} = require("../src/main/settings");
 const { TaskStore } = require("../src/main/task-store");
-const { RemoteManager } = require("../src/main/remote");
+const { RemoteManager, isRemoteChannelEnabled } = require("../src/main/remote");
 const { QQAdapter } = require("../src/main/remote/adapters/QQAdapter");
 const { WeChatAdapter } = require("../src/main/remote/adapters/WeChatAdapter");
 
@@ -26,17 +30,22 @@ function createManager(remoteOverrides, extra = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mogu-v23-close-"));
   const taskStore = new TaskStore(path.join(root, "tasks.json"));
   const audit = [];
+  const ownerId = extra.ownerId || "phone-user";
   const manager = new RemoteManager({
     getSettings: async () => ({
       ...DEFAULT_SETTINGS,
       remote: sanitizeRemoteSettings({
         enabled: true,
-        telegram: true,
-        qq: false,
-        wechat: false,
+        telegram: { enabled: true },
+        qq: { enabled: false },
+        wechat: { enabled: false },
         requireApproval: true,
         allowAutoExecute: false,
         ...remoteOverrides,
+      }),
+      remoteOwner: sanitizeRemoteOwner({
+        telegramUserId: ownerId,
+        ...(extra.remoteOwner || {}),
       }),
     }),
     permissionProxy: {
@@ -105,6 +114,7 @@ async function permissionLoop() {
   const { root, manager, audit } = createManager(
     { requireApproval: true, allowAutoExecute: false },
     {
+      ownerId: "u",
       adminResponder: async (payload) => {
         denials.push(payload);
         return { decision: "NO" };
@@ -113,7 +123,7 @@ async function permissionLoop() {
   );
   const allow = createManager(
     { requireApproval: true, allowAutoExecute: false },
-    { adminResponder: async () => ({ decision: "YES" }) }
+    { ownerId: "u2", adminResponder: async () => ({ decision: "YES" }) }
   );
   try {
     await manager.start();
@@ -165,7 +175,10 @@ async function permissionLoop() {
 }
 
 async function longTaskSimulated() {
-  const { root, manager } = createManager({ requireApproval: false }, { delayMs: 120 });
+  const { root, manager } = createManager(
+    { requireApproval: false },
+    { delayMs: 120, ownerId: "away-user" }
+  );
   try {
     await manager.start();
     const started = Date.now();
@@ -231,31 +244,41 @@ function liveTelegramPreflight() {
     secrets = {};
   }
   const remote = sanitizeRemoteSettings(settings.remote);
+  const owner = sanitizeRemoteOwner(settings.remoteOwner);
   const tokenMeta = secrets.telegramBotToken;
   const tokenPresent =
     Boolean(tokenMeta?.encoding === "safeStorage" && tokenMeta?.data) ||
     Boolean(process.env.MOGU_TELEGRAM_BOT_TOKEN);
+  const telegramOn = isRemoteChannelEnabled(remote, "telegram");
+  const ownerSet = Boolean(owner.telegramUserId);
+  const ready = tokenPresent && remote.enabled === true && telegramOn && ownerSet;
   return {
     kind: "mogu-v2.3-live-telegram-preflight",
-    status: tokenPresent && remote.enabled === true && remote.telegram === true ? "READY_NOT_RUN" : "BLOCKED",
+    status: ready ? "READY_NOT_RUN" : "BLOCKED",
     settingsKeys: {
       "remote.enabled": remote.enabled,
-      "remote.telegram": remote.telegram,
+      "remote.telegram.enabled": telegramOn,
       "remote.requireApproval": remote.requireApproval,
       "remote.allowAutoExecute": remote.allowAutoExecute,
+      "remoteOwner.telegramUserId": ownerSet ? "[set]" : "",
     },
     expectedPersonalConfig: {
       "remote.enabled": true,
-      "remote.telegram": true,
-      "remote.qq": false,
-      "remote.wechat": false,
+      "remote.telegram.enabled": true,
+      "remote.qq.enabled": false,
+      "remote.wechat.enabled": false,
       "remote.requireApproval": true,
       "remote.allowAutoExecute": false,
+      "remoteOwner.telegramUserId": "<your telegram numeric id>",
     },
     secretValueRead: false,
-    blocker: tokenPresent
-      ? "Desktop app must be running for live phone soak; automated preflight only"
-      : "No telegramBotToken in SecretStore / MOGU_TELEGRAM_BOT_TOKEN",
+    blocker: !tokenPresent
+      ? "No telegramBotToken in SecretStore"
+      : !ownerSet
+        ? "remoteOwner.telegramUserId not bound"
+        : !remote.enabled || !telegramOn
+          ? "remote.enabled / telegram not enabled"
+          : "Desktop app must be running for live phone soak",
   };
 }
 

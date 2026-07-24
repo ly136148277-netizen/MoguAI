@@ -2,10 +2,10 @@
   "kind": "mogu-v2.3-telegram-pipeline",
   "status": "PASS",
   "mode": "simulated-telegram",
-  "moguTaskId": "task-mryh1i1t-hhls65z6",
+  "moguTaskId": "task-mryh9i88-55d6sy6j",
   "taskStatus": "succeeded",
   "reply": "报告就绪\nSkill=mogu.memory\n输入=帮我检查项目状态\n修改: 无（只读验证）",
-  "durationMs": 12,
+  "durationMs": 14,
   "permissionEvents": 1,
   "skillEvents": 1,
   "outboxKinds": [

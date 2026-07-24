@@ -101,10 +101,17 @@ class RemotePermission extends EventEmitter {
       approvalId,
       channel: taskRequest.channel,
       userId: taskRequest.userId,
+      conversationId: taskRequest.conversationId,
       text: taskRequest.text,
       capability: meta.capability,
       riskLevel: meta.riskLevel,
-      prompt: "需要管理员批准：回复 YES 或 NO",
+      prompt: [
+        "⚠️ 需要管理员批准",
+        `Capability: ${meta.capability}`,
+        `请求: ${boundedString(taskRequest.text, 500)}`,
+        "确认执行？回复 YES 或 NO",
+        `(approvalId=${approvalId})`,
+      ].join("\n"),
     };
     this.emit("approval-required", payload);
 
@@ -129,6 +136,8 @@ class RemotePermission extends EventEmitter {
         resolve({ allowed: false, approvalId, reason: "approval_timeout", decision: "NO" });
       }, Number(taskRequest.approvalTimeoutMs) || 120_000);
       this._pending.set(approvalId, {
+        userId: String(taskRequest.userId || ""),
+        channel: String(taskRequest.channel || ""),
         resolve: (result) => {
           clearTimeout(timer);
           resolve(result);
@@ -149,6 +158,22 @@ class RemotePermission extends EventEmitter {
       decision: allowed ? "YES" : "NO",
     });
     return { ok: true, allowed };
+  }
+
+  /**
+   * Phone UX: if the owner has exactly one pending approval, YES/NO without id.
+   */
+  respondForUser(userId, decision, channel = null) {
+    const uid = String(userId || "");
+    const matches = [...this._pending.entries()].filter(([, value]) => {
+      if (value.userId !== uid) return false;
+      if (channel && value.channel && value.channel !== channel) return false;
+      return true;
+    });
+    if (matches.length !== 1) {
+      return { ok: false, reason: matches.length ? "ambiguous_approval" : "unknown_approval" };
+    }
+    return this.respond(matches[0][0], decision);
   }
 }
 

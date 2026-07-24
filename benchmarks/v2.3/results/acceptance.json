@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "kind": "mogu-v2.3-acceptance",
   "status": "PASS",
-  "passed": 47,
-  "total": 47,
+  "passed": 50,
+  "total": 50,
   "checks": [
     {
       "id": "file:src/main/remote/RemoteManager.js",
@@ -71,12 +71,22 @@
       "detail": ""
     },
     {
+      "id": "file:src/main/remote/remote-policy.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
       "id": "file:docs/V2.3_REMOTE_WORKSPACE.md",
       "ok": true,
       "detail": ""
     },
     {
       "id": "file:docs/V2.3_DECISION_PACKAGE.md",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "file:docs/V2.3_REMOTE_FIELD_REPORT.md",
       "ok": true,
       "detail": ""
     },
@@ -107,6 +117,11 @@
     },
     {
       "id": "default-on:requireApproval",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "default-off:owner",
       "ok": true,
       "detail": ""
     },
@@ -241,5 +256,5 @@
       "detail": ""
     }
   ],
-  "completedAt": "2026-07-24T05:00:07.662Z"
+  "completedAt": "2026-07-24T05:06:20.056Z"
 }
